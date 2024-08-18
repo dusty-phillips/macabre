@@ -4,13 +4,9 @@ pub type Import {
   UnqualifiedImport(module: String, name: String, alias: option.Option(String))
 }
 
-pub type Field(t) {
-  Field(label: option.Option(String), item: t)
-}
-
 pub type Expression {
   String(String)
-  Call(function_name: String, arguments: List(Field(Expression)))
+  Call(function_name: String, arguments: List(Expression))
 }
 
 pub type Statement {

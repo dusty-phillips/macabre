@@ -1,7 +1,6 @@
 import glance
 import gleam/list
 import gleam/option
-import pprint
 import python
 
 type TransformError {
@@ -53,7 +52,13 @@ fn transform_call_argument(
 fn transform_expression(expression: glance.Expression) -> python.Expression {
   case expression {
     glance.Call(glance.Variable(function_name), arguments) -> {
-      python.Call(function_name, arguments: [])
+      python.Call(
+        function_name,
+        arguments: list.map(arguments, transform_call_argument),
+      )
+    }
+    glance.String(string) -> {
+      python.String(string)
     }
     _ -> todo as "most expressions aren't handled yet"
   }
@@ -96,5 +101,4 @@ pub fn transform(input: glance.Module) -> Result(python.Module, String) {
   python.empty_module()
   |> list.fold(input.functions, _, transform_function_or_external)
   |> Ok
-  |> pprint.debug
 }

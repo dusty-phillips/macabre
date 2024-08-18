@@ -4,6 +4,7 @@ import glance
 import gleam/io
 import gleam/result
 import gleam/string
+import pprint
 import simplifile
 import transformer
 
@@ -14,7 +15,10 @@ pub fn usage(message: String) -> Nil {
 pub fn parse(contents: String) -> Result(glance.Module, String) {
   contents
   |> glance.module
-  |> result.replace_error("Unable to read")
+  |> result.map_error(fn(x) {
+    pprint.debug(x)
+    "Unable to parse"
+  })
 }
 
 pub fn write_output(contents: String, filename: String) -> Result(Nil, String) {
@@ -40,12 +44,17 @@ pub fn output_result(filename: String, result: Result(Nil, String)) -> Nil {
   }
 }
 
-pub fn compile(filename: String) -> Result(Nil, String) {
-  simplifile.read(filename)
-  |> result.replace_error("Unable to read '" <> filename <> "'")
-  |> result.try(parse)
+pub fn compile(module_contents: String) -> Result(String, String) {
+  module_contents
+  |> parse
   |> result.try(transformer.transform)
   |> result.try(generator.generate)
+}
+
+pub fn compile_module(filename: String) -> Result(Nil, String) {
+  simplifile.read(filename)
+  |> result.replace_error("Unable to read '" <> filename <> "'")
+  |> result.try(compile)
   |> result.try(write_output(_, replace_extension(filename)))
 }
 
@@ -56,7 +65,7 @@ pub fn main() {
       case string.ends_with(input, ".gleam") {
         False -> usage("Not a gleam input file")
         True -> {
-          compile(input) |> output_result(input, _)
+          compile_module(input) |> output_result(input, _)
         }
       }
     [_, _, ..] -> usage("Too many arguments")
