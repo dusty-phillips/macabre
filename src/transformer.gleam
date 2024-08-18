@@ -1,6 +1,8 @@
 import glance
 import gleam/list
 import gleam/option
+import gleam/string
+import pprint
 import python
 
 type TransformError {
@@ -49,6 +51,35 @@ fn transform_call_argument(
   }
 }
 
+fn transform_binop(
+  name: glance.BinaryOperator,
+  left: glance.Expression,
+  right: glance.Expression,
+) -> python.Expression {
+  let op = case name {
+    glance.And -> python.And
+    glance.Or -> python.Or
+    glance.AddInt | glance.AddFloat | glance.Concatenate -> python.Add
+    glance.SubInt | glance.SubFloat -> python.Subtract
+    glance.DivFloat -> python.Divide
+    glance.DivInt -> python.DivideInt
+    glance.MultInt | glance.MultFloat -> python.Multiply
+    glance.RemainderInt -> python.Modulo
+    glance.Eq -> python.Equal
+    glance.NotEq -> python.NotEqual
+    glance.LtInt | glance.LtFloat -> python.LessThan
+    glance.LtEqInt | glance.LtEqFloat -> python.LessThanEqual
+    glance.GtInt | glance.GtFloat -> python.GreaterThan
+    glance.GtEqInt | glance.GtEqFloat -> python.GreaterThanEqual
+    glance.Pipe -> panic as "Pipe should have been translated elsewhere"
+  }
+  python.BinaryOperator(
+    op,
+    transform_expression(left),
+    transform_expression(right),
+  )
+}
+
 fn transform_expression(expression: glance.Expression) -> python.Expression {
   case expression {
     glance.Call(glance.Variable(function_name), arguments) -> {
@@ -57,10 +88,49 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
         arguments: list.map(arguments, transform_call_argument),
       )
     }
-    glance.String(string) -> {
-      python.String(string)
+    glance.String(string) -> python.String(string)
+    glance.Int(string) | glance.Float(string) -> python.Number(string)
+    glance.Variable("True") -> python.Bool("True")
+    glance.Variable("False") -> python.Bool("False")
+    glance.Tuple(expressions) ->
+      expressions
+      |> list.map(transform_expression)
+      |> python.Tuple()
+    glance.TupleIndex(tuple, index) ->
+      python.TupleIndex(transform_expression(tuple), index)
+    glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
+      // simple pipe left |> foo
+      python.Call(function, [transform_expression(left)])
     }
-    _ -> todo as "most expressions aren't handled yet"
+    glance.BinaryOperator(
+      glance.Pipe,
+      left,
+      glance.FnCapture(
+        label,
+        glance.Variable(function),
+        arguments_before,
+        arguments_after,
+      ),
+    ) -> {
+      let argument_expressions =
+        list.concat([
+          arguments_before,
+          [glance.Field(label, left)],
+          arguments_after,
+        ])
+        |> list.map(transform_call_argument)
+      python.Call(function, argument_expressions)
+    }
+    glance.BinaryOperator(glance.Pipe, _, right) -> {
+      pprint.debug(right)
+      panic as "I don't know how to handle this structure of pipe"
+    }
+    glance.BinaryOperator(name, left, right) ->
+      transform_binop(name, left, right)
+    _ -> {
+      pprint.debug(expression)
+      todo as "most expressions aren't handled yet"
+    }
   }
 }
 

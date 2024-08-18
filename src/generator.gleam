@@ -1,4 +1,5 @@
 import generator_helpers
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_builder
@@ -17,9 +18,51 @@ fn generate_import(import_: python.Import) -> string_builder.StringBuilder {
   }
 }
 
+fn generate_binop(
+  name: python.BinaryOperator,
+  left: python.Expression,
+  right: python.Expression,
+) -> string_builder.StringBuilder {
+  let op_string = case name {
+    python.And -> " and "
+    python.Or -> " or "
+    python.Add -> " + "
+    python.Subtract -> " - "
+    python.Divide -> " / "
+    python.DivideInt -> " // "
+    python.Multiply -> " * "
+    python.Modulo -> " % "
+    python.Equal -> " == "
+    python.NotEqual -> " != "
+    python.LessThan -> " < "
+    python.LessThanEqual -> " <= "
+    python.GreaterThan -> " > "
+    python.GreaterThanEqual -> " >= "
+  }
+
+  string_builder.new()
+  |> string_builder.append_builder(generate_expression(left))
+  |> string_builder.append(op_string)
+  |> string_builder.append_builder(generate_expression(right))
+}
+
 fn generate_expression(expression: python.Expression) {
   case expression {
     python.String(string) -> string_builder.from_strings(["\"", string, "\""])
+    python.Number(number) -> string_builder.from_string(number)
+    python.Bool(value) -> string_builder.from_string(value)
+    python.Tuple(expressions) ->
+      string_builder.new()
+      |> string_builder.append("(")
+      |> string_builder.append_builder(
+        expressions |> generate_plural(generate_expression, ", "),
+      )
+      |> string_builder.append(")")
+    python.TupleIndex(expression, index) ->
+      generate_expression(expression)
+      |> string_builder.append("[")
+      |> string_builder.append(index |> int.to_string)
+      |> string_builder.append("]")
     python.Call(function_name, arguments) ->
       string_builder.new()
       |> string_builder.append(function_name)
@@ -30,6 +73,8 @@ fn generate_expression(expression: python.Expression) {
         |> string_builder.join(", "),
       )
       |> string_builder.append(")")
+    python.BinaryOperator(name, left, right) ->
+      generate_binop(name, left, right)
   }
 }
 

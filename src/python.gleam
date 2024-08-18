@@ -4,9 +4,31 @@ pub type Import {
   UnqualifiedImport(module: String, name: String, alias: option.Option(String))
 }
 
+pub type BinaryOperator {
+  And
+  Or
+  Equal
+  NotEqual
+  Add
+  Subtract
+  Multiply
+  Divide
+  DivideInt
+  LessThan
+  LessThanEqual
+  GreaterThan
+  GreaterThanEqual
+  Modulo
+}
+
 pub type Expression {
   String(String)
+  Number(String)
+  Bool(String)
+  Tuple(List(Expression))
+  TupleIndex(tuple: Expression, index: Int)
   Call(function_name: String, arguments: List(Expression))
+  BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)
 }
 
 pub type Statement {

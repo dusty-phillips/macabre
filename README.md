@@ -1,24 +1,20 @@
 # macabre
 
-[![Package Version](https://img.shields.io/hexpm/v/macabre)](https://hex.pm/packages/macabre)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/macabre/)
-
 ```sh
-gleam add macabre@1
+gleam run -- some_file.gleam  # compile to python
 ```
-```gleam
-import macabre
-
-pub fn main() {
-  // TODO: An example of the project in use
-}
-```
-
-Further documentation can be found at <https://hexdocs.pm/macabre>.
 
 ## Development
 
 ```sh
-gleam run   # Run the project
-gleam test  # Run the tests
+gleam test  # Run tests with glacier
 ```
+
+### TODO
+
+- most operators and expressions aren't implemented yet
+- glance doesn't support comments
+- glance doesn't fully typecheck (e.g. `2.0 - 1.5` compiles successfully, but should be `2.0 -. 1.5`)
+- no concept of a "project", gleam.toml, downloading dependencies
+- only compiles one package at a time
+- not sure how to account for `/` on two ints.
