@@ -54,6 +54,7 @@ fn generate_expression(expression: python.Expression) {
     python.String(string) -> string_builder.from_strings(["\"", string, "\""])
     python.Number(number) -> string_builder.from_string(number)
     python.Bool(value) -> string_builder.from_string(value)
+    python.Variable(value) -> string_builder.from_string(value)
     python.Tuple(expressions) ->
       string_builder.new()
       |> string_builder.append("(")
@@ -86,6 +87,12 @@ fn generate_statement(statement: python.Statement) -> StringBuilder {
     python.Expression(expression) ->
       generate_expression(expression)
       |> generator_helpers.append_if_not_empty("\n")
+    python.SimpleAssignment(name, value) -> {
+      string_builder.new()
+      |> string_builder.append(name)
+      |> string_builder.append(" = ")
+      |> string_builder.append_builder(generate_expression(value))
+    }
   }
 }
 

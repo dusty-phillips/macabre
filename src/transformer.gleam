@@ -92,6 +92,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.Int(string) | glance.Float(string) -> python.Number(string)
     glance.Variable("True") -> python.Bool("True")
     glance.Variable("False") -> python.Bool("False")
+    glance.Variable(string) -> python.Variable(string)
     glance.Tuple(expressions) ->
       expressions
       |> list.map(transform_expression)
@@ -139,7 +140,18 @@ fn transform_statement(statement: glance.Statement) -> python.Statement {
     glance.Expression(expression) -> {
       python.Expression(transform_expression(expression))
     }
-    _ -> todo as "not all statements are defined yet"
+    glance.Assignment(
+      kind: glance.Let,
+      pattern: glance.PatternVariable(variable),
+      value: value,
+      ..,
+    ) -> python.SimpleAssignment(variable, transform_expression(value))
+    glance.Assignment(..) ->
+      todo as "Non-trivial assignments are not supported yet"
+    _ -> {
+      pprint.debug(statement)
+      todo as "not all statements are defined yet"
+    }
   }
 }
 

@@ -31,6 +31,7 @@ pub type Expression {
   String(String)
   Number(String)
   Bool(String)
+  Variable(String)
   Tuple(List(Expression))
   TupleIndex(tuple: Expression, index: Int)
   Call(function_name: String, arguments: List(Expression))
@@ -39,6 +40,7 @@ pub type Expression {
 
 pub type Statement {
   Expression(Expression)
+  SimpleAssignment(name: String, value: Expression)
 }
 
 pub type FunctionParameter {
