@@ -129,7 +129,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       transform_binop(name, left, right)
     _ -> {
       pprint.debug(expression)
-      todo as "most expressions aren't handled yet"
+      todo as "many expressions aren't handled yet"
     }
   }
 }
@@ -151,6 +151,38 @@ fn transform_function(function: glance.Function) -> python.Function {
   )
 }
 
+fn transform_type(type_: glance.Type) -> python.Type {
+  case type_ {
+    glance.NamedType(name, module, []) -> python.NamedType(name, module)
+    _ -> todo as "not able to transform most types yet"
+  }
+}
+
+fn transform_variant_field(
+  field: glance.Field(glance.Type),
+) -> python.Field(python.Type) {
+  case field {
+    glance.Field(label: option.None, item: item) ->
+      python.UnlabelledField(transform_type(item))
+    glance.Field(label: option.Some(label), item: item) ->
+      python.LabelledField(label, transform_type(item))
+  }
+}
+
+fn transform_type_variant(variant: glance.Variant) -> python.Variant {
+  python.Variant(
+    name: variant.name,
+    fields: list.map(variant.fields, transform_variant_field),
+  )
+}
+
+fn transform_custom_type(custom_type: glance.CustomType) -> python.CustomType {
+  python.CustomType(
+    name: custom_type.name,
+    variants: list.map(custom_type.variants, transform_type_variant),
+  )
+}
+
 fn transform_function_or_external(
   module: python.Module,
   function: glance.Definition(glance.Function),
@@ -167,8 +199,31 @@ fn transform_function_or_external(
   }
 }
 
+fn transform_custom_type_in_module(
+  module: python.Module,
+  custom_type: glance.Definition(glance.CustomType),
+) -> python.Module {
+  let has_dataclass_import =
+    list.find(module.imports, fn(imp) { imp == python.dataclass_import })
+
+  let imports = case has_dataclass_import {
+    Ok(_) -> module.imports
+    Error(_) -> [python.dataclass_import, ..module.imports]
+  }
+
+  python.Module(
+    ..module,
+    imports: imports,
+    custom_types: [
+      transform_custom_type(custom_type.definition),
+      ..module.custom_types
+    ],
+  )
+}
+
 pub fn transform(input: glance.Module) -> Result(python.Module, String) {
   python.empty_module()
   |> list.fold(input.functions, _, transform_function_or_external)
+  |> list.fold(input.custom_types, _, transform_custom_type_in_module)
   |> Ok
 }

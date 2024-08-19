@@ -4,6 +4,12 @@ pub type Import {
   UnqualifiedImport(module: String, name: String, alias: option.Option(String))
 }
 
+pub const dataclass_import = UnqualifiedImport(
+  "dataclasses",
+  "dataclass",
+  option.None,
+)
+
 pub type BinaryOperator {
   And
   Or
@@ -39,8 +45,21 @@ pub type FunctionParameter {
   NameParam(String)
 }
 
+pub type Field(t) {
+  LabelledField(label: String, item: t)
+  UnlabelledField(item: t)
+}
+
 pub type Type {
-  TodoType
+  NamedType(name: String, module: option.Option(String))
+}
+
+pub type Variant {
+  Variant(name: String, fields: List(Field(Type)))
+}
+
+pub type CustomType {
+  CustomType(name: String, variants: List(Variant))
 }
 
 pub type Function {
@@ -52,9 +71,13 @@ pub type Function {
 }
 
 pub type Module {
-  Module(imports: List(Import), functions: List(Function))
+  Module(
+    imports: List(Import),
+    functions: List(Function),
+    custom_types: List(CustomType),
+  )
 }
 
 pub fn empty_module() -> Module {
-  Module(imports: [], functions: [])
+  Module(imports: [], functions: [], custom_types: [])
 }

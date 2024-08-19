@@ -55,6 +55,7 @@ pub fn compile_module(filename: String) -> Result(Nil, String) {
   simplifile.read(filename)
   |> result.replace_error("Unable to read '" <> filename <> "'")
   |> result.try(compile)
+  |> pprint.debug
   |> result.try(write_output(_, replace_extension(filename)))
 }
 

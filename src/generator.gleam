@@ -122,6 +122,83 @@ fn generate_function(function: python.Function) -> string_builder.StringBuilder 
   )
 }
 
+fn generate_type(type_: python.Type) -> string_builder.StringBuilder {
+  case type_ {
+    python.NamedType(name: "String", module: option.None) ->
+      string_builder.from_string("str")
+
+    python.NamedType(name: "Int", module: option.None) ->
+      string_builder.from_string("int")
+
+    python.NamedType(name: name, module: option.None) ->
+      string_builder.from_string(name)
+
+    python.NamedType(name: name, module: option.Some(module)) ->
+      string_builder.from_strings([module, ".", name])
+  }
+}
+
+fn generate_type_fields(
+  field: python.Field(python.Type),
+) -> string_builder.StringBuilder {
+  case field {
+    python.UnlabelledField(_) ->
+      todo as "not handling unlabeled fields in custom types yet"
+    python.LabelledField(label, item) ->
+      string_builder.new()
+      |> string_builder.append(label)
+      |> string_builder.append(": ")
+      |> string_builder.append_builder(generate_type(item))
+  }
+}
+
+fn generate_type_variant(
+  variant: python.Variant,
+) -> string_builder.StringBuilder {
+  string_builder.new()
+  |> string_builder.append("@dataclass(frozen=True)\n")
+  |> string_builder.append("class ")
+  |> string_builder.append(variant.name)
+  |> string_builder.append(":\n")
+  |> string_builder.append_builder(
+    generate_plural(variant.fields, generate_type_fields, "\n")
+    |> generator_helpers.indent(4),
+  )
+}
+
+fn generate_variant_reassign(
+  namespace: String,
+) -> fn(python.Variant) -> string_builder.StringBuilder {
+  fn(variant: python.Variant) -> string_builder.StringBuilder {
+    string_builder.new()
+    |> string_builder.append(variant.name)
+    |> string_builder.append(" = ")
+    |> string_builder.append(namespace)
+    |> string_builder.append(".")
+    |> string_builder.append(variant.name)
+  }
+}
+
+fn generate_custom_type(
+  custom_type: python.CustomType,
+) -> string_builder.StringBuilder {
+  string_builder.new()
+  |> string_builder.append("class ")
+  |> string_builder.append(custom_type.name)
+  |> string_builder.append(":\n")
+  |> string_builder.append_builder(
+    generate_plural(custom_type.variants, generate_type_variant, "\n\n")
+    |> generator_helpers.indent(4)
+    |> generator_helpers.append_if_not_empty("\n\n"),
+  )
+  |> string_builder.append_builder(generate_plural(
+    custom_type.variants,
+    generate_variant_reassign(custom_type.name),
+    "\n",
+  ))
+  |> string_builder.append("\n\n\n")
+}
+
 fn generate_imports(
   imports: List(python.Import),
 ) -> string_builder.StringBuilder {
@@ -142,6 +219,11 @@ fn generate_plural(
 pub fn generate(module: python.Module) -> Result(String, String) {
   string_builder.new()
   |> string_builder.append_builder(generate_imports(module.imports))
+  |> string_builder.append_builder(generate_plural(
+    module.custom_types,
+    generate_custom_type,
+    "\n\n\n",
+  ))
   |> string_builder.append_builder(generate_plural(
     module.functions,
     generate_function,
