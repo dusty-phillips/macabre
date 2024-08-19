@@ -2,10 +2,13 @@ import generator_helpers
 import gleam/int
 import gleam/list
 import gleam/option
-import gleam/string_builder
+import gleam/string_builder.{type StringBuilder}
+import pprint
 import python
 
-fn generate_import(import_: python.Import) -> string_builder.StringBuilder {
+pub type Foo
+
+fn generate_import(import_: python.Import) -> StringBuilder {
   case import_ {
     python.UnqualifiedImport(module, name, option.None) ->
       string_builder.new()
@@ -22,7 +25,7 @@ fn generate_binop(
   name: python.BinaryOperator,
   left: python.Expression,
   right: python.Expression,
-) -> string_builder.StringBuilder {
+) -> StringBuilder {
   let op_string = case name {
     python.And -> " and "
     python.Or -> " or "
@@ -78,9 +81,7 @@ fn generate_expression(expression: python.Expression) {
   }
 }
 
-fn generate_statement(
-  statement: python.Statement,
-) -> string_builder.StringBuilder {
+fn generate_statement(statement: python.Statement) -> StringBuilder {
   case statement {
     python.Expression(expression) ->
       generate_expression(expression)
@@ -88,24 +89,20 @@ fn generate_statement(
   }
 }
 
-fn generate_parameter(
-  param: python.FunctionParameter,
-) -> string_builder.StringBuilder {
+fn generate_parameter(param: python.FunctionParameter) -> StringBuilder {
   case param {
     python.NameParam(name) -> string_builder.from_string(name)
   }
 }
 
-fn generate_function_body(
-  statements: List(python.Statement),
-) -> string_builder.StringBuilder {
+fn generate_function_body(statements: List(python.Statement)) -> StringBuilder {
   case statements {
     [] -> string_builder.from_string("pass")
     multiple_lines -> generate_plural(multiple_lines, generate_statement, "\n")
   }
 }
 
-fn generate_function(function: python.Function) -> string_builder.StringBuilder {
+fn generate_function(function: python.Function) -> StringBuilder {
   // TODO: The parameters and return types can have Python type hints
   string_builder.new()
   |> string_builder.append("def ")
@@ -122,7 +119,7 @@ fn generate_function(function: python.Function) -> string_builder.StringBuilder 
   )
 }
 
-fn generate_type(type_: python.Type) -> string_builder.StringBuilder {
+fn generate_type(type_: python.Type) -> StringBuilder {
   case type_ {
     python.NamedType(name: "String", module: option.None) ->
       string_builder.from_string("str")
@@ -138,9 +135,7 @@ fn generate_type(type_: python.Type) -> string_builder.StringBuilder {
   }
 }
 
-fn generate_type_fields(
-  field: python.Field(python.Type),
-) -> string_builder.StringBuilder {
+fn generate_type_fields(field: python.Field(python.Type)) -> StringBuilder {
   case field {
     python.UnlabelledField(_) ->
       todo as "not handling unlabeled fields in custom types yet"
@@ -152,9 +147,7 @@ fn generate_type_fields(
   }
 }
 
-fn generate_type_variant(
-  variant: python.Variant,
-) -> string_builder.StringBuilder {
+fn generate_type_variant(variant: python.Variant) -> StringBuilder {
   string_builder.new()
   |> string_builder.append("@dataclass(frozen=True)\n")
   |> string_builder.append("class ")
@@ -168,8 +161,8 @@ fn generate_type_variant(
 
 fn generate_variant_reassign(
   namespace: String,
-) -> fn(python.Variant) -> string_builder.StringBuilder {
-  fn(variant: python.Variant) -> string_builder.StringBuilder {
+) -> fn(python.Variant) -> StringBuilder {
+  fn(variant: python.Variant) -> StringBuilder {
     string_builder.new()
     |> string_builder.append(variant.name)
     |> string_builder.append(" = ")
@@ -179,18 +172,19 @@ fn generate_variant_reassign(
   }
 }
 
-fn generate_custom_type(
-  custom_type: python.CustomType,
-) -> string_builder.StringBuilder {
+fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
+  pprint.debug(custom_type)
   string_builder.new()
   |> string_builder.append("class ")
   |> string_builder.append(custom_type.name)
   |> string_builder.append(":\n")
-  |> string_builder.append_builder(
-    generate_plural(custom_type.variants, generate_type_variant, "\n\n")
-    |> generator_helpers.indent(4)
-    |> generator_helpers.append_if_not_empty("\n\n"),
-  )
+  |> string_builder.append_builder(case custom_type.variants {
+    [] -> todo as "Empty types not supported yet"
+    _ ->
+      generate_plural(custom_type.variants, generate_type_variant, "\n\n")
+      |> generator_helpers.indent(4)
+      |> generator_helpers.append_if_not_empty("\n\n")
+  })
   |> string_builder.append_builder(generate_plural(
     custom_type.variants,
     generate_variant_reassign(custom_type.name),
@@ -199,18 +193,16 @@ fn generate_custom_type(
   |> string_builder.append("\n\n\n")
 }
 
-fn generate_imports(
-  imports: List(python.Import),
-) -> string_builder.StringBuilder {
+fn generate_imports(imports: List(python.Import)) -> StringBuilder {
   generate_plural(imports, generate_import, "\n")
   |> generator_helpers.append_if_not_empty("\n\n\n")
 }
 
 fn generate_plural(
   elements: List(elem),
-  using: fn(elem) -> string_builder.StringBuilder,
+  using: fn(elem) -> StringBuilder,
   join_with: String,
-) -> string_builder.StringBuilder {
+) -> StringBuilder {
   elements
   |> list.map(using)
   |> string_builder.join(join_with)
