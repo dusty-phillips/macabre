@@ -103,7 +103,7 @@ Baz = Foo.Baz
   )
 }
 
-pub fn tuple_type() {
+pub fn tuple_type_test() {
   "pub type Foo {
     Foo(point: #(Int, Int))
   }"
@@ -111,8 +111,59 @@ pub fn tuple_type() {
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
-    @dataclass.dataclass(frozen=True)
+
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    point: typing.Tuple[int, int]
+
+
+",
+  )
+}
+
+pub fn variant_generic_test() {
+  "pub type Foo(elem) {
+    Foo(item: elem)
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+ELEM = typing.TypeVar('ELEM')
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    item: ELEM
+
+
+",
+  )
+}
+
+pub fn multi_variant_generic_test() {
+  "pub type Foo(elem) {
+    Bar(item: elem)
+    Baz(elem: elem)
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+ELEM = typing.TypeVar('ELEM')
+class Foo:
+    @dataclasses.dataclass(frozen=True)
     class Bar:
-        point: typing.Tuple[int, int]",
+        item: ELEM
+    
+    @dataclasses.dataclass(frozen=True)
+    class Baz:
+        elem: ELEM
+
+Bar = Foo.Bar
+Baz = Foo.Baz
+
+
+",
   )
 }

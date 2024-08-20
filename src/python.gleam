@@ -65,6 +65,7 @@ pub type Field(t) {
 pub type Type {
   NamedType(name: String, module: option.Option(String))
   TupleType(elements: List(Type))
+  GenericType(name: String)
 }
 
 pub type Variant {
@@ -72,7 +73,7 @@ pub type Variant {
 }
 
 pub type CustomType {
-  CustomType(name: String, variants: List(Variant))
+  CustomType(name: String, parameters: List(String), variants: List(Variant))
 }
 
 pub type Function {

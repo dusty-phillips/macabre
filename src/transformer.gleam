@@ -210,9 +210,21 @@ fn transform_function(function: glance.Function) -> python.Function {
 fn transform_type(type_: glance.Type) -> python.Type {
   case type_ {
     glance.NamedType(name, module, []) -> python.NamedType(name, module)
+
+    glance.NamedType(name, module, parameters) ->
+      todo as "Not able to transform parameterized types yet"
+
     glance.TupleType(elements) ->
       python.TupleType(list.map(elements, transform_type))
-    _ -> todo as "not able to transform most types yet"
+
+    glance.FunctionType(..) ->
+      todo as "Not able to transform function types yet"
+
+    glance.VariableType(name) -> {
+      python.GenericType(name)
+    }
+
+    glance.HoleType(..) -> todo as "I don't even know what a hole type is"
   }
 }
 
@@ -237,6 +249,7 @@ fn transform_type_variant(variant: glance.Variant) -> python.Variant {
 fn transform_custom_type(custom_type: glance.CustomType) -> python.CustomType {
   python.CustomType(
     name: custom_type.name,
+    parameters: custom_type.parameters,
     variants: list.map(custom_type.variants, transform_type_variant),
   )
 }

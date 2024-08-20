@@ -195,6 +195,10 @@ fn generate_type(type_: python.Type) -> StringBuilder {
       |> generate_plural(generate_type, ", ")
       |> string_builder.prepend("typing.Tuple[")
       |> string_builder.append("]")
+
+    python.GenericType(name) ->
+      string_builder.from_string(name)
+      |> string_builder.uppercase
   }
 }
 
@@ -208,6 +212,15 @@ fn generate_type_field(field: python.Field(python.Type)) -> StringBuilder {
       |> string_builder.append(": ")
       |> string_builder.append_builder(generate_type(item))
   }
+}
+
+fn generate_generic_var(name: String) -> StringBuilder {
+  let upper_name = string_builder.from_string(name) |> string_builder.uppercase
+  string_builder.new()
+  |> string_builder.append_builder(upper_name)
+  |> string_builder.append(" = typing.TypeVar('")
+  |> string_builder.append_builder(upper_name)
+  |> string_builder.append("')\n")
 }
 
 fn generate_type_variant(variant: python.Variant) -> StringBuilder {
@@ -246,12 +259,13 @@ fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
 
     // we just discard the outer class if there is only one variant
     [one_variant] -> {
-      generate_type_variant(one_variant)
+      generate_plural(custom_type.parameters, generate_generic_var, "\n")
+      |> string_builder.append_builder(generate_type_variant(one_variant))
       |> string_builder.append("\n\n\n")
     }
 
     variants -> {
-      string_builder.new()
+      generate_plural(custom_type.parameters, generate_generic_var, "\n")
       |> string_builder.append("class ")
       |> string_builder.append(custom_type.name)
       |> string_builder.append(":\n")
