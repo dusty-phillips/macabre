@@ -1,5 +1,9 @@
 import gleam/option
 
+pub type Context(a) {
+  Context(imports: List(Import), item: a)
+}
+
 pub type Import {
   UnqualifiedImport(module: String, name: String, alias: option.Option(String))
 }

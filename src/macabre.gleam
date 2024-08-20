@@ -1,10 +1,12 @@
 import argv
+import filepath
 import generator
 import glance
 import gleam/io
 import gleam/result
 import gleam/string
 import pprint
+import python_prelude
 import simplifile
 import transformer
 
@@ -27,7 +29,11 @@ pub fn write_output(contents: String, filename: String) -> Result(Nil, String) {
 }
 
 pub fn replace_extension(filename: String) -> String {
-  filename |> string.drop_right(5) <> "py"
+  filename |> filepath.strip_extension <> ".py"
+}
+
+pub fn replace_file(path: String, filename: String) -> String {
+  path |> filepath.directory_name |> filepath.join(filename)
 }
 
 pub fn output_result(filename: String, result: Result(Nil, String)) -> Nil {
@@ -44,6 +50,12 @@ pub fn output_result(filename: String, result: Result(Nil, String)) -> Nil {
   }
 }
 
+pub fn output_prelude_file(filepath: String) -> Result(Nil, String) {
+  filepath
+  |> simplifile.write(python_prelude.gleam_builtins)
+  |> result.replace_error("Unable to write prelude")
+}
+
 pub fn compile(module_contents: String) -> Result(String, String) {
   module_contents
   |> parse
@@ -57,6 +69,13 @@ pub fn compile_module(filename: String) -> Result(Nil, String) {
   |> result.try(compile)
   |> pprint.debug
   |> result.try(write_output(_, replace_extension(filename)))
+  |> result.try(fn(_) {
+    // TODO: eventually, this has to be output to a base directory,
+    // not one copy per module.
+    filename
+    |> replace_file("gleam_builtins.py")
+    |> output_prelude_file
+  })
 }
 
 pub fn main() {

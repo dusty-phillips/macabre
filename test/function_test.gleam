@@ -6,7 +6,11 @@ pub fn external_python_test() {
   fn println() -> nil"
   |> macabre.compile
   |> should.be_ok
-  |> should.equal("from mylib import println\n\n\n")
+  |> should.equal(
+    "from gleam_builtins import *
+
+from mylib import println\n\n\n",
+  )
 }
 
 pub fn skip_external_javascript_test() {
@@ -19,7 +23,9 @@ fn println() -> nil"
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def println():
+    "from gleam_builtins import *
+
+def println():
     pass",
   )
 }
@@ -34,7 +40,9 @@ fn println() -> nil"
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def println():
+    "from gleam_builtins import *
+
+def println():
     pass",
   )
 }
@@ -44,7 +52,9 @@ pub fn empty_body_no_external_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def println():
+    "from gleam_builtins import *
+
+def println():
     pass",
   )
 }
@@ -54,7 +64,9 @@ pub fn function_with_string_param_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def println(arg):
+    "from gleam_builtins import *
+
+def println(arg):
     pass",
   )
 }
@@ -64,7 +76,9 @@ pub fn function_with_two_string_params_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def println(arg, other):
+    "from gleam_builtins import *
+
+def println(arg, other):
     pass",
   )
 }
@@ -77,7 +91,9 @@ fn func2() -> nil {}
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def func1():
+    "from gleam_builtins import *
+
+def func1():
     pass
 
 

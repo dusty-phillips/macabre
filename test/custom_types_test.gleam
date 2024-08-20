@@ -8,11 +8,10 @@ pub fn single_variant_custom_type_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "from dataclasses import dataclass
-
+    "from gleam_builtins import *
 
 class Foo:
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class Bar:
         a: int
 
@@ -31,15 +30,14 @@ pub fn multi_variant_custom_type_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "from dataclasses import dataclass
-
+    "from gleam_builtins import *
 
 class Foo:
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class Bar:
         a: int
     
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class Baz:
         a: str
 

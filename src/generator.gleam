@@ -5,6 +5,7 @@ import gleam/option
 import gleam/string_builder.{type StringBuilder}
 import pprint
 import python
+import python_prelude
 
 pub type Foo
 
@@ -172,7 +173,7 @@ fn generate_type_fields(field: python.Field(python.Type)) -> StringBuilder {
 
 fn generate_type_variant(variant: python.Variant) -> StringBuilder {
   string_builder.new()
-  |> string_builder.append("@dataclass(frozen=True)\n")
+  |> string_builder.append("@dataclasses.dataclass(frozen=True)\n")
   |> string_builder.append("class ")
   |> string_builder.append(variant.name)
   |> string_builder.append(":\n")
@@ -233,6 +234,7 @@ fn generate_plural(
 
 pub fn generate(module: python.Module) -> Result(String, String) {
   string_builder.new()
+  |> string_builder.append(python_prelude.prelude)
   |> string_builder.append_builder(generate_imports(module.imports))
   |> string_builder.append_builder(generate_plural(
     module.custom_types,

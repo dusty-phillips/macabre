@@ -9,7 +9,9 @@ pub fn simple_assignment_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def main():
+    "from gleam_builtins import *
+
+def main():
     a = \"hello world\"",
   )
 }
@@ -23,7 +25,9 @@ pub fn mulitple_simple_assignment_test() {
   |> macabre.compile
   |> should.be_ok
   |> should.equal(
-    "def main():
+    "from gleam_builtins import *
+
+def main():
     a = \"hello world\"
     b = 42",
   )

@@ -61,3 +61,4 @@ PRs are welcome.
 - only compiles one module at a time
 - eliminate all todos in source code
 - panic should probably raise a custom/stdlib exception
+- generate **main** if a module has a main function

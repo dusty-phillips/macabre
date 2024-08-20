@@ -251,17 +251,8 @@ fn transform_custom_type_in_module(
   module: python.Module,
   custom_type: glance.Definition(glance.CustomType),
 ) -> python.Module {
-  let has_dataclass_import =
-    list.find(module.imports, fn(imp) { imp == python.dataclass_import })
-
-  let imports = case has_dataclass_import {
-    Ok(_) -> module.imports
-    Error(_) -> [python.dataclass_import, ..module.imports]
-  }
-
   python.Module(
     ..module,
-    imports: imports,
     custom_types: [
       transform_custom_type(custom_type.definition),
       ..module.custom_types
