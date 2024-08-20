@@ -6,14 +6,14 @@ Seriously, Just back away slowly. I'm just playing around.
 
 Are you still here? Don't you know there's a monster at the end of this book?
 
-## What have you done?
+## OMG, What have you done?
 
 Nothing, yet. It only "barely" works if we carefully redefine "barely" to "doesn't".
 
 This is an ultra experimental compiler written in Gleam to compile Gleam source code (using
 the [glance](https://hexdocs.pm/glance/) package) to Python.
 
-## OMG, Why are you doing this?
+## Why are you doing this?
 
 I have no idea. It's fun and educational. (I'm on a roll with this redefining words thing.)
 
