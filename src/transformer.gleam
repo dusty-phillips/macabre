@@ -89,6 +89,16 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.Variable(string) -> python.Variable(string)
     glance.NegateInt(expression) ->
       python.Negate(transform_expression(expression))
+    glance.Panic(option.None) ->
+      python.Panic(python.String("panic expression evaluated"))
+    glance.Panic(option.Some(expression)) ->
+      python.Panic(transform_expression(expression))
+    glance.Todo(option.None) ->
+      python.Todo(python.String("This has not yet been implemented"))
+    glance.Todo(option.Some(expression)) ->
+      python.Todo(transform_expression(expression))
+    glance.NegateBool(expression) ->
+      python.Not(transform_expression(expression))
     glance.Call(glance.Variable(function_name), arguments) -> {
       python.Call(
         function_name,

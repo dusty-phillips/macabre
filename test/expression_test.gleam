@@ -99,12 +99,75 @@ pub fn negate_int_test() {
   let b = -a
   }"
   |> macabre.compile
-  |> pprint.debug
   |> should.be_ok
   |> should.equal(
     "def main():
     a = -1
     b = -a",
+  )
+}
+
+pub fn negate_bool_test() {
+  "fn main() {
+  let b = !True
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    b = not True",
+  )
+}
+
+pub fn empty_panic_test() {
+  "fn main() {
+  panic
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    raise BaseException(\"panic expression evaluated\")
+    ",
+  )
+}
+
+pub fn string_panic_test() {
+  "fn main() {
+  panic as \"my custom panic\"
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    raise BaseException(\"my custom panic\")
+    ",
+  )
+}
+
+pub fn empty_todo_test() {
+  "fn main() {
+  todo
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    raise NotImplementedError(\"This has not yet been implemented\")
+    ",
+  )
+}
+
+pub fn string_todo_test() {
+  "fn main() {
+  todo as \"much is yet to be done\"
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    raise NotImplementedError(\"much is yet to be done\")
+    ",
   )
 }
 

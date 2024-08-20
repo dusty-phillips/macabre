@@ -57,6 +57,16 @@ fn generate_expression(expression: python.Expression) {
     python.Variable(value) -> string_builder.from_string(value)
     python.Negate(expression) ->
       generate_expression(expression) |> string_builder.prepend("-")
+    python.Not(expression) ->
+      generate_expression(expression) |> string_builder.prepend("not ")
+    python.Panic(expression) ->
+      generate_expression(expression)
+      |> string_builder.prepend("raise BaseException(")
+      |> string_builder.append(")")
+    python.Todo(expression) ->
+      generate_expression(expression)
+      |> string_builder.prepend("raise NotImplementedError(")
+      |> string_builder.append(")")
     python.Tuple(expressions) ->
       string_builder.new()
       |> string_builder.append("(")

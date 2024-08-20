@@ -42,6 +42,7 @@ fd .gleam | entr gleam test
 Are you insane?
 
 Sweet, me too.
+
 PRs are welcome.
 
 ### TODO
@@ -56,3 +57,4 @@ PRs are welcome.
 - no concept of a "project", gleam.toml, downloading dependencies
 - only compiles one module at a time
 - eliminate all todos in source code
+- panic should probably raise a custom/stdlib exception
