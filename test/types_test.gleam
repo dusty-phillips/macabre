@@ -167,3 +167,35 @@ Baz = Foo.Baz
 ",
   )
 }
+
+// TODO: The extra whitespace after the class Foo has me puzzled
+pub fn generic_field_type_test() {
+  "pub type Foo(elem) {
+    Foo(item: elem)
+  }
+
+  pub type Bar {
+    Bar(foo: Foo(String))
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+ELEM = typing.TypeVar('ELEM')
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    item: ELEM
+
+
+
+
+
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    foo: Foo[str]
+
+
+",
+  )
+}

@@ -178,17 +178,31 @@ fn generate_function(function: python.Function) -> StringBuilder {
 
 fn generate_type(type_: python.Type) -> StringBuilder {
   case type_ {
-    python.NamedType(name: "String", module: option.None) ->
-      string_builder.from_string("str")
+    python.NamedType(
+      name: "String",
+      module: option.None,
+      generic_parameters: [],
+    ) -> string_builder.from_string("str")
 
-    python.NamedType(name: "Int", module: option.None) ->
+    python.NamedType(name: "Int", module: option.None, generic_parameters: []) ->
       string_builder.from_string("int")
 
-    python.NamedType(name: name, module: option.None) ->
-      string_builder.from_string(name)
-
-    python.NamedType(name: name, module: option.Some(module)) ->
-      string_builder.from_strings([module, ".", name])
+    python.NamedType(name: name, module:, generic_parameters:) -> {
+      pprint.debug(generic_parameters)
+      let params = case generic_parameters {
+        [] -> string_builder.new()
+        params_exist ->
+          params_exist
+          |> generate_plural(generate_type, ",")
+          |> string_builder.prepend("[")
+          |> string_builder.append("]")
+      }
+      module
+      |> option.map(fn(mod) { string_builder.from_strings([mod, "."]) })
+      |> option.lazy_unwrap(string_builder.new)
+      |> string_builder.append(name)
+      |> string_builder.append_builder(params)
+    }
 
     python.TupleType(elements) ->
       elements
@@ -242,7 +256,6 @@ fn generate_variant_reassign(
   namespace: String,
 ) -> fn(python.Variant) -> StringBuilder {
   fn(variant: python.Variant) -> StringBuilder {
-    pprint.debug(variant)
     string_builder.new()
     |> string_builder.append(variant.name)
     |> string_builder.append(" = ")

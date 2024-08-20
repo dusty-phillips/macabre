@@ -63,7 +63,11 @@ pub type Field(t) {
 }
 
 pub type Type {
-  NamedType(name: String, module: option.Option(String))
+  NamedType(
+    name: String,
+    module: option.Option(String),
+    generic_parameters: List(Type),
+  )
   TupleType(elements: List(Type))
   GenericType(name: String)
 }

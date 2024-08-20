@@ -68,4 +68,5 @@ PRs are welcome.
 - custom types with unlabelled fields are not working
   - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
 - I notice that the javascript doesn't generate the wrapping class for custom variants. Can we get away with not having them?
+- Related: if you have a multi-variant type where the first constructor shadows the type's name, it breaks
 - maybe call ruff or black on the files after they are output, if they are installed.

@@ -105,7 +105,6 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       python.Not(transform_expression(expression))
 
     glance.Call(function, arguments) -> {
-      pprint.debug(arguments)
       python.Call(
         function: transform_expression(function),
         arguments: list.map(arguments, transform_call_argument),
@@ -150,7 +149,6 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       python.Call(python.Variable(function), argument_expressions)
     }
     glance.BinaryOperator(glance.Pipe, _, right) -> {
-      pprint.debug(right)
       panic as "I don't know how to handle this structure of pipe"
     }
     glance.BinaryOperator(name, left, right) ->
@@ -209,10 +207,8 @@ fn transform_function(function: glance.Function) -> python.Function {
 
 fn transform_type(type_: glance.Type) -> python.Type {
   case type_ {
-    glance.NamedType(name, module, []) -> python.NamedType(name, module)
-
     glance.NamedType(name, module, parameters) ->
-      todo as "Not able to transform parameterized types yet"
+      python.NamedType(name, module, list.map(parameters, transform_type))
 
     glance.TupleType(elements) ->
       python.TupleType(list.map(elements, transform_type))
