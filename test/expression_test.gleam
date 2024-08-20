@@ -1,6 +1,5 @@
 import gleeunit/should
 import macabre
-import pprint
 
 pub fn string_expression_test() {
   "fn main() {
@@ -526,13 +525,10 @@ pub fn record_update_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-class Foo:
-    @dataclasses.dataclass(frozen=True)
-    class Bar:
-        a: int
-        b: str
-
-Bar = Foo.Bar
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    a: int
+    b: str
 
 
 def main():

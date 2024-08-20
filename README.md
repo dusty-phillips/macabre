@@ -47,7 +47,6 @@ PRs are welcome.
 
 ### TODO
 
-- custom types with only one variant should not build a container class
 - custom types with no fields are probably not working
 - custom types with unlabelled fields are probably not working
 - most expressions aren't implemented yet

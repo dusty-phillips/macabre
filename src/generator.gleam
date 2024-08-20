@@ -212,6 +212,7 @@ fn generate_variant_reassign(
   namespace: String,
 ) -> fn(python.Variant) -> StringBuilder {
   fn(variant: python.Variant) -> StringBuilder {
+    pprint.debug(variant)
     string_builder.new()
     |> string_builder.append(variant.name)
     |> string_builder.append(" = ")
@@ -222,24 +223,31 @@ fn generate_variant_reassign(
 }
 
 fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
-  pprint.debug(custom_type)
-  string_builder.new()
-  |> string_builder.append("class ")
-  |> string_builder.append(custom_type.name)
-  |> string_builder.append(":\n")
-  |> string_builder.append_builder(case custom_type.variants {
+  case custom_type.variants {
     [] -> todo as "Empty types not supported yet"
-    _ ->
-      generate_plural(custom_type.variants, generate_type_variant, "\n\n")
-      |> generator_helpers.indent(4)
-      |> generator_helpers.append_if_not_empty("\n\n")
-  })
-  |> string_builder.append_builder(generate_plural(
-    custom_type.variants,
-    generate_variant_reassign(custom_type.name),
-    "\n",
-  ))
-  |> string_builder.append("\n\n\n")
+    // we just discard the outer class if there is only one variant
+    [one_variant] -> {
+      generate_type_variant(one_variant)
+      |> string_builder.append("\n\n\n")
+    }
+    variants -> {
+      string_builder.new()
+      |> string_builder.append("class ")
+      |> string_builder.append(custom_type.name)
+      |> string_builder.append(":\n")
+      |> string_builder.append_builder(
+        generate_plural(variants, generate_type_variant, "\n\n")
+        |> generator_helpers.indent(4)
+        |> generator_helpers.append_if_not_empty("\n\n"),
+      )
+      |> string_builder.append_builder(generate_plural(
+        custom_type.variants,
+        generate_variant_reassign(custom_type.name),
+        "\n",
+      ))
+      |> string_builder.append("\n\n\n")
+    }
+  }
 }
 
 fn generate_imports(imports: List(python.Import)) -> StringBuilder {

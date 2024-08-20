@@ -10,12 +10,9 @@ pub fn single_variant_custom_type_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-class Foo:
-    @dataclasses.dataclass(frozen=True)
-    class Bar:
-        a: int
-
-Bar = Foo.Bar
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    a: int
 
 
 ",
