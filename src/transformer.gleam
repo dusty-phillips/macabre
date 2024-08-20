@@ -157,14 +157,17 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.BinaryOperator(name, left, right) ->
       transform_binop(name, left, right)
 
+    glance.RecordUpdate(module, constructor, record, fields) as expr -> {
+      python.RecordUpdate(module, constructor, record, fields)
+    }
+
     glance.BitString(_) as expr
     | glance.Block(_) as expr
     | glance.Case(_, _) as expr
     | glance.FieldAccess(_, _) as expr
     | glance.Fn(_, _, _) as expr
     | glance.FnCapture(_, _, _, _) as expr
-    | glance.List(_, _) as expr
-    | glance.RecordUpdate(_, _, _, _) as expr -> {
+    | glance.List(_, _) as expr -> {
       pprint.debug(expr)
       todo as "Several expressions are not implemented yet"
     }
