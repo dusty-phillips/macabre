@@ -47,7 +47,6 @@ PRs are welcome.
 
 ### TODO
 
-- panic should probably raise a custom/stdlib exception instead of BaseException
 - custom types with unlabelled fields are not working
   - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
 - some complex expressions aren't implemented yet

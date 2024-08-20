@@ -146,7 +146,7 @@ pub fn empty_panic_test() {
     "from gleam_builtins import *
 
 def main():
-    raise BaseException(\"panic expression evaluated\")
+    raise GleamPanic(\"panic expression evaluated\")
     ",
   )
 }
@@ -161,7 +161,7 @@ pub fn string_panic_test() {
     "from gleam_builtins import *
 
 def main():
-    raise BaseException(\"my custom panic\")
+    raise GleamPanic(\"my custom panic\")
     ",
   )
 }

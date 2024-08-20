@@ -76,7 +76,7 @@ fn generate_expression(expression: python.Expression) {
       generate_expression(expression) |> string_builder.prepend("not ")
     python.Panic(expression) ->
       generate_expression(expression)
-      |> string_builder.prepend("raise BaseException(")
+      |> string_builder.prepend("raise GleamPanic(")
       |> string_builder.append(")")
     python.Todo(expression) ->
       generate_expression(expression)
