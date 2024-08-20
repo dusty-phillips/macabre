@@ -13,7 +13,7 @@ Nothing, yet. It only "barely" works if we carefully redefine "barely" to "doesn
 This is an ultra experimental compiler written in Gleam to compile Gleam source code (using
 the [glance](https://hexdocs.pm/glance/) package) to Python.
 
-## Why are you doing this?
+## OMG, Why are you doing this?
 
 I have no idea. It's fun and educational. (I'm on a roll with this redefining words thing.)
 
