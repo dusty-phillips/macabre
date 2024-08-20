@@ -184,7 +184,7 @@ fn generate_type(type_: python.Type) -> StringBuilder {
   }
 }
 
-fn generate_type_fields(field: python.Field(python.Type)) -> StringBuilder {
+fn generate_type_field(field: python.Field(python.Type)) -> StringBuilder {
   case field {
     python.UnlabelledField(_) ->
       todo as "not handling unlabeled fields in custom types yet"
@@ -203,7 +203,10 @@ fn generate_type_variant(variant: python.Variant) -> StringBuilder {
   |> string_builder.append(variant.name)
   |> string_builder.append(":\n")
   |> string_builder.append_builder(
-    generate_plural(variant.fields, generate_type_fields, "\n")
+    case variant.fields {
+      [] -> string_builder.from_string("pass")
+      fields -> generate_plural(fields, generate_type_field, "\n")
+    }
     |> generator_helpers.indent(4),
   )
 }
@@ -224,12 +227,15 @@ fn generate_variant_reassign(
 
 fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
   case custom_type.variants {
-    [] -> todo as "Empty types not supported yet"
+    // empty types get discarded
+    [] -> string_builder.new()
+
     // we just discard the outer class if there is only one variant
     [one_variant] -> {
       generate_type_variant(one_variant)
       |> string_builder.append("\n\n\n")
     }
+
     variants -> {
       string_builder.new()
       |> string_builder.append("class ")

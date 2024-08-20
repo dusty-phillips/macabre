@@ -47,9 +47,10 @@ PRs are welcome.
 
 ### TODO
 
-- custom types with no fields are probably not working
-- custom types with unlabelled fields are probably not working
-- most expressions aren't implemented yet
+- panic should probably raise a custom/stdlib exception instead of BaseException
+- custom types with unlabelled fields are not working
+  - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
+- some complex expressions aren't implemented yet
 - haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse
 - No List or Result custom types yet
@@ -58,7 +59,8 @@ PRs are welcome.
 - not currently generating python type hints (e.g. function arguments and return types), but gleam gives us that info so may as well use it
 - no concept of a "project", gleam.toml, downloading dependencies
 - only compiles one module at a time
+- copies the prelude module blindly into the directory that contains that one module
 - eliminate all todos in source code
-- panic should probably raise a custom/stdlib exception
 - generate **main** if a module has a main function
+- I notice that the javascript doesn't generate the wrapping class for custom variants. Can we get away with not having them?
 - flesh out this list
