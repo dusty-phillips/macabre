@@ -33,6 +33,7 @@ pub type Expression {
   Bool(String)
   Variable(String)
   Tuple(List(Expression))
+  Negate(Expression)
   TupleIndex(tuple: Expression, index: Int)
   Call(function_name: String, arguments: List(Expression))
   BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)

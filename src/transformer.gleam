@@ -82,17 +82,19 @@ fn transform_binop(
 
 fn transform_expression(expression: glance.Expression) -> python.Expression {
   case expression {
+    glance.Int(string) | glance.Float(string) -> python.Number(string)
+    glance.String(string) -> python.String(string)
+    glance.Variable("True") -> python.Bool("True")
+    glance.Variable("False") -> python.Bool("False")
+    glance.Variable(string) -> python.Variable(string)
+    glance.NegateInt(expression) ->
+      python.Negate(transform_expression(expression))
     glance.Call(glance.Variable(function_name), arguments) -> {
       python.Call(
         function_name,
         arguments: list.map(arguments, transform_call_argument),
       )
     }
-    glance.String(string) -> python.String(string)
-    glance.Int(string) | glance.Float(string) -> python.Number(string)
-    glance.Variable("True") -> python.Bool("True")
-    glance.Variable("False") -> python.Bool("False")
-    glance.Variable(string) -> python.Variable(string)
     glance.Tuple(expressions) ->
       expressions
       |> list.map(transform_expression)

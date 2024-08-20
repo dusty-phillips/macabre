@@ -1,5 +1,6 @@
-import glacier/should
+import gleeunit/should
 import macabre
+import pprint
 
 pub fn string_expression_test() {
   "fn main() {
@@ -89,6 +90,21 @@ pub fn variable_expression_test() {
     "def main():
     println(a)
     ",
+  )
+}
+
+pub fn negate_int_test() {
+  "fn main() {
+  let a = -1
+  let b = -a
+  }"
+  |> macabre.compile
+  |> pprint.debug
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    a = -1
+    b = -a",
   )
 }
 

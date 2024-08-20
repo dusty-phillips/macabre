@@ -25,13 +25,24 @@ gleam run -- some_very_simple_file.gleam  # compile to python
 
 ## Development
 
+Run tests with gleeunit:
+
 ```sh
-gleam test  # Run tests with glacier
+gleam test
+```
+
+Run tests in watch mode:
+
+```sh
+fd .gleam | entr gleam test
 ```
 
 ## Contributing
 
-Are you insane? Sweet, me too. PRs are welcome.
+Are you insane?
+
+Sweet, me too.
+PRs are welcome.
 
 ### TODO
 

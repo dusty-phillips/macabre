@@ -1,7 +1,7 @@
-import glacier/should
+import gleeunit/should
 import macabre
 
-pub fn multi_variant_custom_type_test() {
+pub fn simple_assignment_test() {
   "pub fn main() {
     let a = \"hello world\"
   }
@@ -10,7 +10,21 @@ pub fn multi_variant_custom_type_test() {
   |> should.be_ok
   |> should.equal(
     "def main():
+    a = \"hello world\"",
+  )
+}
+
+pub fn mulitple_simple_assignment_test() {
+  "pub fn main() {
+    let a = \"hello world\"
+    let b = 42
+  }
+  "
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
     a = \"hello world\"
-    ",
+    b = 42",
   )
 }
