@@ -79,6 +79,19 @@ pub fn false_expression_test() {
   )
 }
 
+pub fn variable_expression_test() {
+  "fn main() {
+  println(a)
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    println(a)
+    ",
+  )
+}
+
 pub fn tuple_index_test() {
   "fn main() {
   #(42, 12.5, \"foo\").1

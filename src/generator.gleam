@@ -92,6 +92,7 @@ fn generate_statement(statement: python.Statement) -> StringBuilder {
       |> string_builder.append(name)
       |> string_builder.append(" = ")
       |> string_builder.append_builder(generate_expression(value))
+      |> string_builder.append("\n")
     }
   }
 }
