@@ -496,7 +496,7 @@ def main():
   )
 }
 
-pub fn call_expression_test() {
+pub fn simple_call_expression_test() {
   "fn main() {
       foo(\"bar\")
   }"
@@ -507,6 +507,21 @@ pub fn call_expression_test() {
 
 def main():
     foo(\"bar\")
+    ",
+  )
+}
+
+pub fn labelled_argument_call_expression_test() {
+  "fn main() {
+      foo(\"bar\", baz: \"baz\")
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    foo(\"bar\", baz=\"baz\")
     ",
   )
 }
@@ -534,5 +549,29 @@ class Bar:
 def main():
     foo = Bar(1, \"who\")
     bar = dataclasses.replace(foo, b=\"you\")",
+  )
+}
+
+pub fn construct_record_with_label_test() {
+  "pub type Foo {
+    Bar(a: Int, b: String)
+  }
+
+  pub fn main() {
+    let foo = Bar(b: \"who\", a: 1)
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    a: int
+    b: str
+
+
+def main():
+    foo = Bar(b=\"who\", a=1)",
   )
 }

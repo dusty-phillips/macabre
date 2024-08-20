@@ -45,15 +45,20 @@ Sweet, me too.
 
 PRs are welcome.
 
-### TODO
+### Some of the things I know are missing
 
 - some complex expressions aren't implemented yet
-- labelled arguments when _constructing_ a record aren't supported yet
+- calling functions or constructors with out of order positional args doesn't work in python
+  - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1, 1), mystr: "Foo")` in gleam
+  - javascript seems to solve this by automatically reordering the arguments to match the input type
+- implicit returns from functions aren't hooked up
+- label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
 - haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse
 - No List or Result custom types yet
 - glance doesn't support comments
-- glance doesn't fully typecheck (e.g. `2.0 - 1.5` compiles successfully, but should be `2.0 -. 1.5`)
+- Not doing anything to avoid collision between gleam identifiers with python keywords
+- glance doesn't typecheck (e.g. `2.0 - 1.5` compiles successfully, but should be `2.0 -. 1.5`)
 - not currently generating python type hints (e.g. function arguments and return types), but gleam gives us that info so may as well use it
 - no concept of a "project", gleam.toml, downloading dependencies
 - only compiles one module at a time
@@ -63,4 +68,4 @@ PRs are welcome.
 - custom types with unlabelled fields are not working
   - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
 - I notice that the javascript doesn't generate the wrapping class for custom variants. Can we get away with not having them?
-- flesh out this list
+- maybe call ruff or black on the files after they are output, if they are installed.

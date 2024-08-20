@@ -62,6 +62,16 @@ fn generate_record_update_fields(
   }
 }
 
+fn generate_call_fields(field: python.Field(python.Expression)) -> StringBuilder {
+  case field {
+    python.UnlabelledField(expression) -> generate_expression(expression)
+    python.LabelledField(label, expression) ->
+      generate_expression(expression)
+      |> string_builder.prepend("=")
+      |> string_builder.prepend(label)
+  }
+}
+
 fn generate_expression(expression: python.Expression) {
   case expression {
     python.String(string) -> string_builder.from_strings(["\"", string, "\""])
@@ -113,7 +123,7 @@ fn generate_expression(expression: python.Expression) {
       |> string_builder.append("(")
       |> string_builder.append_builder(
         arguments
-        |> list.map(generate_expression)
+        |> list.map(generate_call_fields)
         |> string_builder.join(", "),
       )
       |> string_builder.append(")")

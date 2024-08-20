@@ -41,12 +41,12 @@ fn transform_function_parameter(
 
 fn transform_call_argument(
   argument: glance.Field(glance.Expression),
-) -> python.Expression {
+) -> python.Field(python.Expression) {
   case argument {
-    glance.Field(label: option.Some(_), item: _) ->
-      todo as "Labelled arguments are not yet supported"
+    glance.Field(option.Some(label), expression) ->
+      python.LabelledField(label, transform_expression(expression))
     glance.Field(label: option.None, item: expression) ->
-      transform_expression(expression)
+      python.UnlabelledField(transform_expression(expression))
   }
 }
 
@@ -105,6 +105,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       python.Not(transform_expression(expression))
 
     glance.Call(function, arguments) -> {
+      pprint.debug(arguments)
       python.Call(
         function: transform_expression(function),
         arguments: list.map(arguments, transform_call_argument),
@@ -124,7 +125,9 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
 
     glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
       // simple pipe left |> foo
-      python.Call(python.Variable(function), [transform_expression(left)])
+      python.Call(python.Variable(function), [
+        python.UnlabelledField(transform_expression(left)),
+      ])
     }
 
     glance.BinaryOperator(
