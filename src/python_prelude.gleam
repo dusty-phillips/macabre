@@ -1,5 +1,6 @@
 pub const gleam_builtins = "
 import dataclasses
+import typing
 
 class GleamPanic(BaseException):
     pass

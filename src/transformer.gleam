@@ -1,7 +1,6 @@
 import glance
 import gleam/list
 import gleam/option
-import gleam/string
 import pprint
 import python
 
@@ -208,6 +207,8 @@ fn transform_function(function: glance.Function) -> python.Function {
 fn transform_type(type_: glance.Type) -> python.Type {
   case type_ {
     glance.NamedType(name, module, []) -> python.NamedType(name, module)
+    glance.TupleType(elements) ->
+      python.TupleType(list.map(elements, transform_type))
     _ -> todo as "not able to transform most types yet"
   }
 }

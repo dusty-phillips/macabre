@@ -102,3 +102,17 @@ Baz = Foo.Baz
 ",
   )
 }
+
+pub fn tuple_type() {
+  "pub type Foo {
+    Foo(point: #(Int, Int))
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+    @dataclass.dataclass(frozen=True)
+    class Bar:
+        point: typing.Tuple[int, int]",
+  )
+}

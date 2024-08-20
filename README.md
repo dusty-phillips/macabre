@@ -47,9 +47,8 @@ PRs are welcome.
 
 ### TODO
 
-- custom types with unlabelled fields are not working
-  - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
 - some complex expressions aren't implemented yet
+- labelled arguments when _constructing_ a record aren't supported yet
 - haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse
 - No List or Result custom types yet
@@ -61,5 +60,7 @@ PRs are welcome.
 - copies the prelude module blindly into the directory that contains that one module
 - eliminate all todos in source code
 - generate **main** if a module has a main function
+- custom types with unlabelled fields are not working
+  - Given that labelled and unlabelled fields can be mixed on one class, I have a feeling we have to ditch dataclasses. Probably a custom class with slots, a dict of names to indices, and a custom **match_args** that can handle tuple-like _or_ record-like syntax?
 - I notice that the javascript doesn't generate the wrapping class for custom variants. Can we get away with not having them?
 - flesh out this list

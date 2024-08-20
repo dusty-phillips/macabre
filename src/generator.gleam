@@ -7,8 +7,6 @@ import pprint
 import python
 import python_prelude
 
-pub type Foo
-
 fn generate_import(import_: python.Import) -> StringBuilder {
   case import_ {
     python.UnqualifiedImport(module, name, option.None) ->
@@ -181,6 +179,12 @@ fn generate_type(type_: python.Type) -> StringBuilder {
 
     python.NamedType(name: name, module: option.Some(module)) ->
       string_builder.from_strings([module, ".", name])
+
+    python.TupleType(elements) ->
+      elements
+      |> generate_plural(generate_type, ", ")
+      |> string_builder.prepend("typing.Tuple[")
+      |> string_builder.append("]")
   }
 }
 

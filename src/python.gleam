@@ -64,6 +64,7 @@ pub type Field(t) {
 
 pub type Type {
   NamedType(name: String, module: option.Option(String))
+  TupleType(elements: List(Type))
 }
 
 pub type Variant {
