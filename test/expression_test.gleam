@@ -184,6 +184,19 @@ pub fn tuple_index_test() {
   )
 }
 
+pub fn field_access_test() {
+  "fn main() {
+    foo.b
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "def main():
+    foo.b
+    ",
+  )
+}
+
 pub fn binop_int_add_test() {
   "fn main() {
     40 + 2

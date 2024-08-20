@@ -48,7 +48,10 @@ PRs are welcome.
 ### TODO
 
 - flesh out this list
+- custom types with no fields are probably not working
+- custom types with unlabelled fields are probably not working
 - most expressions aren't implemented yet
+- haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse
 - No List or Result custom types yet
 - glance doesn't support comments

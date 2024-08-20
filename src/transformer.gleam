@@ -123,6 +123,9 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.TupleIndex(tuple, index) ->
       python.TupleIndex(transform_expression(tuple), index)
 
+    glance.FieldAccess(container: expression, label:) ->
+      python.FieldAccess(transform_expression(expression), label)
+
     glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
       // simple pipe left |> foo
       python.Call(function, [transform_expression(left)])

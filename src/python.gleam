@@ -38,6 +38,7 @@ pub type Expression {
   Panic(Expression)
   Todo(Expression)
   TupleIndex(tuple: Expression, index: Int)
+  FieldAccess(container: Expression, label: String)
   Call(function_name: String, arguments: List(Expression))
   BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)
 }

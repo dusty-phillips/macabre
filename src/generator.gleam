@@ -79,6 +79,10 @@ fn generate_expression(expression: python.Expression) {
       |> string_builder.append("[")
       |> string_builder.append(index |> int.to_string)
       |> string_builder.append("]")
+    python.FieldAccess(expression, label) ->
+      generate_expression(expression)
+      |> string_builder.append(".")
+      |> string_builder.append(label)
     python.Call(function_name, arguments) ->
       string_builder.new()
       |> string_builder.append(function_name)
