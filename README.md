@@ -47,7 +47,7 @@ PRs are welcome.
 
 ### TODO
 
-- flesh out this list
+- custom types with only one variant should not build a container class
 - custom types with no fields are probably not working
 - custom types with unlabelled fields are probably not working
 - most expressions aren't implemented yet
@@ -62,3 +62,4 @@ PRs are welcome.
 - eliminate all todos in source code
 - panic should probably raise a custom/stdlib exception
 - generate **main** if a module has a main function
+- flesh out this list

@@ -511,3 +511,32 @@ def main():
     ",
   )
 }
+
+pub fn record_update_test() {
+  "pub type Foo {
+    Bar(a: Int, b: String)
+  }
+
+  pub fn main() {
+    let foo = Bar(1, \"who\")
+    let bar = Bar(..foo, b: \"you\")
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+class Foo:
+    @dataclasses.dataclass(frozen=True)
+    class Bar:
+        a: int
+        b: str
+
+Bar = Foo.Bar
+
+
+def main():
+    foo = Bar(1, \"who\")
+    bar = dataclasses.replace(foo, b=\"you\")",
+  )
+}

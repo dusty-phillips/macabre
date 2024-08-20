@@ -50,6 +50,20 @@ fn generate_binop(
   |> string_builder.append_builder(generate_expression(right))
 }
 
+fn generate_record_update_fields(
+  field: python.Field(python.Expression),
+) -> StringBuilder {
+  case field {
+    python.UnlabelledField(_) ->
+      panic("Unlabeled fields are not expected on record updates")
+    python.LabelledField(label, expression) ->
+      string_builder.new()
+      |> string_builder.append(label)
+      |> string_builder.append("=")
+      |> string_builder.append_builder(generate_expression(expression))
+  }
+}
+
 fn generate_expression(expression: python.Expression) {
   case expression {
     python.String(string) -> string_builder.from_strings(["\"", string, "\""])
@@ -84,9 +98,20 @@ fn generate_expression(expression: python.Expression) {
       generate_expression(expression)
       |> string_builder.append(".")
       |> string_builder.append(label)
-    python.Call(function_name, arguments) ->
+    python.RecordUpdate(record, fields) ->
       string_builder.new()
-      |> string_builder.append(function_name)
+      |> string_builder.append("dataclasses.replace(")
+      |> string_builder.append_builder(generate_expression(record))
+      |> string_builder.append(", ")
+      |> string_builder.append_builder(generate_plural(
+        fields,
+        generate_record_update_fields,
+        ", ",
+      ))
+      |> string_builder.append(")")
+    python.Call(function, arguments) ->
+      string_builder.new()
+      |> string_builder.append_builder(generate_expression(function))
       |> string_builder.append("(")
       |> string_builder.append_builder(
         arguments

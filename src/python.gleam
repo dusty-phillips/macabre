@@ -43,13 +43,8 @@ pub type Expression {
   Todo(Expression)
   TupleIndex(tuple: Expression, index: Int)
   FieldAccess(container: Expression, label: String)
-  Call(function_name: String, arguments: List(Expression))
-  RecordUpdate(
-    module: option.Option(String),
-    constructior: String,
-    record: Expression,
-    fields: List(#(String, Expression)),
-  )
+  Call(function: Expression, arguments: List(Expression))
+  RecordUpdate(record: Expression, fields: List(Field(Expression)))
   BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)
 }
 

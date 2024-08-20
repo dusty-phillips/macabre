@@ -105,14 +105,11 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.NegateBool(expression) ->
       python.Not(transform_expression(expression))
 
-    glance.Call(glance.Variable(function_name), arguments) -> {
+    glance.Call(function, arguments) -> {
       python.Call(
-        function_name,
+        function: transform_expression(function),
         arguments: list.map(arguments, transform_call_argument),
       )
-    }
-    glance.Call(..) -> {
-      panic as "I don't understand how to handle non-valiable calls"
     }
 
     glance.Tuple(expressions) ->
@@ -128,7 +125,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
 
     glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
       // simple pipe left |> foo
-      python.Call(function, [transform_expression(left)])
+      python.Call(python.Variable(function), [transform_expression(left)])
     }
 
     glance.BinaryOperator(
@@ -148,7 +145,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
           arguments_after,
         ])
         |> list.map(transform_call_argument)
-      python.Call(function, argument_expressions)
+      python.Call(python.Variable(function), argument_expressions)
     }
     glance.BinaryOperator(glance.Pipe, _, right) -> {
       pprint.debug(right)
@@ -157,8 +154,14 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.BinaryOperator(name, left, right) ->
       transform_binop(name, left, right)
 
-    glance.RecordUpdate(module, constructor, record, fields) as expr -> {
-      python.RecordUpdate(module, constructor, record, fields)
+    glance.RecordUpdate(record:, fields:, ..) -> {
+      python.RecordUpdate(
+        record: transform_expression(record),
+        fields: fields
+          |> list.map(fn(tuple) {
+            python.LabelledField(tuple.0, transform_expression(tuple.1))
+          }),
+      )
     }
 
     glance.BitString(_) as expr
