@@ -89,32 +89,45 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.Variable(string) -> python.Variable(string)
     glance.NegateInt(expression) ->
       python.Negate(transform_expression(expression))
+
     glance.Panic(option.None) ->
       python.Panic(python.String("panic expression evaluated"))
+
     glance.Panic(option.Some(expression)) ->
       python.Panic(transform_expression(expression))
+
     glance.Todo(option.None) ->
       python.Todo(python.String("This has not yet been implemented"))
+
     glance.Todo(option.Some(expression)) ->
       python.Todo(transform_expression(expression))
+
     glance.NegateBool(expression) ->
       python.Not(transform_expression(expression))
+
     glance.Call(glance.Variable(function_name), arguments) -> {
       python.Call(
         function_name,
         arguments: list.map(arguments, transform_call_argument),
       )
     }
+    glance.Call(..) -> {
+      panic as "I don't understand how to handle non-valiable calls"
+    }
+
     glance.Tuple(expressions) ->
       expressions
       |> list.map(transform_expression)
       |> python.Tuple()
+
     glance.TupleIndex(tuple, index) ->
       python.TupleIndex(transform_expression(tuple), index)
+
     glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
       // simple pipe left |> foo
       python.Call(function, [transform_expression(left)])
     }
+
     glance.BinaryOperator(
       glance.Pipe,
       left,
@@ -140,9 +153,17 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     }
     glance.BinaryOperator(name, left, right) ->
       transform_binop(name, left, right)
-    _ -> {
-      pprint.debug(expression)
-      todo as "many expressions aren't handled yet"
+
+    glance.BitString(_) as expr
+    | glance.Block(_) as expr
+    | glance.Case(_, _) as expr
+    | glance.FieldAccess(_, _) as expr
+    | glance.Fn(_, _, _) as expr
+    | glance.FnCapture(_, _, _, _) as expr
+    | glance.List(_, _) as expr
+    | glance.RecordUpdate(_, _, _, _) as expr -> {
+      pprint.debug(expr)
+      todo as "Several expressions are not implemented yet"
     }
   }
 }
