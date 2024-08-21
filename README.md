@@ -48,29 +48,29 @@ PRs are welcome.
 ### Some of the things I know are missing
 
 - no case expressions
+- block expressions aren't supported yet
+- fn expressions are not supported yet
 - no destructuring/pattern matching in let
 - no let assert
 - label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
 - const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)
-- block expressions aren't supported yet
-- fnCapture and fn expressions are not supported yet
-  - but fnCapture is supported as part of a Call, so that probably needs to be unwrapped
-- haven't really tested with nesting of expressions
-- need to print out nice errors when glance fails to parse
+- bitstrings aren't supported yet (map to bytes)
 - No Result custom types yet
 - List custom type is missing `match_args`, other helpers
 - glance doesn't support comments
-- Not doing anything to avoid collision between gleam identifiers with python keywords
 - glance doesn't typecheck (e.g. `2.0 - 1.5` compiles successfully, but should be `2.0 -. 1.5`)
+- Not doing anything to avoid collision between gleam identifiers with python keywords
 - not currently generating python type hints (e.g. function arguments and return types), but gleam gives us that info so may as well use it
+- haven't really tested with nesting of expressions
+- need to print out nice errors when glance fails to parse
 - no concept of a "project", gleam.toml, downloading dependencies
 - only compiles one module at a time
 - copies the prelude module blindly into the directory that contains that one module
 - eliminate all todos in source code
 - No standard library
 - generate **main** if a module has a main function
-- calling functions or constructors with out of order positional args doesn't work in python
+- calling functions or constructors with out-of-order positional args doesn't work in python
   - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1, 1), mystr: "Foo")` in gleam
   - javascript seems to solve this by automatically reordering the arguments to match the input type
 - custom types with unlabelled fields are not working

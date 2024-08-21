@@ -150,6 +150,18 @@ fn generate_expression(expression: python.Expression) {
       ))
       |> string_builder.append(")")
 
+    python.Lambda(arguments, body) -> {
+      string_builder.from_string("(lambda ")
+      |> string_builder.append_builder(generator_helpers.generate_plural(
+        arguments,
+        generate_expression,
+        ", ",
+      ))
+      |> string_builder.append(": ")
+      |> string_builder.append_builder(generate_expression(body))
+      |> string_builder.append(")")
+    }
+
     python.Call(function, arguments) ->
       string_builder.new()
       |> string_builder.append_builder(generate_expression(function))

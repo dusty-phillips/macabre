@@ -123,6 +123,21 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       )
     }
 
+    glance.FnCapture(label, function, arguments_before, arguments_after) -> {
+      let argument_expressions =
+        list.concat([
+          arguments_before,
+          [glance.Field(label, glance.Variable("fn_capture"))],
+          arguments_after,
+        ])
+        |> list.map(transform_call_argument)
+
+      python.Lambda(
+        [python.Variable("fn_capture")],
+        python.Call(transform_expression(function), argument_expressions),
+      )
+    }
+
     glance.Tuple(expressions) ->
       expressions
       |> list.map(transform_expression)
@@ -134,35 +149,12 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.FieldAccess(container: expression, label:) ->
       python.FieldAccess(transform_expression(expression), label)
 
-    glance.BinaryOperator(glance.Pipe, left, glance.Variable(function)) -> {
-      // simple pipe left |> foo
-      python.Call(python.Variable(function), [
+    glance.BinaryOperator(glance.Pipe, left, right) -> {
+      python.Call(transform_expression(right), [
         python.UnlabelledField(transform_expression(left)),
       ])
     }
 
-    glance.BinaryOperator(
-      glance.Pipe,
-      left,
-      glance.FnCapture(
-        label,
-        glance.Variable(function),
-        arguments_before,
-        arguments_after,
-      ),
-    ) -> {
-      let argument_expressions =
-        list.concat([
-          arguments_before,
-          [glance.Field(label, left)],
-          arguments_after,
-        ])
-        |> list.map(transform_call_argument)
-      python.Call(python.Variable(function), argument_expressions)
-    }
-    glance.BinaryOperator(glance.Pipe, _, right) -> {
-      panic as "I don't know how to handle this structure of pipe"
-    }
     glance.BinaryOperator(name, left, right) ->
       transform_binop(name, left, right)
 
@@ -187,8 +179,7 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
     glance.BitString(_) as expr
     | glance.Block(_) as expr
     | glance.Case(_, _) as expr
-    | glance.Fn(_, _, _) as expr
-    | glance.FnCapture(_, _, _, _) as expr -> {
+    | glance.Fn(_, _, _) as expr -> {
       pprint.debug(expr)
       todo as "Several expressions are not implemented yet"
     }

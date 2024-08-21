@@ -41,6 +41,7 @@ pub type Expression {
   Not(Expression)
   Panic(Expression)
   Todo(Expression)
+  Lambda(args: List(Expression), body: Expression)
   List(elements: List(Expression))
   ListWithRest(elements: List(Expression), rest: Expression)
   TupleIndex(tuple: Expression, index: Int)

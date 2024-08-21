@@ -507,7 +507,7 @@ pub fn capture_pipe_test() {
     "from gleam_builtins import *
 
 def main():
-    return println(\"a\", \"foo\", \"b\")",
+    return (lambda fn_capture: println(\"a\", fn_capture, \"b\"))(\"foo\")",
   )
 }
 
@@ -536,6 +536,22 @@ pub fn labelled_argument_call_expression_test() {
 
 def main():
     return foo(\"bar\", baz=\"baz\")",
+  )
+}
+
+pub fn fn_capture_test() {
+  "fn main() {
+      let x = foo(\"a\", _, \"b\")
+      x(\"c\")
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    x = (lambda fn_capture: foo(\"a\", fn_capture, \"b\"))
+    return x(\"c\")",
   )
 }
 
