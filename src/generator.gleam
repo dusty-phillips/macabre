@@ -94,7 +94,8 @@ fn generate_expression(expression: python.Expression) {
       string_builder.new()
       |> string_builder.append("(")
       |> string_builder.append_builder(
-        expressions |> generate_plural(generate_expression, ", "),
+        expressions
+        |> generator_helpers.generate_plural(generate_expression, ", "),
       )
       |> string_builder.append(")")
     python.TupleIndex(expression, index) ->
@@ -111,7 +112,7 @@ fn generate_expression(expression: python.Expression) {
       |> string_builder.append("dataclasses.replace(")
       |> string_builder.append_builder(generate_expression(record))
       |> string_builder.append(", ")
-      |> string_builder.append_builder(generate_plural(
+      |> string_builder.append_builder(generator_helpers.generate_plural(
         fields,
         generate_record_update_fields,
         ", ",
@@ -155,7 +156,12 @@ fn generate_parameter(param: python.FunctionParameter) -> StringBuilder {
 fn generate_function_body(statements: List(python.Statement)) -> StringBuilder {
   case statements {
     [] -> string_builder.from_string("pass")
-    multiple_lines -> generate_plural(multiple_lines, generate_statement, "\n")
+    multiple_lines ->
+      generator_helpers.generate_plural(
+        multiple_lines,
+        generate_statement,
+        "\n",
+      )
   }
 }
 
@@ -165,7 +171,7 @@ fn generate_function(function: python.Function) -> StringBuilder {
   |> string_builder.append("def ")
   |> string_builder.append(function.name)
   |> string_builder.append("(")
-  |> string_builder.append_builder(generate_plural(
+  |> string_builder.append_builder(generator_helpers.generate_plural(
     function.parameters,
     generate_parameter,
     ", ",
@@ -188,12 +194,11 @@ fn generate_type(type_: python.Type) -> StringBuilder {
       string_builder.from_string("int")
 
     python.NamedType(name: name, module:, generic_parameters:) -> {
-      pprint.debug(generic_parameters)
       let params = case generic_parameters {
         [] -> string_builder.new()
         params_exist ->
           params_exist
-          |> generate_plural(generate_type, ",")
+          |> generator_helpers.generate_plural(generate_type, ",")
           |> string_builder.prepend("[")
           |> string_builder.append("]")
       }
@@ -206,7 +211,7 @@ fn generate_type(type_: python.Type) -> StringBuilder {
 
     python.TupleType(elements) ->
       elements
-      |> generate_plural(generate_type, ", ")
+      |> generator_helpers.generate_plural(generate_type, ", ")
       |> string_builder.prepend("typing.Tuple[")
       |> string_builder.append("]")
 
@@ -246,7 +251,8 @@ fn generate_type_variant(variant: python.Variant) -> StringBuilder {
   |> string_builder.append_builder(
     case variant.fields {
       [] -> string_builder.from_string("pass")
-      fields -> generate_plural(fields, generate_type_field, "\n")
+      fields ->
+        generator_helpers.generate_plural(fields, generate_type_field, "\n")
     }
     |> generator_helpers.indent(4),
   )
@@ -272,22 +278,34 @@ fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
 
     // we just discard the outer class if there is only one variant
     [one_variant] -> {
-      generate_plural(custom_type.parameters, generate_generic_var, "\n")
+      generator_helpers.generate_plural(
+        custom_type.parameters,
+        generate_generic_var,
+        "\n",
+      )
       |> string_builder.append_builder(generate_type_variant(one_variant))
       |> string_builder.append("\n\n\n")
     }
 
     variants -> {
-      generate_plural(custom_type.parameters, generate_generic_var, "\n")
+      generator_helpers.generate_plural(
+        custom_type.parameters,
+        generate_generic_var,
+        "\n",
+      )
       |> string_builder.append("class ")
       |> string_builder.append(custom_type.name)
       |> string_builder.append(":\n")
       |> string_builder.append_builder(
-        generate_plural(variants, generate_type_variant, "\n\n")
+        generator_helpers.generate_plural(
+          variants,
+          generate_type_variant,
+          "\n\n",
+        )
         |> generator_helpers.indent(4)
         |> generator_helpers.append_if_not_empty("\n\n"),
       )
-      |> string_builder.append_builder(generate_plural(
+      |> string_builder.append_builder(generator_helpers.generate_plural(
         custom_type.variants,
         generate_variant_reassign(custom_type.name),
         "\n",
@@ -298,30 +316,20 @@ fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
 }
 
 fn generate_imports(imports: List(python.Import)) -> StringBuilder {
-  generate_plural(imports, generate_import, "\n")
+  generator_helpers.generate_plural(imports, generate_import, "\n")
   |> generator_helpers.append_if_not_empty("\n\n\n")
-}
-
-fn generate_plural(
-  elements: List(elem),
-  using: fn(elem) -> StringBuilder,
-  join_with: String,
-) -> StringBuilder {
-  elements
-  |> list.map(using)
-  |> string_builder.join(join_with)
 }
 
 pub fn generate(module: python.Module) -> Result(String, String) {
   string_builder.new()
   |> string_builder.append(python_prelude.prelude)
   |> string_builder.append_builder(generate_imports(module.imports))
-  |> string_builder.append_builder(generate_plural(
+  |> string_builder.append_builder(generator_helpers.generate_plural(
     module.custom_types,
     generate_custom_type,
     "\n\n\n",
   ))
-  |> string_builder.append_builder(generate_plural(
+  |> string_builder.append_builder(generator_helpers.generate_plural(
     module.functions,
     generate_function,
     "\n\n\n",

@@ -1,4 +1,5 @@
 import gleam/iterator
+import gleam/list
 import gleam/string_builder
 
 pub fn indent(
@@ -29,4 +30,13 @@ pub fn append_if_not_empty(
     True -> builder
     False -> string_builder.append(builder, with)
   }
+}
+pub fn generate_plural(
+  elements: List(elem),
+  using: fn(elem) -> string_builder.StringBuilder,
+  join_with: String,
+) -> string_builder.StringBuilder {
+  elements
+  |> list.map(using)
+  |> string_builder.join(join_with)
 }
