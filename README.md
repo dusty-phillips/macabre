@@ -51,7 +51,8 @@ PRs are welcome.
 - calling functions or constructors with out of order positional args doesn't work in python
   - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1, 1), mystr: "Foo")` in gleam
   - javascript seems to solve this by automatically reordering the arguments to match the input type
-- implicit returns from functions aren't hooked up
+- no destructuring/pattern matching in let
+- no let assert
 - label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
 - haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse

@@ -11,8 +11,7 @@ pub fn string_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    \"bar\"
-    ",
+    return \"bar\"",
   )
 }
 
@@ -26,8 +25,7 @@ pub fn int_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    42
-    ",
+    return 42",
   )
 }
 
@@ -41,8 +39,7 @@ pub fn float_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    12.5
-    ",
+    return 12.5",
   )
 }
 
@@ -56,8 +53,7 @@ pub fn tuple_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    (42, 12.5, \"foo\")
-    ",
+    return (42, 12.5, \"foo\")",
   )
 }
 
@@ -71,8 +67,7 @@ pub fn true_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    True
-    ",
+    return True",
   )
 }
 
@@ -86,8 +81,7 @@ pub fn false_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    False
-    ",
+    return False",
   )
 }
 
@@ -101,8 +95,7 @@ pub fn variable_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    println(a)
-    ",
+    return println(a)",
   )
 }
 
@@ -206,8 +199,7 @@ pub fn tuple_index_test() {
     "from gleam_builtins import *
 
 def main():
-    (42, 12.5, \"foo\")[1]
-    ",
+    return (42, 12.5, \"foo\")[1]",
   )
 }
 
@@ -221,8 +213,7 @@ pub fn field_access_test() {
     "from gleam_builtins import *
 
 def main():
-    foo.b
-    ",
+    return foo.b",
   )
 }
 
@@ -236,8 +227,7 @@ pub fn binop_int_add_test() {
     "from gleam_builtins import *
 
 def main():
-    40 + 2
-    ",
+    return 40 + 2",
   )
 }
 
@@ -251,8 +241,7 @@ pub fn binop_float_add_test() {
     "from gleam_builtins import *
 
 def main():
-    40.2 + 2.5
-    ",
+    return 40.2 + 2.5",
   )
 }
 
@@ -266,8 +255,7 @@ pub fn binop_concat_add_test() {
     "from gleam_builtins import *
 
 def main():
-    \"hello \" + \"world\"
-    ",
+    return \"hello \" + \"world\"",
   )
 }
 
@@ -281,8 +269,7 @@ pub fn binop_int_sub_test() {
     "from gleam_builtins import *
 
 def main():
-    40 - 2
-    ",
+    return 40 - 2",
   )
 }
 
@@ -296,8 +283,7 @@ pub fn binop_float_sub_test() {
     "from gleam_builtins import *
 
 def main():
-    40.2 - 2.5
-    ",
+    return 40.2 - 2.5",
   )
 }
 
@@ -311,8 +297,7 @@ pub fn binop_int_div_test() {
     "from gleam_builtins import *
 
 def main():
-    40 // 2
-    ",
+    return 40 // 2",
   )
 }
 
@@ -326,8 +311,7 @@ pub fn binop_float_div_test() {
     "from gleam_builtins import *
 
 def main():
-    40.2 / 2.5
-    ",
+    return 40.2 / 2.5",
   )
 }
 
@@ -341,8 +325,7 @@ pub fn binop_int_modulo_test() {
     "from gleam_builtins import *
 
 def main():
-    5 % 2
-    ",
+    return 5 % 2",
   )
 }
 
@@ -356,8 +339,7 @@ pub fn equality_test() {
     "from gleam_builtins import *
 
 def main():
-    5 == 5
-    ",
+    return 5 == 5",
   )
 }
 
@@ -371,8 +353,7 @@ pub fn inequality_test() {
     "from gleam_builtins import *
 
 def main():
-    5 != 2
-    ",
+    return 5 != 2",
   )
 }
 
@@ -386,8 +367,7 @@ pub fn lt_int_test() {
     "from gleam_builtins import *
 
 def main():
-    5 < 2
-    ",
+    return 5 < 2",
   )
 }
 
@@ -401,8 +381,7 @@ pub fn lt_float_test() {
     "from gleam_builtins import *
 
 def main():
-    5.0 < 2.0
-    ",
+    return 5.0 < 2.0",
   )
 }
 
@@ -416,8 +395,7 @@ pub fn lt_eq_int_test() {
     "from gleam_builtins import *
 
 def main():
-    5 <= 2
-    ",
+    return 5 <= 2",
   )
 }
 
@@ -431,8 +409,7 @@ pub fn lt_eq_float_test() {
     "from gleam_builtins import *
 
 def main():
-    5.0 <= 2.0
-    ",
+    return 5.0 <= 2.0",
   )
 }
 
@@ -446,8 +423,7 @@ pub fn logical_or_test() {
     "from gleam_builtins import *
 
 def main():
-    True or False
-    ",
+    return True or False",
   )
 }
 
@@ -461,8 +437,7 @@ pub fn logical_and_test() {
     "from gleam_builtins import *
 
 def main():
-    True and False
-    ",
+    return True and False",
   )
 }
 
@@ -476,8 +451,7 @@ pub fn simple_pipe_test() {
     "from gleam_builtins import *
 
 def main():
-    println(\"foo\")
-    ",
+    return println(\"foo\")",
   )
 }
 
@@ -491,8 +465,7 @@ pub fn capture_pipe_test() {
     "from gleam_builtins import *
 
 def main():
-    println(\"a\", \"foo\", \"b\")
-    ",
+    return println(\"a\", \"foo\", \"b\")",
   )
 }
 
@@ -506,8 +479,7 @@ pub fn simple_call_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    foo(\"bar\")
-    ",
+    return foo(\"bar\")",
   )
 }
 
@@ -521,8 +493,7 @@ pub fn labelled_argument_call_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    foo(\"bar\", baz=\"baz\")
-    ",
+    return foo(\"bar\", baz=\"baz\")",
   )
 }
 

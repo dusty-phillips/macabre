@@ -138,6 +138,9 @@ fn generate_statement(statement: python.Statement) -> StringBuilder {
     python.Expression(expression) ->
       generate_expression(expression)
       |> generator_helpers.append_if_not_empty("\n")
+    python.Return(expression) ->
+      string_builder.from_string("return ")
+      |> string_builder.append_builder(generate_expression(expression))
     python.SimpleAssignment(name, value) -> {
       string_builder.new()
       |> string_builder.append(name)

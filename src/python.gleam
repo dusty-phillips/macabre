@@ -50,6 +50,7 @@ pub type Expression {
 
 pub type Statement {
   Expression(Expression)
+  Return(Expression)
   SimpleAssignment(name: String, value: Expression)
 }
 

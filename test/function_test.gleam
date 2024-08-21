@@ -101,3 +101,17 @@ def func2():
     pass",
   )
 }
+
+pub fn function_with_return_value_test() {
+  "fn greet() -> String {
+  \"hello world\"
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def greet():
+    return \"hello world\"",
+  )
+}

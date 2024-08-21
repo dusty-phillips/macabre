@@ -1,6 +1,7 @@
 import glance
 import gleam/list
 import gleam/option
+import internal/transformer
 import pprint
 import python
 
@@ -17,6 +18,17 @@ fn maybe_extract_external(
       [glance.Variable("python"), glance.String(module), glance.String(name)],
     ) -> Ok(python.UnqualifiedImport(module, name, option.None))
     _ -> Error(NotExternal)
+  }
+}
+
+fn add_return_if_returnable_expression(
+  statement: python.Statement,
+) -> python.Statement {
+  case statement {
+    python.Expression(python.Panic(_)) -> statement
+    python.Expression(python.Todo(_)) -> statement
+    python.Expression(expr) -> python.Return(expr)
+    statement -> statement
   }
 }
 
@@ -201,7 +213,8 @@ fn transform_function(function: glance.Function) -> python.Function {
   python.Function(
     name: function.name,
     parameters: list.map(function.parameters, transform_function_parameter),
-    body: list.map(function.body, transform_statement),
+    body: list.map(function.body, transform_statement)
+      |> transformer.transform_last(add_return_if_returnable_expression),
   )
 }
 
