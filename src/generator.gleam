@@ -75,21 +75,49 @@ fn generate_call_fields(field: python.Field(python.Expression)) -> StringBuilder
 fn generate_expression(expression: python.Expression) {
   case expression {
     python.String(string) -> string_builder.from_strings(["\"", string, "\""])
+
     python.Number(number) -> string_builder.from_string(number)
+
     python.Bool(value) -> string_builder.from_string(value)
+
     python.Variable(value) -> string_builder.from_string(value)
+
     python.Negate(expression) ->
       generate_expression(expression) |> string_builder.prepend("-")
+
     python.Not(expression) ->
       generate_expression(expression) |> string_builder.prepend("not ")
+
     python.Panic(expression) ->
       generate_expression(expression)
       |> string_builder.prepend("raise GleamPanic(")
       |> string_builder.append(")")
+
     python.Todo(expression) ->
       generate_expression(expression)
       |> string_builder.prepend("raise NotImplementedError(")
       |> string_builder.append(")")
+
+    python.List(elements) ->
+      string_builder.from_string("to_gleam_list([")
+      |> string_builder.append_builder(generator_helpers.generate_plural(
+        elements,
+        generate_expression,
+        ", ",
+      ))
+      |> string_builder.append("])")
+
+    python.ListWithRest(elements, rest) ->
+      string_builder.from_string("to_gleam_list([")
+      |> string_builder.append_builder(generator_helpers.generate_plural(
+        elements,
+        generate_expression,
+        ", ",
+      ))
+      |> string_builder.append("], ")
+      |> string_builder.append_builder(generate_expression(rest))
+      |> string_builder.append(")")
+
     python.Tuple(expressions) ->
       string_builder.new()
       |> string_builder.append("(")
@@ -98,15 +126,18 @@ fn generate_expression(expression: python.Expression) {
         |> generator_helpers.generate_plural(generate_expression, ", "),
       )
       |> string_builder.append(")")
+
     python.TupleIndex(expression, index) ->
       generate_expression(expression)
       |> string_builder.append("[")
       |> string_builder.append(index |> int.to_string)
       |> string_builder.append("]")
+
     python.FieldAccess(expression, label) ->
       generate_expression(expression)
       |> string_builder.append(".")
       |> string_builder.append(label)
+
     python.RecordUpdate(record, fields) ->
       string_builder.new()
       |> string_builder.append("dataclasses.replace(")
@@ -118,6 +149,7 @@ fn generate_expression(expression: python.Expression) {
         ", ",
       ))
       |> string_builder.append(")")
+
     python.Call(function, arguments) ->
       string_builder.new()
       |> string_builder.append_builder(generate_expression(function))
@@ -128,6 +160,7 @@ fn generate_expression(expression: python.Expression) {
         |> string_builder.join(", "),
       )
       |> string_builder.append(")")
+
     python.BinaryOperator(name, left, right) ->
       generate_binop(name, left, right)
   }

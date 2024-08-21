@@ -41,6 +41,8 @@ pub type Expression {
   Not(Expression)
   Panic(Expression)
   Todo(Expression)
+  List(elements: List(Expression))
+  ListWithRest(elements: List(Expression), rest: Expression)
   TupleIndex(tuple: Expression, index: Int)
   FieldAccess(container: Expression, label: String)
   Call(function: Expression, arguments: List(Field(Expression)))

@@ -176,13 +176,19 @@ fn transform_expression(expression: glance.Expression) -> python.Expression {
       )
     }
 
+    glance.List(head, option.Some(rest)) as expr ->
+      python.ListWithRest(
+        list.map(head, transform_expression),
+        transform_expression(rest),
+      )
+    glance.List(head, option.None) as expr ->
+      python.List(list.map(head, transform_expression))
+
     glance.BitString(_) as expr
     | glance.Block(_) as expr
     | glance.Case(_, _) as expr
-    | glance.FieldAccess(_, _) as expr
     | glance.Fn(_, _, _) as expr
-    | glance.FnCapture(_, _, _, _) as expr
-    | glance.List(_, _) as expr -> {
+    | glance.FnCapture(_, _, _, _) as expr -> {
       pprint.debug(expr)
       todo as "Several expressions are not implemented yet"
     }

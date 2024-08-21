@@ -57,6 +57,48 @@ def main():
   )
 }
 
+pub fn empty_list_expression_test() {
+  "fn main() {
+  []
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return to_gleam_list([])",
+  )
+}
+
+pub fn list_expression_with_contents_test() {
+  "fn main() {
+  [1, 2, 3]
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return to_gleam_list([1, 2, 3])",
+  )
+}
+
+pub fn list_expression_with_tail_test() {
+  "fn main() {
+  [1, 2, ..[3, 4]]
+  }"
+  |> macabre.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return to_gleam_list([1, 2], to_gleam_list([3, 4]))",
+  )
+}
+
 pub fn true_expression_test() {
   "fn main() {
       True
