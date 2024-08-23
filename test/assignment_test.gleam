@@ -1,12 +1,12 @@
+import compiler
 import gleeunit/should
-import macabre
 
 pub fn simple_assignment_test() {
   "pub fn main() {
     let a = \"hello world\"
   }
   "
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -22,7 +22,7 @@ pub fn mulitple_simple_assignment_test() {
     let b = 42
   }
   "
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *

@@ -1,11 +1,11 @@
+import compiler
 import gleeunit/should
-import macabre
 
 pub fn string_expression_test() {
   "fn main() {
       \"bar\"
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -19,7 +19,7 @@ pub fn int_expression_test() {
   "fn main() {
       42
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -33,7 +33,7 @@ pub fn float_expression_test() {
   "fn main() {
       12.5
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -47,7 +47,7 @@ pub fn tuple_expression_test() {
   "fn main() {
   #(42, 12.5, \"foo\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -61,7 +61,7 @@ pub fn empty_list_expression_test() {
   "fn main() {
   []
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -75,7 +75,7 @@ pub fn list_expression_with_contents_test() {
   "fn main() {
   [1, 2, 3]
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -89,7 +89,7 @@ pub fn list_expression_with_tail_test() {
   "fn main() {
   [1, 2, ..[3, 4]]
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -103,7 +103,7 @@ pub fn true_expression_test() {
   "fn main() {
       True
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -117,7 +117,7 @@ pub fn false_expression_test() {
   "fn main() {
       False
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -131,7 +131,7 @@ pub fn variable_expression_test() {
   "fn main() {
   println(a)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -146,7 +146,7 @@ pub fn negate_int_test() {
   let a = -1
   let b = -a
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -161,7 +161,7 @@ pub fn negate_bool_test() {
   "fn main() {
   let b = !True
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -175,7 +175,7 @@ pub fn empty_panic_test() {
   "fn main() {
   panic
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -190,7 +190,7 @@ pub fn string_panic_test() {
   "fn main() {
   panic as \"my custom panic\"
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -205,7 +205,7 @@ pub fn empty_todo_test() {
   "fn main() {
   todo
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -220,7 +220,7 @@ pub fn string_todo_test() {
   "fn main() {
   todo as \"much is yet to be done\"
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -235,7 +235,7 @@ pub fn tuple_index_test() {
   "fn main() {
   #(42, 12.5, \"foo\").1
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -249,7 +249,7 @@ pub fn field_access_test() {
   "fn main() {
     foo.b
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -263,7 +263,7 @@ pub fn binop_int_add_test() {
   "fn main() {
     40 + 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -277,7 +277,7 @@ pub fn binop_float_add_test() {
   "fn main() {
     40.2 +. 2.5
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -291,7 +291,7 @@ pub fn binop_concat_add_test() {
   "fn main() {
     \"hello \" <> \"world\"
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -305,7 +305,7 @@ pub fn binop_int_sub_test() {
   "fn main() {
     40 - 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -319,7 +319,7 @@ pub fn binop_float_sub_test() {
   "fn main() {
     40.2 -. 2.5
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -333,7 +333,7 @@ pub fn binop_int_div_test() {
   "fn main() {
     40 / 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -347,7 +347,7 @@ pub fn binop_float_div_test() {
   "fn main() {
     40.2 /. 2.5
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -361,7 +361,7 @@ pub fn binop_int_modulo_test() {
   "fn main() {
     5 % 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -375,7 +375,7 @@ pub fn equality_test() {
   "fn main() {
     5 == 5
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -389,7 +389,7 @@ pub fn inequality_test() {
   "fn main() {
     5 != 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -403,7 +403,7 @@ pub fn lt_int_test() {
   "fn main() {
     5 < 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -417,7 +417,7 @@ pub fn lt_float_test() {
   "fn main() {
     5.0 <. 2.0
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -431,7 +431,7 @@ pub fn lt_eq_int_test() {
   "fn main() {
     5 <= 2
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -445,7 +445,7 @@ pub fn lt_eq_float_test() {
   "fn main() {
     5.0 <=. 2.0
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -459,7 +459,7 @@ pub fn logical_or_test() {
   "fn main() {
     True || False
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -473,7 +473,7 @@ pub fn logical_and_test() {
   "fn main() {
     True && False
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -487,7 +487,7 @@ pub fn simple_pipe_test() {
   "fn main() {
     \"foo\" |> println
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -501,7 +501,7 @@ pub fn capture_pipe_test() {
   "fn main() {
     \"foo\" |> println(\"a\", _, \"b\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -515,7 +515,7 @@ pub fn simple_call_expression_test() {
   "fn main() {
       foo(\"bar\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -529,7 +529,7 @@ pub fn labelled_argument_call_expression_test() {
   "fn main() {
       foo(\"bar\", baz: \"baz\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -544,7 +544,7 @@ pub fn fn_capture_test() {
       let x = foo(\"a\", _, \"b\")
       x(\"c\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -564,7 +564,7 @@ pub fn record_update_test() {
     let foo = Bar(1, \"who\")
     let bar = Bar(..foo, b: \"you\")
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -589,7 +589,7 @@ pub fn construct_record_with_label_test() {
   pub fn main() {
     let foo = Bar(b: \"who\", a: 1)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *

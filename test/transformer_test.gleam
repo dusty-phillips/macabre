@@ -1,6 +1,6 @@
+import compiler/internal/transformer
 import gleam/list
 import gleeunit/should
-import internal/transformer
 
 pub fn transform_last_empty_test() {
   []

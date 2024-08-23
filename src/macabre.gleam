@@ -1,26 +1,15 @@
 import argv
+import compiler
 import filepath
-import generator
-import glance
 import gleam/io
 import gleam/result
 import gleam/string
 import pprint
 import python_prelude
 import simplifile
-import transformer
 
 pub fn usage(message: String) -> Nil {
   io.println("Usage: macabre <filename.gleam>\n\n" <> message)
-}
-
-pub fn parse(contents: String) -> Result(glance.Module, String) {
-  contents
-  |> glance.module
-  |> result.map_error(fn(x) {
-    pprint.debug(x)
-    "Unable to parse"
-  })
 }
 
 pub fn write_output(contents: String, filename: String) -> Result(Nil, String) {
@@ -56,17 +45,10 @@ pub fn output_prelude_file(filepath: String) -> Result(Nil, String) {
   |> result.replace_error("Unable to write prelude")
 }
 
-pub fn compile(module_contents: String) -> Result(String, String) {
-  module_contents
-  |> parse
-  |> result.try(transformer.transform)
-  |> result.try(generator.generate)
-}
-
 pub fn compile_module(filename: String) -> Result(Nil, String) {
   simplifile.read(filename)
   |> result.replace_error("Unable to read '" <> filename <> "'")
-  |> result.try(compile)
+  |> result.try(compiler.compile)
   |> pprint.debug
   |> result.try(write_output(_, replace_extension(filename)))
   |> result.try(fn(_) {

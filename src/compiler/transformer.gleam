@@ -1,9 +1,9 @@
+import compiler/internal/transformer as internal
+import compiler/python
 import glance
 import gleam/list
 import gleam/option
-import internal/transformer
 import pprint
-import python
 
 fn transform_function_parameter(
   function_parameter: glance.FunctionParameter,
@@ -25,23 +25,23 @@ fn transform_function_parameter(
 }
 
 fn fold_call_argument(
-  state: transformer.TransformState(
-    transformer.ReversedList(python.Field(python.Expression)),
+  state: internal.TransformState(
+    internal.ReversedList(python.Field(python.Expression)),
   ),
   argument: glance.Field(glance.Expression),
-) -> transformer.TransformState(
-  transformer.ReversedList(python.Field(python.Expression)),
+) -> internal.TransformState(
+  internal.ReversedList(python.Field(python.Expression)),
 ) {
   case argument {
     glance.Field(option.Some(label), expression) -> {
-      transformer.merge_state_prepend(
+      internal.merge_state_prepend(
         state,
         transform_expression(state.context, expression),
         python.LabelledField(label, _),
       )
     }
     glance.Field(label: option.None, item: expression) -> {
-      transformer.merge_state_prepend(
+      internal.merge_state_prepend(
         state,
         transform_expression(state.context, expression),
         python.UnlabelledField,
@@ -51,11 +51,11 @@ fn fold_call_argument(
 }
 
 fn transform_binop(
-  context: transformer.TransformerContext,
+  context: internal.TransformerContext,
   name: glance.BinaryOperator,
   left: glance.Expression,
   right: glance.Expression,
-) -> transformer.ExpressionReturn {
+) -> internal.ExpressionReturn {
   let op = case name {
     glance.And -> python.And
     glance.Or -> python.Or
@@ -75,37 +75,37 @@ fn transform_binop(
   }
   let left_result = transform_expression(context, left)
   let right_result = transform_expression(left_result.context, right)
-  transformer.merge_return(left_result, right_result, fn(left_ex, right_ex) {
+  internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
     python.BinaryOperator(op, left_ex, right_ex)
   })
 }
 
 fn transform_expression(
-  context: transformer.TransformerContext,
+  context: internal.TransformerContext,
   expression: glance.Expression,
-) -> transformer.ExpressionReturn {
+) -> internal.ExpressionReturn {
   case expression {
     glance.Int(string) | glance.Float(string) ->
-      transformer.ExpressionReturn(context, [], python.Number(string))
+      internal.ExpressionReturn(context, [], python.Number(string))
 
     glance.String(string) ->
-      transformer.ExpressionReturn(context, [], python.String(string))
+      internal.ExpressionReturn(context, [], python.String(string))
 
     glance.Variable("True") ->
-      transformer.ExpressionReturn(context, [], python.Bool("True"))
+      internal.ExpressionReturn(context, [], python.Bool("True"))
 
     glance.Variable("False") ->
-      transformer.ExpressionReturn(context, [], python.Bool("False"))
+      internal.ExpressionReturn(context, [], python.Bool("False"))
 
     glance.Variable(string) ->
-      transformer.ExpressionReturn(context, [], python.Variable(string))
+      internal.ExpressionReturn(context, [], python.Variable(string))
 
     glance.NegateInt(expression) ->
       transform_expression(context, expression)
-      |> transformer.map_return(python.Negate)
+      |> internal.map_return(python.Negate)
 
     glance.Panic(option.None) ->
-      transformer.ExpressionReturn(
+      internal.ExpressionReturn(
         context,
         [],
         python.Panic(python.String("panic expression evaluated")),
@@ -113,10 +113,10 @@ fn transform_expression(
 
     glance.Panic(option.Some(expression)) ->
       transform_expression(context, expression)
-      |> transformer.map_return(python.Panic)
+      |> internal.map_return(python.Panic)
 
     glance.Todo(option.None) ->
-      transformer.ExpressionReturn(
+      internal.ExpressionReturn(
         context,
         [],
         python.Todo(python.String("This has not yet been implemented")),
@@ -124,11 +124,11 @@ fn transform_expression(
 
     glance.Todo(option.Some(expression)) ->
       transform_expression(context, expression)
-      |> transformer.map_return(python.Todo(_))
+      |> internal.map_return(python.Todo(_))
 
     glance.NegateBool(expression) -> {
       transform_expression(context, expression)
-      |> transformer.map_return(python.Not(_))
+      |> internal.map_return(python.Not(_))
     }
 
     glance.Call(function, arguments) -> {
@@ -136,10 +136,10 @@ fn transform_expression(
       let reversed_arguments_result =
         list.fold(
           arguments,
-          transformer.TransformState(function_result.context, [], []),
+          internal.TransformState(function_result.context, [], []),
           fold_call_argument,
         )
-      transformer.ExpressionReturn(
+      internal.ExpressionReturn(
         reversed_arguments_result.context,
         list.append(
           function_result.statements,
@@ -161,11 +161,11 @@ fn transform_expression(
           arguments_after,
         ])
         |> list.fold(
-          transformer.TransformState(function_result.context, [], []),
+          internal.TransformState(function_result.context, [], []),
           fold_call_argument,
         )
 
-      transformer.ExpressionReturn(
+      internal.ExpressionReturn(
         reversed_arguments_result.context,
         list.append(
           function_result.statements,
@@ -184,30 +184,30 @@ fn transform_expression(
     glance.Tuple(expressions) ->
       expressions
       |> list.fold(
-        transformer.TransformState(context, [], []),
+        internal.TransformState(context, [], []),
         fn(state, expression) {
-          transformer.merge_state_prepend(
+          internal.merge_state_prepend(
             state,
             transform_expression(state.context, expression),
             fn(a) { a },
           )
         },
       )
-      |> transformer.reverse_state_to_return(python.Tuple)
+      |> internal.reverse_state_to_return(python.Tuple)
 
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
-      |> transformer.map_return(python.TupleIndex(_, index))
+      |> internal.map_return(python.TupleIndex(_, index))
     }
 
     glance.FieldAccess(container: expression, label:) ->
       transform_expression(context, expression)
-      |> transformer.map_return(python.FieldAccess(_, label))
+      |> internal.map_return(python.FieldAccess(_, label))
 
     glance.BinaryOperator(glance.Pipe, left, right) -> {
       let left_result = transform_expression(context, left)
       let right_result = transform_expression(left_result.context, right)
-      transformer.merge_return(left_result, right_result, fn(left_ex, right_ex) {
+      internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
         python.Call(right_ex, [python.UnlabelledField(left_ex)])
       })
     }
@@ -219,16 +219,16 @@ fn transform_expression(
       let record_result = transform_expression(context, record)
       fields
       |> list.fold(
-        transformer.TransformState(record_result.context, [], []),
+        internal.TransformState(record_result.context, [], []),
         fn(state, tuple) {
-          transformer.merge_state_prepend(
+          internal.merge_state_prepend(
             state,
             transform_expression(state.context, tuple.1),
             python.LabelledField(tuple.0, _),
           )
         },
       )
-      |> transformer.reverse_state_to_return(python.RecordUpdate(
+      |> internal.reverse_state_to_return(python.RecordUpdate(
         record: record_result.expression,
         fields: _,
       ))
@@ -237,20 +237,17 @@ fn transform_expression(
     glance.List(head, option.Some(rest)) -> {
       let reversed_list_result =
         head
-        |> list.fold(
-          transformer.TransformState(context, [], []),
-          fn(state, elem) {
-            transformer.merge_state_prepend(
-              state,
-              transform_expression(state.context, elem),
-              fn(a) { a },
-            )
-          },
-        )
+        |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
+          internal.merge_state_prepend(
+            state,
+            transform_expression(state.context, elem),
+            fn(a) { a },
+          )
+        })
 
       let rest_result = transform_expression(reversed_list_result.context, rest)
 
-      transformer.ExpressionReturn(
+      internal.ExpressionReturn(
         rest_result.context,
         list.append(reversed_list_result.statements, rest_result.statements),
         python.ListWithRest(
@@ -262,17 +259,14 @@ fn transform_expression(
     glance.List(head, option.None) as expr -> {
       let reversed_list_result =
         head
-        |> list.fold(
-          transformer.TransformState(context, [], []),
-          fn(state, elem) {
-            transformer.merge_state_prepend(
-              state,
-              transform_expression(state.context, elem),
-              fn(a) { a },
-            )
-          },
-        )
-      transformer.ExpressionReturn(
+        |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
+          internal.merge_state_prepend(
+            state,
+            transform_expression(state.context, elem),
+            fn(a) { a },
+          )
+        })
+      internal.ExpressionReturn(
         reversed_list_result.context,
         reversed_list_result.statements,
         python.List(reversed_list_result.item |> list.reverse),
@@ -290,13 +284,13 @@ fn transform_expression(
 }
 
 fn transform_statement(
-  transform_context: transformer.TransformerContext,
+  transform_context: internal.TransformerContext,
   statement: glance.Statement,
-) -> transformer.StatementReturn {
+) -> internal.StatementReturn {
   case statement {
     glance.Expression(expression) -> {
       let result = transform_expression(transform_context, expression)
-      transformer.StatementReturn(
+      internal.StatementReturn(
         context: result.context,
         statements: list.append(result.statements, [
           python.Expression(result.expression),
@@ -310,7 +304,7 @@ fn transform_statement(
       ..,
     ) -> {
       let result = transform_expression(transform_context, value)
-      transformer.StatementReturn(
+      internal.StatementReturn(
         context: result.context,
         statements: list.append(result.statements, [
           python.SimpleAssignment(variable, result.expression),
@@ -334,22 +328,20 @@ fn transform_top_level_function(function: glance.Function) -> python.Function {
       let result =
         function.body
         |> list.fold(
-          transformer.StatementReturn(
-            context: transformer.TransformerContext(next_function_id: 0),
+          internal.StatementReturn(
+            context: internal.TransformerContext(next_function_id: 0),
             statements: [],
           ),
           fn(state, next_statement) {
             let result = transform_statement(state.context, next_statement)
-            transformer.StatementReturn(
+            internal.StatementReturn(
               context: result.context,
               statements: list.append(state.statements, result.statements),
             )
           },
         )
       result.statements
-      |> transformer.transform_last(
-        transformer.add_return_if_returnable_expression,
-      )
+      |> internal.transform_last(internal.add_return_if_returnable_expression)
     },
   )
 }
@@ -403,9 +395,7 @@ fn transform_function_or_external(
   module: python.Module,
   function: glance.Definition(glance.Function),
 ) -> python.Module {
-  case
-    list.filter_map(function.attributes, transformer.maybe_extract_external)
-  {
+  case list.filter_map(function.attributes, internal.maybe_extract_external) {
     [] ->
       python.Module(
         ..module,

@@ -1,10 +1,10 @@
+import compiler
 import gleeunit/should
-import macabre
 
 pub fn no_variant_custom_type_test() {
   "pub type Foo {
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -17,7 +17,7 @@ pub fn single_variant_custom_type_test() {
   "pub type Foo {
   Bar(a: Int)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -36,7 +36,7 @@ pub fn multi_variant_custom_type_test() {
   Bar(a: Int)
   Baz(a: String)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -62,7 +62,7 @@ pub fn single_variant_with_no_fields_test() {
   "pub type Foo {
   Bar
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -81,7 +81,7 @@ pub fn multi_variant_with_no_fields_test() {
   Bar
   Baz
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -107,7 +107,7 @@ pub fn tuple_type_test() {
   "pub type Foo {
     Foo(point: #(Int, Int))
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -125,7 +125,7 @@ pub fn variant_generic_test() {
   "pub type Foo(elem) {
     Foo(item: elem)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -145,7 +145,7 @@ pub fn multi_variant_generic_test() {
     Bar(item: elem)
     Baz(elem: elem)
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
@@ -177,7 +177,7 @@ pub fn generic_field_type_test() {
   pub type Bar {
     Bar(foo: Foo(String))
   }"
-  |> macabre.compile
+  |> compiler.compile
   |> should.be_ok
   |> should.equal(
     "from gleam_builtins import *
