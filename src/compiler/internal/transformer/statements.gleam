@@ -5,7 +5,36 @@ import gleam/list
 import gleam/option
 import pprint
 
-pub fn transform_statement(
+// a block is a scope, so context can be reset at this level.
+//
+// Called from 
+// * function.transform_top_level_function
+// * Todo: fn
+// * Todo: block
+// * Todo: case
+pub fn transform_statement_block(
+  statements: List(glance.Statement),
+) -> List(python.Statement) {
+  let result =
+    statements
+    |> list.fold(
+      internal.StatementReturn(
+        context: internal.TransformerContext(next_function_id: 0),
+        statements: [],
+      ),
+      fn(state, next_statement) {
+        let result = transform_statement(state.context, next_statement)
+        internal.StatementReturn(
+          context: result.context,
+          statements: list.append(state.statements, result.statements),
+        )
+      },
+    )
+  result.statements
+  |> internal.transform_last(internal.add_return_if_returnable_expression)
+}
+
+fn transform_statement(
   transform_context: internal.TransformerContext,
   statement: glance.Statement,
 ) -> internal.StatementReturn {

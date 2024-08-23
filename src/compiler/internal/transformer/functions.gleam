@@ -11,26 +11,8 @@ pub fn transform_top_level_function(
   python.Function(
     name: function.name,
     parameters: list.map(function.parameters, transform_function_parameter),
-    body: {
-      let result =
-        function.body
-        |> list.fold(
-          internal.StatementReturn(
-            context: internal.TransformerContext(next_function_id: 0),
-            statements: [],
-          ),
-          fn(state, next_statement) {
-            let result =
-              statements.transform_statement(state.context, next_statement)
-            internal.StatementReturn(
-              context: result.context,
-              statements: list.append(state.statements, result.statements),
-            )
-          },
-        )
-      result.statements
-      |> internal.transform_last(internal.add_return_if_returnable_expression)
-    },
+    body: function.body
+      |> statements.transform_statement_block,
   )
 }
 
