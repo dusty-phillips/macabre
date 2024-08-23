@@ -1,4 +1,5 @@
 import compiler/internal/transformer as internal
+import compiler/internal/transformer/patterns
 import compiler/python
 import glance
 import gleam/int
@@ -23,6 +24,7 @@ pub fn transform_statement_block(
         context: internal.TransformerContext(
           next_function_id: 0,
           next_block_id: 0,
+          next_case_id: 0,
         ),
         statements: [],
       ),
@@ -145,7 +147,7 @@ fn transform_expression(
 
     glance.Block(statements) -> transform_block(context, statements)
 
-    glance.Case(..) -> todo as "case expressions not supported yet"
+    glance.Case(subjects, clauses) -> transform_case(context, subjects, clauses)
 
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
@@ -340,7 +342,7 @@ fn transform_fn(
 fn transform_block(
   context: internal.TransformerContext,
   body: List(glance.Statement),
-) {
+) -> internal.ExpressionReturn {
   let function_name = "_fn_block_" <> int.to_string(context.next_block_id)
   let function =
     python.Function(function_name, [], transform_statement_block(body))
@@ -352,6 +354,70 @@ fn transform_block(
     statements: [python.FunctionDef(function)],
     expression: python.Call(python.Variable(function_name), []),
   )
+}
+
+fn transform_case(
+  context: internal.TransformerContext,
+  subjects: List(glance.Expression),
+  clauses: List(glance.Clause),
+) -> internal.ExpressionReturn {
+  let subjects_result = case subjects {
+    [] -> panic("No subjects!")
+    [subject] -> transform_expression(context, subject)
+    multiple -> transform_tuple(context, multiple)
+  }
+  let clause_result =
+    list.fold(
+      clauses,
+      internal.TransformState(subjects_result.context, [], []),
+      fold_case_clause,
+    )
+
+  let function_name = "_fn_case_" <> int.to_string(context.next_case_id)
+  let function =
+    python.Function(function_name, [python.NameParam("_case_subject")], [
+      python.Match(clause_result.item |> list.reverse),
+    ])
+
+  internal.ExpressionReturn(
+    context: internal.TransformerContext(
+      ..subjects_result.context,
+      next_case_id: context.next_case_id + 1,
+    ),
+    statements: list.append(subjects_result.statements, [
+      python.FunctionDef(function),
+    ]),
+    expression: python.Call(python.Variable(function_name), [
+      python.UnlabelledField(subjects_result.expression),
+    ]),
+  )
+}
+
+fn fold_case_clause(
+  state: internal.TransformState(internal.ReversedList(python.MatchCase)),
+  clause: glance.Clause,
+) -> internal.TransformState(internal.ReversedList(python.MatchCase)) {
+  case clause {
+    glance.Clause(guard: option.Some(_), ..) ->
+      todo as "Case guards not implemented yet"
+
+    glance.Clause([pattern_list], option.None, glance.Block(_statements)) -> {
+      todo as "block case clauses not supported yet"
+    }
+
+    glance.Clause(pattern_list, option.None, body) -> {
+      let python_pattern = patterns.transform_alternative_patterns(pattern_list)
+      let body_result = transform_expression(state.context, body)
+
+      internal.merge_state_prepend(state, body_result, fn(expr) {
+        python.MatchCase(python_pattern, [python.Return(expr)])
+      })
+    }
+
+    glance.Clause(..) -> {
+      todo as "multiple clause not implemented yet"
+    }
+  }
 }
 
 fn transform_pipe(

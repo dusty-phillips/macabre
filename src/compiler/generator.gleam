@@ -4,6 +4,7 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_builder.{type StringBuilder}
+import pprint
 import python_prelude
 
 fn generate_import(import_: python.Import) -> StringBuilder {
@@ -191,7 +192,54 @@ fn generate_statement(statement: python.Statement) -> StringBuilder {
       |> string_builder.append(" = ")
       |> string_builder.append_builder(generate_expression(value))
     }
+    python.Match(cases) ->
+      string_builder.new()
+      |> string_builder.append("match _case_subject:\n")
+      |> string_builder.append_builder(
+        generate_cases(cases) |> internal.indent(4),
+      )
+    // TODO: Deal with cases
     python.FunctionDef(function) -> generate_function(function)
+  }
+}
+
+fn generate_cases(cases: List(python.MatchCase)) -> StringBuilder {
+  case cases {
+    [] -> string_builder.from_string("pass")
+    cases -> internal.generate_plural(cases, generate_case, "\n")
+  }
+}
+
+fn generate_case(case_: python.MatchCase) -> StringBuilder {
+  string_builder.from_string("case ")
+  |> string_builder.append_builder(generate_pattern(case_.pattern))
+  |> string_builder.append(":\n")
+  |> string_builder.append_builder(
+    generate_block(case_.body) |> internal.indent(4),
+  )
+}
+
+fn generate_pattern(pattern: python.Pattern) -> StringBuilder {
+  case pattern {
+    python.PatternWildcard -> string_builder.from_string("_")
+    python.PatternInt(str)
+    | python.PatternFloat(str)
+    | python.PatternVariable(str) -> string_builder.from_string(str)
+    python.PatternString(str) -> string_builder.from_strings(["\"", str, "\""])
+    python.PatternAssignment(pattern, name) ->
+      generate_pattern(pattern)
+      |> string_builder.append(" as ")
+      |> string_builder.append(name)
+    python.PatternTuple(patterns) ->
+      patterns
+      |> list.map(generate_pattern)
+      |> string_builder.join(", ")
+      |> string_builder.prepend("(")
+      |> string_builder.append(")")
+    python.PatternAlternate(patterns) ->
+      patterns
+      |> list.map(generate_pattern)
+      |> string_builder.join(" | ")
   }
 }
 
@@ -201,7 +249,7 @@ fn generate_parameter(param: python.FunctionParameter) -> StringBuilder {
   }
 }
 
-fn generate_function_body(statements: List(python.Statement)) -> StringBuilder {
+fn generate_block(statements: List(python.Statement)) -> StringBuilder {
   case statements {
     [] -> string_builder.from_string("pass")
     multiple_lines ->
@@ -222,7 +270,7 @@ fn generate_function(function: python.Function) -> StringBuilder {
   ))
   |> string_builder.append("):\n")
   |> string_builder.append_builder(
-    generate_function_body(function.body) |> internal.indent(4),
+    generate_block(function.body) |> internal.indent(4),
   )
 }
 

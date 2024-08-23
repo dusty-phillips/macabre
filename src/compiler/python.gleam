@@ -55,6 +55,7 @@ pub type Statement {
   Expression(Expression)
   Return(Expression)
   FunctionDef(Function)
+  Match(cases: List(MatchCase))
   SimpleAssignment(name: String, value: Expression)
 }
 
@@ -83,6 +84,23 @@ pub type Variant {
 
 pub type CustomType {
   CustomType(name: String, parameters: List(String), variants: List(Variant))
+}
+
+pub type MatchCase {
+  // Inner List is collecting tuples together, outer list is patterns that get or'd together
+  // e.g. 1,2 | 3, 4 becomes [[1,2], [3, 4]]
+  MatchCase(pattern: Pattern, body: List(Statement))
+}
+
+pub type Pattern {
+  PatternWildcard
+  PatternInt(value: String)
+  PatternFloat(value: String)
+  PatternString(value: String)
+  PatternVariable(value: String)
+  PatternAssignment(pattern: Pattern, name: String)
+  PatternTuple(value: List(Pattern))
+  PatternAlternate(patterns: List(Pattern))
 }
 
 pub type Function {

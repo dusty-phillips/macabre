@@ -48,8 +48,10 @@ PRs are welcome.
 ### Some of the things I know are missing
 
 - no destructuring/pattern matching in let
+  - some constructs can map straight to python destructuring
+  - others may need a custom case
 - no let assert
-- no case expressions
+- empty tuples are probably broken
 - label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
 - const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)
