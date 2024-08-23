@@ -62,16 +62,24 @@ fn transform_expression(
     glance.Variable(string) ->
       internal.empty_return(context, python.Variable(string))
 
+    glance.Tuple(expressions) -> transform_tuple(context, expressions)
+
+    glance.List(head, rest) -> transform_list(context, head, rest)
+
     glance.NegateInt(expression) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Negate)
+
+    glance.NegateBool(expression) -> {
+      transform_expression(context, expression)
+      |> internal.map_return(python.Not(_))
+    }
 
     glance.Panic(option.None) ->
       internal.empty_return(
         context,
         python.Panic(python.String("panic expression evaluated")),
       )
-
     glance.Panic(option.Some(expression)) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Panic)
@@ -81,15 +89,9 @@ fn transform_expression(
         context,
         python.Todo(python.String("This has not yet been implemented")),
       )
-
     glance.Todo(option.Some(expression)) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Todo(_))
-
-    glance.NegateBool(expression) -> {
-      transform_expression(context, expression)
-      |> internal.map_return(python.Not(_))
-    }
 
     glance.Call(function, arguments) ->
       transform_call(context, function, arguments)
@@ -102,10 +104,6 @@ fn transform_expression(
         arguments_before,
         arguments_after,
       )
-
-    glance.Tuple(expressions) -> transform_tuple(context, expressions)
-
-    glance.List(head, rest) -> transform_list(context, head, rest)
 
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
@@ -132,6 +130,54 @@ fn transform_expression(
     | glance.Fn(_, _, _) as expr -> {
       pprint.debug(expr)
       todo as "Several expressions are not implemented yet"
+    }
+  }
+}
+
+fn transform_tuple(
+  context: internal.TransformerContext,
+  expressions: List(glance.Expression),
+) -> internal.ExpressionReturn {
+  expressions
+  |> list.fold(internal.TransformState(context, [], []), fn(state, expression) {
+    internal.merge_state_prepend(
+      state,
+      transform_expression(state.context, expression),
+      fn(a) { a },
+    )
+  })
+  |> internal.reverse_state_to_return(python.Tuple)
+}
+
+fn transform_list(
+  context: internal.TransformerContext,
+  head: List(glance.Expression),
+  rest: option.Option(glance.Expression),
+) -> internal.ExpressionReturn {
+  let reversed_list_result =
+    head
+    |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
+      internal.merge_state_prepend(
+        state,
+        transform_expression(state.context, elem),
+        fn(a) { a },
+      )
+    })
+
+  case rest {
+    option.None -> {
+      internal.reverse_state_to_return(reversed_list_result, python.List(_))
+    }
+    option.Some(rest) -> {
+      let rest_result = transform_expression(reversed_list_result.context, rest)
+      internal.ExpressionReturn(
+        rest_result.context,
+        list.append(reversed_list_result.statements, rest_result.statements),
+        python.ListWithRest(
+          reversed_list_result.item |> list.reverse,
+          rest_result.expression,
+        ),
+      )
     }
   }
 }
@@ -220,54 +266,6 @@ fn transform_fn_capture(
       ),
     ),
   )
-}
-
-fn transform_tuple(
-  context: internal.TransformerContext,
-  expressions: List(glance.Expression),
-) -> internal.ExpressionReturn {
-  expressions
-  |> list.fold(internal.TransformState(context, [], []), fn(state, expression) {
-    internal.merge_state_prepend(
-      state,
-      transform_expression(state.context, expression),
-      fn(a) { a },
-    )
-  })
-  |> internal.reverse_state_to_return(python.Tuple)
-}
-
-fn transform_list(
-  context: internal.TransformerContext,
-  head: List(glance.Expression),
-  rest: option.Option(glance.Expression),
-) -> internal.ExpressionReturn {
-  let reversed_list_result =
-    head
-    |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
-      internal.merge_state_prepend(
-        state,
-        transform_expression(state.context, elem),
-        fn(a) { a },
-      )
-    })
-
-  case rest {
-    option.None -> {
-      internal.reverse_state_to_return(reversed_list_result, python.List(_))
-    }
-    option.Some(rest) -> {
-      let rest_result = transform_expression(reversed_list_result.context, rest)
-      internal.ExpressionReturn(
-        rest_result.context,
-        list.append(reversed_list_result.statements, rest_result.statements),
-        python.ListWithRest(
-          reversed_list_result.item |> list.reverse,
-          rest_result.expression,
-        ),
-      )
-    }
-  }
 }
 
 fn transform_pipe(
