@@ -1,7 +1,7 @@
 import compiler/python
 import glance
 import gleam/list
-import pprint
+import gleam/option
 
 // alternative patterns are sent to us a a list of list of patters.
 // the outer list represents alternatives, so 1 | 2 -> becomes [[1], [2]]
@@ -49,7 +49,18 @@ fn transform_pattern(pattern: glance.Pattern) -> python.Pattern {
       todo as "concatenate patterns are not supported yet"
     glance.PatternBitString(..) ->
       todo as "bitstring patterns are not supported yet"
-    glance.PatternConstructor(..) ->
-      todo as "record constructor patterns are not supported yet"
+    glance.PatternConstructor(module, constructor, arguments, _) ->
+      python.PatternConstructor(
+        module,
+        constructor,
+        list.map(arguments, fn(field) {
+          case field {
+            glance.Field(option.Some(label), item) ->
+              python.LabelledField(label, transform_pattern(item))
+            glance.Field(option.None, item) ->
+              python.UnlabelledField(transform_pattern(item))
+          }
+        }),
+      )
   }
 }

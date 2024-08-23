@@ -45,52 +45,66 @@ Sweet, me too.
 
 PRs are welcome.
 
-### Some of the things I know are missing
+## Outstanding Todos
 
-- no destructuring/pattern matching in let
-  - some constructs can map straight to python destructuring
-  - others may need a custom case
-- no let assert
+This is a list of all outstanding `todo` expressions (Gleam todo expressions
+are ) in the codebase, as of the last time that I updated this list.
+
+- (EASY) Aliased imports are not generated yet
+- Unlabelled fields in custom types are not generated yet
+  - Given that labelled and unlabelled fields can be mixed on one class, I have
+    a feeling we have to ditch dataclasses. Probably a custom class with slots, a
+    dict of names to indices, and a custom **match_args** that can handle
+    tuple-like _or_ record-like syntax?
+- Labelled parameters in function calls are not transformed (ie `fn foo(bar baz: Str)`)
+- (EASY) Discard parameters in function arguments are not transformed
+- Bitstrings are not supported yet
+- case guards are not supported yet
+- block case expressions are not supported yet.
+  - this could be trivially solved by just letting it fall through to the expression arm,
+    which would generate an extra function, but it should be possible to put those
+    statements right in the case itself
+- Functions as type fields are not supported yet
+  - debatable whether to make them a `def` right on the class or have the def be defined somewhere and just attach it like other fields
+- Fields that are "HoleType" are not supported and I don't even know what that means
+- IN case statements, the following patterns are not supported:
+  - List patterns
+  - Concatenate patterns
+  - Bitstring patterns (bytes)
+- Destructuring in assignments is not supported yet
+  - (EASY) tuple destructuring can map straight to python destructuring
+  - other structures will maybe need a match statement?
+- Use statements are not supported yet
+
+### Some other the things I know are missing
+
 - empty tuples are probably broken
-- label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
-- const definitions aren't supported yet (module.constants)
+  - (EASY) I used parens instead of a `,` like a total python NOOB
+- no let assert
+- (EASY) const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)
-- use statements aren't supported yet
-- bitstrings aren't supported yet (map to bytes)
-- No Result custom types yet
-- Shadowed variable names behave differently if used in closures
-  - made more complicated by the fact that the python code will likely have more
-    closures
-  - solution might be to keep track of used names and use unique ones when they
-    are shadowed
-- List custom type is missing `match_args`, other helpers
-- glance doesn't support comments
-- glance doesn't typecheck (e.g. `2.0 - 1.5` compiles successfully, but should
-  be `2.0 -. 1.5`)
 - Not doing anything to avoid collision between gleam identifiers with python keywords
+  - Especially: shadowed variable names behave differently if used in closures
+- glance itself doesn't support comments, so these are stripped out of the compiled code
+- glance doesn't have (much of) a typechecker
 - not currently generating python type hints (e.g. function arguments and
   return types), but gleam gives us that info so may as well use it
-- haven't really tested with nesting of expressions
 - need to print out nice errors when glance fails to parse
 - no concept of a "project", gleam.toml, downloading dependencies
-- only compiles one module at a time
-- copies the prelude module blindly into the directory that contains that one module
-- eliminate all todos in source code
+- only compiles one module at a time, doesn't follow imports
+- copies the prelude module blindly into the directory that contains that one module instead of a top level
 - No standard library
-- generate **main** if a module has a main function
+  - No Result custom type yet (I thought this needed to be in the prelude, but I don't see any result-specific syntax anywhere)
+- generate `__main__.py` if a module has a main function
 - calling functions or constructors with out-of-order positional args doesn't
   work in python
   - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1,
 1), mystr: "Foo")` in gleam
   - javascript seems to solve this by automatically reordering the arguments to
     match the input type
-- custom types with unlabelled fields are not working
-  - Given that labelled and unlabelled fields can be mixed on one class, I have
-    a feeling we have to ditch dataclasses. Probably a custom class with slots, a
-    dict of names to indices, and a custom **match_args** that can handle
-    tuple-like _or_ record-like syntax?
-- I notice that the javascript doesn't generate the wrapping class for custom
-  variants. Can we get away with not having them?
+- (EASY) I notice that the javascript doesn't generate the wrapping class for custom
+  variants. I think we should make top level types for each constructor and then a type union
+  for all the types in a single class.
 - Related: if you have a multi-variant type where the first constructor shadows
   the type's name, it breaks
-- maybe call ruff or black on the files after they are output, if they are installed.
+- (EASY) maybe call ruff or black on the files after they are output, if they are installed.

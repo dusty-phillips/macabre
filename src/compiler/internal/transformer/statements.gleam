@@ -413,10 +413,6 @@ fn fold_case_clause(
         python.MatchCase(python_pattern, [python.Return(expr)])
       })
     }
-
-    glance.Clause(..) -> {
-      todo as "multiple clause not implemented yet"
-    }
   }
 }
 

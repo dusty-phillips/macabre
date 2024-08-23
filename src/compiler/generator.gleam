@@ -240,6 +240,29 @@ fn generate_pattern(pattern: python.Pattern) -> StringBuilder {
       patterns
       |> list.map(generate_pattern)
       |> string_builder.join(" | ")
+    python.PatternConstructor(module, constructor, arguments) ->
+      module
+      |> option.map(fn(mod) { string_builder.from_strings([mod, "."]) })
+      |> option.unwrap(string_builder.new())
+      |> string_builder.append(constructor)
+      |> string_builder.append("(")
+      |> string_builder.append_builder(internal.generate_plural(
+        arguments,
+        generate_pattern_constructor_field,
+        ", ",
+      ))
+      |> string_builder.append(")")
+  }
+}
+
+fn generate_pattern_constructor_field(
+  field: python.Field(python.Pattern),
+) -> StringBuilder {
+  case field {
+    python.LabelledField(label, pattern) ->
+      string_builder.from_strings([label, "="])
+      |> string_builder.append_builder(generate_pattern(pattern))
+    python.UnlabelledField(pattern) -> generate_pattern(pattern)
   }
 }
 

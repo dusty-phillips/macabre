@@ -101,6 +101,11 @@ pub type Pattern {
   PatternAssignment(pattern: Pattern, name: String)
   PatternTuple(value: List(Pattern))
   PatternAlternate(patterns: List(Pattern))
+  PatternConstructor(
+    module: option.Option(String),
+    constructor: String,
+    arguments: List(Field(Pattern)),
+  )
 }
 
 pub type Function {
