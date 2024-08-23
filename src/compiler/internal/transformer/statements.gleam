@@ -145,6 +145,8 @@ fn transform_expression(
 
     glance.Block(statements) -> transform_block(context, statements)
 
+    glance.Case(..) -> todo as "case expressions not supported yet"
+
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
       |> internal.map_return(python.TupleIndex(_, index))
@@ -164,12 +166,9 @@ fn transform_expression(
     glance.RecordUpdate(record:, fields:, ..) ->
       transform_record_update(context, record, fields)
 
-    glance.BitString(_) as expr
-    | glance.Block(_) as expr
-    | glance.Case(_, _) as expr
-    | glance.Fn(_, _, _) as expr -> {
+    glance.BitString(_) as expr -> {
       pprint.debug(expr)
-      todo as "Several expressions are not implemented yet"
+      todo as "BitString expressions not supported yet"
     }
   }
 }
