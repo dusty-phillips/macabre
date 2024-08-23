@@ -50,6 +50,41 @@ fn fold_call_argument(
   }
 }
 
+fn transform_fn_capture(
+  context: internal.TransformerContext,
+  label: option.Option(String),
+  function: glance.Expression,
+  arguments_before: List(glance.Field(glance.Expression)),
+  arguments_after: List(glance.Field(glance.Expression)),
+) -> internal.ExpressionReturn {
+  let function_result = transform_expression(context, function)
+  let reversed_arguments_result =
+    list.concat([
+      arguments_before,
+      [glance.Field(label, glance.Variable("fn_capture"))],
+      arguments_after,
+    ])
+    |> list.fold(
+      internal.TransformState(function_result.context, [], []),
+      fold_call_argument,
+    )
+
+  internal.ExpressionReturn(
+    reversed_arguments_result.context,
+    list.append(
+      function_result.statements,
+      reversed_arguments_result.statements,
+    ),
+    python.Lambda(
+      [python.Variable("fn_capture")],
+      python.Call(
+        function_result.expression,
+        reversed_arguments_result.item |> list.reverse,
+      ),
+    ),
+  )
+}
+
 fn transform_binop(
   context: internal.TransformerContext,
   name: glance.BinaryOperator,
@@ -78,6 +113,102 @@ fn transform_binop(
   internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
     python.BinaryOperator(op, left_ex, right_ex)
   })
+}
+
+fn transform_tuple(
+  context: internal.TransformerContext,
+  expressions: List(glance.Expression),
+) -> internal.ExpressionReturn {
+  expressions
+  |> list.fold(internal.TransformState(context, [], []), fn(state, expression) {
+    internal.merge_state_prepend(
+      state,
+      transform_expression(state.context, expression),
+      fn(a) { a },
+    )
+  })
+  |> internal.reverse_state_to_return(python.Tuple)
+}
+
+fn transform_call(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+  arguments: List(glance.Field(glance.Expression)),
+) -> internal.ExpressionReturn {
+  let function_result = transform_expression(context, function)
+  let reversed_arguments_result =
+    list.fold(
+      arguments,
+      internal.TransformState(function_result.context, [], []),
+      fold_call_argument,
+    )
+  internal.ExpressionReturn(
+    reversed_arguments_result.context,
+    list.append(
+      function_result.statements,
+      reversed_arguments_result.statements,
+    ),
+    python.Call(
+      function: function_result.expression,
+      arguments: list.reverse(reversed_arguments_result.item),
+    ),
+  )
+}
+
+fn transform_record_update(
+  context: internal.TransformerContext,
+  record: glance.Expression,
+  fields: List(#(String, glance.Expression)),
+) -> internal.ExpressionReturn {
+  let record_result = transform_expression(context, record)
+  fields
+  |> list.fold(
+    internal.TransformState(record_result.context, [], []),
+    fn(state, tuple) {
+      internal.merge_state_prepend(
+        state,
+        transform_expression(state.context, tuple.1),
+        python.LabelledField(tuple.0, _),
+      )
+    },
+  )
+  |> internal.reverse_state_to_return(python.RecordUpdate(
+    record: record_result.expression,
+    fields: _,
+  ))
+}
+
+fn transform_list(
+  context: internal.TransformerContext,
+  head: List(glance.Expression),
+  rest: option.Option(glance.Expression),
+) -> internal.ExpressionReturn {
+  let reversed_list_result =
+    head
+    |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
+      internal.merge_state_prepend(
+        state,
+        transform_expression(state.context, elem),
+        fn(a) { a },
+      )
+    })
+
+  case rest {
+    option.None -> {
+      internal.reverse_state_to_return(reversed_list_result, python.List(_))
+    }
+    option.Some(rest) -> {
+      let rest_result = transform_expression(reversed_list_result.context, rest)
+      internal.ExpressionReturn(
+        rest_result.context,
+        list.append(reversed_list_result.statements, rest_result.statements),
+        python.ListWithRest(
+          reversed_list_result.item |> list.reverse,
+          rest_result.expression,
+        ),
+      )
+    }
+  }
 }
 
 fn transform_expression(
@@ -131,69 +262,19 @@ fn transform_expression(
       |> internal.map_return(python.Not(_))
     }
 
-    glance.Call(function, arguments) -> {
-      let function_result = transform_expression(context, function)
-      let reversed_arguments_result =
-        list.fold(
-          arguments,
-          internal.TransformState(function_result.context, [], []),
-          fold_call_argument,
-        )
-      internal.ExpressionReturn(
-        reversed_arguments_result.context,
-        list.append(
-          function_result.statements,
-          reversed_arguments_result.statements,
-        ),
-        python.Call(
-          function: function_result.expression,
-          arguments: list.reverse(reversed_arguments_result.item),
-        ),
-      )
-    }
+    glance.Call(function, arguments) ->
+      transform_call(context, function, arguments)
 
-    glance.FnCapture(label, function, arguments_before, arguments_after) -> {
-      let function_result = transform_expression(context, function)
-      let reversed_arguments_result =
-        list.concat([
-          arguments_before,
-          [glance.Field(label, glance.Variable("fn_capture"))],
-          arguments_after,
-        ])
-        |> list.fold(
-          internal.TransformState(function_result.context, [], []),
-          fold_call_argument,
-        )
-
-      internal.ExpressionReturn(
-        reversed_arguments_result.context,
-        list.append(
-          function_result.statements,
-          reversed_arguments_result.statements,
-        ),
-        python.Lambda(
-          [python.Variable("fn_capture")],
-          python.Call(
-            function_result.expression,
-            reversed_arguments_result.item |> list.reverse,
-          ),
-        ),
+    glance.FnCapture(label, function, arguments_before, arguments_after) ->
+      transform_fn_capture(
+        context,
+        label,
+        function,
+        arguments_before,
+        arguments_after,
       )
-    }
 
-    glance.Tuple(expressions) ->
-      expressions
-      |> list.fold(
-        internal.TransformState(context, [], []),
-        fn(state, expression) {
-          internal.merge_state_prepend(
-            state,
-            transform_expression(state.context, expression),
-            fn(a) { a },
-          )
-        },
-      )
-      |> internal.reverse_state_to_return(python.Tuple)
+    glance.Tuple(expressions) -> transform_tuple(context, expressions)
 
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
@@ -215,63 +296,10 @@ fn transform_expression(
       transform_binop(context, name, left, right)
     }
 
-    glance.RecordUpdate(record:, fields:, ..) -> {
-      let record_result = transform_expression(context, record)
-      fields
-      |> list.fold(
-        internal.TransformState(record_result.context, [], []),
-        fn(state, tuple) {
-          internal.merge_state_prepend(
-            state,
-            transform_expression(state.context, tuple.1),
-            python.LabelledField(tuple.0, _),
-          )
-        },
-      )
-      |> internal.reverse_state_to_return(python.RecordUpdate(
-        record: record_result.expression,
-        fields: _,
-      ))
-    }
+    glance.RecordUpdate(record:, fields:, ..) ->
+      transform_record_update(context, record, fields)
 
-    glance.List(head, option.Some(rest)) -> {
-      let reversed_list_result =
-        head
-        |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
-          internal.merge_state_prepend(
-            state,
-            transform_expression(state.context, elem),
-            fn(a) { a },
-          )
-        })
-
-      let rest_result = transform_expression(reversed_list_result.context, rest)
-
-      internal.ExpressionReturn(
-        rest_result.context,
-        list.append(reversed_list_result.statements, rest_result.statements),
-        python.ListWithRest(
-          reversed_list_result.item |> list.reverse,
-          rest_result.expression,
-        ),
-      )
-    }
-    glance.List(head, option.None) as expr -> {
-      let reversed_list_result =
-        head
-        |> list.fold(internal.TransformState(context, [], []), fn(state, elem) {
-          internal.merge_state_prepend(
-            state,
-            transform_expression(state.context, elem),
-            fn(a) { a },
-          )
-        })
-      internal.ExpressionReturn(
-        reversed_list_result.context,
-        reversed_list_result.statements,
-        python.List(reversed_list_result.item |> list.reverse),
-      )
-    }
+    glance.List(head, rest) -> transform_list(context, head, rest)
 
     glance.BitString(_) as expr
     | glance.Block(_) as expr
