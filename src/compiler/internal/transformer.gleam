@@ -11,7 +11,7 @@ pub type TransformError {
 }
 
 pub type TransformerContext {
-  TransformerContext(next_function_id: Int)
+  TransformerContext(next_function_id: Int, next_block_id: Int)
 }
 
 pub type ExpressionReturn {

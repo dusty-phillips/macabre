@@ -20,7 +20,10 @@ pub fn transform_statement_block(
     statements
     |> list.fold(
       internal.StatementReturn(
-        context: internal.TransformerContext(next_function_id: 0),
+        context: internal.TransformerContext(
+          next_function_id: 0,
+          next_block_id: 0,
+        ),
         statements: [],
       ),
       fn(state, next_statement) {
@@ -324,6 +327,7 @@ fn transform_fn(
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(
+      ..context,
       next_function_id: context.next_function_id + 1,
     ),
     statements: [python.FunctionDef(function)],
