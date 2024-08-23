@@ -1,5 +1,4 @@
 import compiler/internal/transformer
-import gleam/list
 import gleeunit/should
 
 pub fn transform_last_empty_test() {

@@ -14,7 +14,7 @@ fn generate_import(import_: python.Import) -> StringBuilder {
       |> string_builder.append(module)
       |> string_builder.append(" import ")
       |> string_builder.append(name)
-    python.UnqualifiedImport(module, name, option.Some(_)) ->
+    python.UnqualifiedImport(_module, _name, option.Some(_)) ->
       todo as "Aliased imports not supported yet"
   }
 }
@@ -52,7 +52,7 @@ fn generate_record_update_fields(
 ) -> StringBuilder {
   case field {
     python.UnlabelledField(_) ->
-      panic("Unlabeled fields are not expected on record updates")
+      panic as "Unlabeled fields are not expected on record updates"
     python.LabelledField(label, expression) ->
       string_builder.new()
       |> string_builder.append(label)
