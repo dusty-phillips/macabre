@@ -66,11 +66,13 @@ fn transform_statement(
         ]),
       )
     }
-    glance.Assignment(..) ->
+    glance.Assignment(..) as expr -> {
+      pprint.debug(expr)
       todo as "Non-trivial assignments are not supported yet"
-    _ -> {
-      pprint.debug(statement)
-      todo as "not all statements are defined yet"
+    }
+
+    glance.Use(..) -> {
+      todo as "Use statements are not supported yet"
     }
   }
 }
