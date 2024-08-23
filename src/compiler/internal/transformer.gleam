@@ -37,6 +37,15 @@ pub type StatementReturn {
   )
 }
 
+// Simple constructor for an ExpressionReturn that doesn't need to
+// modify the context or return statements
+pub fn empty_return(
+  context: TransformerContext,
+  expression: python.Expression,
+) -> ExpressionReturn {
+  ExpressionReturn(context, [], expression)
+}
+
 // Return a new ExpressionReturn with the same context and statements,
 // but call a function to generate a new expression
 pub fn map_return(

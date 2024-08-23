@@ -85,6 +85,18 @@ fn transform_fn_capture(
   )
 }
 
+fn transform_pipe(
+  context: internal.TransformerContext,
+  left: glance.Expression,
+  right: glance.Expression,
+) -> internal.ExpressionReturn {
+  let left_result = transform_expression(context, left)
+  let right_result = transform_expression(left_result.context, right)
+  internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
+    python.Call(right_ex, [python.UnlabelledField(left_ex)])
+  })
+}
+
 fn transform_binop(
   context: internal.TransformerContext,
   name: glance.BinaryOperator,
@@ -217,28 +229,27 @@ fn transform_expression(
 ) -> internal.ExpressionReturn {
   case expression {
     glance.Int(string) | glance.Float(string) ->
-      internal.ExpressionReturn(context, [], python.Number(string))
+      internal.empty_return(context, python.Number(string))
 
     glance.String(string) ->
-      internal.ExpressionReturn(context, [], python.String(string))
+      internal.empty_return(context, python.String(string))
 
     glance.Variable("True") ->
-      internal.ExpressionReturn(context, [], python.Bool("True"))
+      internal.empty_return(context, python.Bool("True"))
 
     glance.Variable("False") ->
-      internal.ExpressionReturn(context, [], python.Bool("False"))
+      internal.empty_return(context, python.Bool("False"))
 
     glance.Variable(string) ->
-      internal.ExpressionReturn(context, [], python.Variable(string))
+      internal.empty_return(context, python.Variable(string))
 
     glance.NegateInt(expression) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Negate)
 
     glance.Panic(option.None) ->
-      internal.ExpressionReturn(
+      internal.empty_return(
         context,
-        [],
         python.Panic(python.String("panic expression evaluated")),
       )
 
@@ -247,9 +258,8 @@ fn transform_expression(
       |> internal.map_return(python.Panic)
 
     glance.Todo(option.None) ->
-      internal.ExpressionReturn(
+      internal.empty_return(
         context,
-        [],
         python.Todo(python.String("This has not yet been implemented")),
       )
 
@@ -285,13 +295,9 @@ fn transform_expression(
       transform_expression(context, expression)
       |> internal.map_return(python.FieldAccess(_, label))
 
-    glance.BinaryOperator(glance.Pipe, left, right) -> {
-      let left_result = transform_expression(context, left)
-      let right_result = transform_expression(left_result.context, right)
-      internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
-        python.Call(right_ex, [python.UnlabelledField(left_ex)])
-      })
-    }
+    glance.BinaryOperator(glance.Pipe, left, right) ->
+      transform_pipe(context, left, right)
+
     glance.BinaryOperator(name, left, right) -> {
       transform_binop(context, name, left, right)
     }
