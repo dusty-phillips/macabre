@@ -189,3 +189,30 @@ def main():
     return _fn_case_0((1, 2))",
   )
 }
+
+pub fn case_block_test() {
+  "pub fn main() {
+    case 1 {
+      1 -> {
+        let x = 1
+        let y = 2
+        x + y
+      }
+    }
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 1:
+                x = 1
+                y = 2
+                return x + y
+    return _fn_case_0(1)",
+  )
+}

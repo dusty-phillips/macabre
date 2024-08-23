@@ -17,17 +17,24 @@ import pprint
 pub fn transform_statement_block(
   statements: List(glance.Statement),
 ) -> List(python.Statement) {
+  transform_statement_block_with_context(
+    internal.TransformerContext(
+      next_function_id: 0,
+      next_block_id: 0,
+      next_case_id: 0,
+    ),
+    statements,
+  ).statements
+}
+
+pub fn transform_statement_block_with_context(
+  context: internal.TransformerContext,
+  statements: List(glance.Statement),
+) -> internal.StatementReturn {
   let result =
     statements
     |> list.fold(
-      internal.StatementReturn(
-        context: internal.TransformerContext(
-          next_function_id: 0,
-          next_block_id: 0,
-          next_case_id: 0,
-        ),
-        statements: [],
-      ),
+      internal.StatementReturn(context, statements: []),
       fn(state, next_statement) {
         let result = transform_statement(state.context, next_statement)
         internal.StatementReturn(
@@ -36,8 +43,12 @@ pub fn transform_statement_block(
         )
       },
     )
-  result.statements
-  |> internal.transform_last(internal.add_return_if_returnable_expression)
+
+  internal.StatementReturn(
+    ..result,
+    statements: result.statements
+      |> internal.transform_last(internal.add_return_if_returnable_expression),
+  )
 }
 
 fn transform_statement(
@@ -401,8 +412,19 @@ fn fold_case_clause(
     glance.Clause(guard: option.Some(_), ..) ->
       todo as "Case guards not implemented yet"
 
-    glance.Clause([pattern_list], option.None, glance.Block(_statements)) -> {
-      todo as "block case clauses not supported yet"
+    glance.Clause(pattern_list, option.None, glance.Block(statements)) -> {
+      let python_pattern = patterns.transform_alternative_patterns(pattern_list)
+      let statements_result =
+        transform_statement_block_with_context(state.context, statements)
+      internal.TransformState(
+        statements_result.context,
+        state.statements,
+        state.item
+          |> list.prepend(python.MatchCase(
+            python_pattern,
+            statements_result.statements,
+          )),
+      )
     }
 
     glance.Clause(pattern_list, option.None, body) -> {

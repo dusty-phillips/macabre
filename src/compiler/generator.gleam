@@ -4,7 +4,6 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_builder.{type StringBuilder}
-import pprint
 import python_prelude
 
 fn generate_import(import_: python.Import) -> StringBuilder {
@@ -180,9 +179,7 @@ fn generate_expression(expression: python.Expression) {
 
 fn generate_statement(statement: python.Statement) -> StringBuilder {
   case statement {
-    python.Expression(expression) ->
-      generate_expression(expression)
-      |> internal.append_if_not_empty("\n")
+    python.Expression(expression) -> generate_expression(expression)
     python.Return(expression) ->
       string_builder.from_string("return ")
       |> string_builder.append_builder(generate_expression(expression))

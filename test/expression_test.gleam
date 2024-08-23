@@ -181,8 +181,7 @@ pub fn empty_panic_test() {
     "from gleam_builtins import *
 
 def main():
-    raise GleamPanic(\"panic expression evaluated\")
-    ",
+    raise GleamPanic(\"panic expression evaluated\")",
   )
 }
 
@@ -196,8 +195,7 @@ pub fn string_panic_test() {
     "from gleam_builtins import *
 
 def main():
-    raise GleamPanic(\"my custom panic\")
-    ",
+    raise GleamPanic(\"my custom panic\")",
   )
 }
 
@@ -211,8 +209,7 @@ pub fn empty_todo_test() {
     "from gleam_builtins import *
 
 def main():
-    raise NotImplementedError(\"This has not yet been implemented\")
-    ",
+    raise NotImplementedError(\"This has not yet been implemented\")",
   )
 }
 
@@ -226,8 +223,7 @@ pub fn string_todo_test() {
     "from gleam_builtins import *
 
 def main():
-    raise NotImplementedError(\"much is yet to be done\")
-    ",
+    raise NotImplementedError(\"much is yet to be done\")",
   )
 }
 
