@@ -47,10 +47,9 @@ PRs are welcome.
 
 ### Some of the things I know are missing
 
-- no case expressions
-- block expressions aren't supported yet
 - no destructuring/pattern matching in let
 - no let assert
+- no case expressions
 - label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)
 - const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)

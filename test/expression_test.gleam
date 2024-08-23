@@ -658,3 +658,59 @@ def main():
     foo = _fn_def_0",
   )
 }
+
+pub fn simple_block_test() {
+  "pub fn main() {
+    let foo = {1}
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_block_0():
+        return 1
+    foo = _fn_block_0()",
+  )
+}
+
+pub fn multiple_block_test() {
+  "pub fn main() {
+    let foo = {1}
+    let bar = {2}
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_block_0():
+        return 1
+    foo = _fn_block_0()
+    def _fn_block_1():
+        return 2
+    bar = _fn_block_1()",
+  )
+}
+
+pub fn nested_block_test() {
+  "pub fn main() {
+    let foo = {
+      { 1 }
+    }
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_block_0():
+        def _fn_block_0():
+            return 1
+        return _fn_block_0()
+    foo = _fn_block_0()",
+  )
+}

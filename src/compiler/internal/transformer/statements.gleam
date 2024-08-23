@@ -141,6 +141,8 @@ fn transform_expression(
     glance.Fn(arguments:, return_annotation: _, body:) ->
       transform_fn(context, arguments, body)
 
+    glance.Block(statements) -> transform_block(context, statements)
+
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
       |> internal.map_return(python.TupleIndex(_, index))
@@ -320,8 +322,7 @@ fn transform_fn(
       }
     })
 
-  let function_name =
-    "_fn_def_" <> { context.next_function_id |> int.to_string }
+  let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
   let function =
     python.Function(function_name, parameters, transform_statement_block(body))
 
@@ -332,6 +333,23 @@ fn transform_fn(
     ),
     statements: [python.FunctionDef(function)],
     expression: python.Variable(function_name),
+  )
+}
+
+fn transform_block(
+  context: internal.TransformerContext,
+  body: List(glance.Statement),
+) {
+  let function_name = "_fn_block_" <> int.to_string(context.next_block_id)
+  let function =
+    python.Function(function_name, [], transform_statement_block(body))
+  internal.ExpressionReturn(
+    context: internal.TransformerContext(
+      ..context,
+      next_block_id: context.next_block_id + 1,
+    ),
+    statements: [python.FunctionDef(function)],
+    expression: python.Call(python.Variable(function_name), []),
   )
 }
 
