@@ -45,7 +45,18 @@ Sweet, me too.
 
 PRs are welcome.
 
-## Outstanding Todos
+The main entry point is `macabre.gleam`, which handles all file loading and
+other side effects. The compiler is pure gleam. Most of the work happens in
+`transformer.gleam` and `generator.gleam`. The former converts the Gleam AST to
+a Python AST, the latter generates python code. There are tons of helper
+functions in various other files.
+
+The Python AST is in `python.gleam`. This doesn't model all of python; just the
+subset that is needed to map Gleam expressions to.
+
+Some tasks below are marked easy if you want to get started.
+
+### Outstanding Todos
 
 This is a list of all outstanding `todo` expressions (Gleam todo expressions
 are ) in the codebase, as of the last time that I updated this list.
@@ -104,3 +115,4 @@ are ) in the codebase, as of the last time that I updated this list.
 - Related: if you have a multi-variant type where the first constructor shadows
   the type's name, it breaks
 - (EASY) maybe call ruff or black on the files after they are output, if they are installed.
+- Code is very not commented
