@@ -1,6 +1,7 @@
 import compiler/internal/transformer as internal
 import compiler/python
 import glance
+import gleam/int
 import gleam/list
 import gleam/option
 import pprint
@@ -133,6 +134,9 @@ fn transform_expression(
         arguments_before,
         arguments_after,
       )
+
+    glance.Fn(arguments:, return_annotation: _, body:) ->
+      transform_fn(context, arguments, body)
 
     glance.TupleIndex(tuple, index) -> {
       transform_expression(context, tuple)
@@ -294,6 +298,36 @@ fn transform_fn_capture(
         reversed_arguments_result.item |> list.reverse,
       ),
     ),
+  )
+}
+
+fn transform_fn(
+  context: internal.TransformerContext,
+  arguments: List(glance.FnParameter),
+  body: List(glance.Statement),
+) -> internal.ExpressionReturn {
+  let parameters =
+    arguments
+    |> list.map(fn(argument) {
+      // TODO: shouldn't be ignoring type here
+      case argument.name {
+        glance.Named(name) -> python.NameParam(name)
+        glance.Discarded(_) ->
+          todo as "discard parameters not supported in function arguments yet"
+      }
+    })
+
+  let function_name =
+    "_fn_def_" <> { context.next_function_id |> int.to_string }
+  let function =
+    python.Function(function_name, parameters, transform_statement_block(body))
+
+  internal.ExpressionReturn(
+    context: internal.TransformerContext(
+      next_function_id: context.next_function_id + 1,
+    ),
+    statements: [python.FunctionDef(function)],
+    expression: python.Variable(function_name),
   )
 }
 

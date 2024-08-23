@@ -49,7 +49,6 @@ PRs are welcome.
 
 - no case expressions
 - block expressions aren't supported yet
-- fn expressions are not supported yet
 - no destructuring/pattern matching in let
 - no let assert
 - label aliases aren't supported yet (ie `fn foo(bar bas: Str)`)

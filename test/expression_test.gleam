@@ -604,3 +604,57 @@ def main():
     foo = Bar(b=\"who\", a=1)",
   )
 }
+
+pub fn simple_fn_test() {
+  "pub fn main() {
+    let foo = fn(a, b) {}
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_def_0(a, b):
+        pass
+    foo = _fn_def_0",
+  )
+}
+
+pub fn multiple_fn_test() {
+  "pub fn main() {
+    let foo = #(fn(a, b) {}, fn(c, d) {})
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_def_0(a, b):
+        pass
+    def _fn_def_1(c, d):
+        pass
+    foo = (_fn_def_0, _fn_def_1)",
+  )
+}
+
+pub fn nested_fn_test() {
+  "pub fn main() {
+    let foo = fn(a, b) {
+      let bar = fn(c, d) {}
+    }
+  }"
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_def_0(a, b):
+        def _fn_def_0(c, d):
+            pass
+        bar = _fn_def_0
+    foo = _fn_def_0",
+  )
+}

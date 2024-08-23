@@ -191,6 +191,7 @@ fn generate_statement(statement: python.Statement) -> StringBuilder {
       |> string_builder.append(" = ")
       |> string_builder.append_builder(generate_expression(value))
     }
+    python.FunctionDef(function) -> generate_function(function)
   }
 }
 
