@@ -207,6 +207,7 @@ fn generate_bitstring_segment_option(
     python.BitStringOption -> string_builder.from_string("\"BitString\", None")
     python.Utf8Option -> string_builder.from_string("\"Utf8\", None")
     python.Utf16Option -> string_builder.from_string("\"Utf16\", None")
+    python.Utf32Option -> string_builder.from_string("\"Utf32\", None")
   }
   |> string_builder.prepend("(")
   |> string_builder.append(")")

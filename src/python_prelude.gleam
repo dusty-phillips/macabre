@@ -57,6 +57,7 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
     size = None
     unit = None
     type = None
+    bitsize = None
     endianness = 'big'
     for option in options:
         match option:
@@ -80,6 +81,8 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 type = 'utf8'
             case ('Utf16', None):
                 type = 'utf16'
+            case ('Utf32', None):
+                type = 'utf32'
             case _:
                 raise Exception(f'Unexpected bitstring option {option}')
 
@@ -93,23 +96,18 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 size = 8
             case 'float':
                 size = 64
-            case 'utf8':
-                size = len(value.encode('utf8'))
-            case 'utf16':
-                size = len(value.encode('utf16'))
 
     if unit == None:
         match type:
             case 'int' | 'float':
                 unit = 1
-            case 'bitstring' | 'utf8' | 'utf16':
+                bitsize = unit * size
+            case 'bitstring' | 'utf8' | 'utf16' | 'utf8':
                 unit = 8
+                bitsize = unit * size
 
-    bitsize = unit * size
-    if bitsize % 8:
+    if bitsize != None and bitsize % 8:
         raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
-
-    bytesize = bitsize // 8
 
     match type:
         case 'int':
@@ -138,6 +136,12 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                     return value.encode('utf-16-le')
                 case 'big':
                     return value.encode('utf-16-be')
+        case 'utf32':
+            match endianness:
+                case 'little':
+                    return value.encode('utf-32-le')
+                case 'big':
+                    return value.encode('utf-32-be')
             
 
     raise Exception('Unexpected bitstring encountered')
