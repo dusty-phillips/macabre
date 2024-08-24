@@ -61,7 +61,8 @@ Some tasks below are marked easy if you want to get started.
 This is a list of all outstanding `todo` expressions (Gleam todo expressions
 are ) in the codebase, as of the last time that I updated this list.
 
-- (EASY) Aliased imports are not generated yet
+- imports with attributes are not implemented yet
+- type imports are not implemented yet
 - Unlabelled fields in custom types are not generated yet
   - Given that labelled and unlabelled fields can be mixed on one class, I have
     a feeling we have to ditch dataclasses. Probably a custom class with slots, a

@@ -4,15 +4,14 @@ pub type Context(a) {
   Context(imports: List(Import), item: a)
 }
 
+// TODO: for my sanity, I didn't group imports as in "from x import (a, b)" 
+// We can either fix this or rely on a import formatter on the exported code
 pub type Import {
-  UnqualifiedImport(module: String, name: String, alias: option.Option(String))
+  UnqualifiedImport(module: String, name: String)
+  AliasedUnqualifiedImport(module: String, name: String, alias: String)
+  QualifiedImport(module: String)
+  AliasedQualifiedImport(module: String, alias: String)
 }
-
-pub const dataclass_import = UnqualifiedImport(
-  "dataclasses",
-  "dataclass",
-  option.None,
-)
 
 pub type BinaryOperator {
   And

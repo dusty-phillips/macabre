@@ -117,18 +117,6 @@ pub fn reverse_state_to_return(
   )
 }
 
-pub fn maybe_extract_external(
-  function_attribute: glance.Attribute,
-) -> Result(python.Import, TransformError) {
-  case function_attribute {
-    glance.Attribute(
-      "external",
-      [glance.Variable("python"), glance.String(module), glance.String(name)],
-    ) -> Ok(python.UnqualifiedImport(module, name, option.None))
-    _ -> Error(NotExternal)
-  }
-}
-
 pub fn transform_last(elements: List(a), transformer: fn(a) -> a) -> List(a) {
   // This makes three iterations over elements. It may be a candidate for optimization
   // since it happens on all the statements in every function body. I can find ways
