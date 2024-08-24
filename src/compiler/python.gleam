@@ -62,6 +62,8 @@ pub type BitStringSegmentOption {
   LittleOption
   BigOption
   BitStringOption
+  Utf8Option
+  Utf16Option
   NativeOption
 }
 

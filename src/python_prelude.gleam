@@ -62,20 +62,24 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
         match option:
             case ('SizeValue', size):
                 size = size
-            case('Unit', unit):
+            case ('Unit', unit):
                 unit = unit
-            case('Little', None):
+            case ('Little', None):
                 endianness = 'little'
-            case('Big', None):
+            case ('Big', None):
                 endianness = 'big'
-            case('Native', None):
+            case ('Native', None):
                 endianness = sys.byteorder
-            case('Float', None):
+            case ('Float', None):
                 type = 'float'
-            case('Integer', None):
+            case ('Integer', None):
                 type = 'int'
-            case('BitString', None):
+            case ('BitString', None):
                 type = 'bitstring'
+            case ('Utf8', None):
+                type = 'utf8'
+            case ('Utf16', None):
+                type = 'utf16'
             case _:
                 raise Exception(f'Unexpected bitstring option {option}')
 
@@ -89,14 +93,16 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 size = 8
             case 'float':
                 size = 64
-            case 'bitstring':
-                size = len(value)
+            case 'utf8':
+                size = len(value.encode('utf8'))
+            case 'utf16':
+                size = len(value.encode('utf16'))
 
     if unit == None:
         match type:
             case 'int' | 'float':
                 unit = 1
-            case 'bitstring':
+            case 'bitstring' | 'utf8' | 'utf16':
                 unit = 8
 
     bitsize = unit * size
@@ -114,8 +120,6 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                     order = '>'
                 case 'little':
                     order = '<'
-                case 'native':
-                    onder = '='
             match bitsize:
                 case 32:
                     fmt = 'f'
@@ -126,6 +130,15 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
             return struct.pack(f'{order}{fmt}', value)
         case 'bitstring':
             return value
+        case 'utf8':
+            return value.encode('utf8')
+        case 'utf16':
+            match endianness:
+                case 'little':
+                    return value.encode('utf-16-le')
+                case 'big':
+                    return value.encode('utf-16-be')
+            
 
     raise Exception('Unexpected bitstring encountered')
 "

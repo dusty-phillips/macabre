@@ -557,6 +557,8 @@ fn fold_bitsting_segment_option(
       internal.map_state_prepend(state, python.NativeOption)
     glance.BitStringOption ->
       internal.map_state_prepend(state, python.BitStringOption)
+    glance.Utf8Option -> internal.map_state_prepend(state, python.Utf8Option)
+    glance.Utf16Option -> internal.map_state_prepend(state, python.Utf16Option)
 
     glance.UnitOption(size) ->
       internal.map_state_prepend(state, python.UnitOption(size))
