@@ -98,12 +98,19 @@ pub fn merge_state_prepend(
   prev: TransformState(ReversedList(a)),
   current: ExpressionReturn,
   map_next: fn(python.Expression) -> a,
-) -> TransformState(List(a)) {
+) -> TransformState(ReversedList(a)) {
   merge_state(
     prev,
     current,
     list.prepend(prev.item, map_next(current.expression)),
   )
+}
+
+pub fn map_state_prepend(
+  prev: TransformState(ReversedList(a)),
+  next: a,
+) -> TransformState(ReversedList(a)) {
+  TransformState(prev.context, prev.statements, prev.item |> list.prepend(next))
 }
 
 pub fn reverse_state_to_return(

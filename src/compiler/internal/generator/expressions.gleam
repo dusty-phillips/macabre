@@ -107,6 +107,8 @@ pub fn generate_expression(expression: python.Expression) -> StringBuilder {
 
     python.BinaryOperator(name, left, right) ->
       generate_binop(name, left, right)
+
+    python.BitString(segments) -> generate_bitstring(segments)
   }
 }
 
@@ -160,4 +162,47 @@ fn generate_binop(
   |> string_builder.append_builder(generate_expression(left))
   |> string_builder.append(op_string)
   |> string_builder.append_builder(generate_expression(right))
+}
+
+fn generate_bitstring(segments: List(python.BitStringSegment)) -> StringBuilder {
+  string_builder.from_string("gleam_bitstring_segments_to_bytes(")
+  |> string_builder.append_builder(internal.generate_plural(
+    segments,
+    generate_bitstring_segment,
+    ", ",
+  ))
+  |> string_builder.append(")")
+}
+
+fn generate_bitstring_segment(segment: python.BitStringSegment) -> StringBuilder {
+  generate_expression(segment.value)
+  |> string_builder.prepend("(")
+  |> string_builder.append(", [")
+  |> string_builder.append_builder(internal.generate_plural(
+    segment.options,
+    generate_bitstring_segment_option,
+    ", ",
+  ))
+  |> string_builder.append("])")
+}
+
+fn generate_bitstring_segment_option(
+  option: python.BitStringSegmentOption,
+) -> StringBuilder {
+  case option {
+    python.SizeValueOption(expression) ->
+      generate_expression(expression)
+      |> string_builder.prepend("\"SizeValue\", ")
+    python.UnitOption(integer) ->
+      integer
+      |> int.to_string
+      |> string_builder.from_string
+      |> string_builder.prepend("\"Unit\", ")
+    python.FloatOption -> string_builder.from_string("\"Float\", None")
+    python.BigOption -> string_builder.from_string("\"Big\", None")
+    python.LittleOption -> string_builder.from_string("\"Little\", None")
+    python.NativeOption -> string_builder.from_string("\"Native\", None")
+  }
+  |> string_builder.prepend("(")
+  |> string_builder.append(")")
 }

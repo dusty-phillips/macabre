@@ -48,6 +48,20 @@ pub type Expression {
   Call(function: Expression, arguments: List(Field(Expression)))
   RecordUpdate(record: Expression, fields: List(Field(Expression)))
   BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)
+  BitString(List(BitStringSegment))
+}
+
+pub type BitStringSegment {
+  BitStringSegment(value: Expression, options: List(BitStringSegmentOption))
+}
+
+pub type BitStringSegmentOption {
+  SizeValueOption(Expression)
+  UnitOption(Int)
+  FloatOption
+  LittleOption
+  BigOption
+  NativeOption
 }
 
 pub type Statement {

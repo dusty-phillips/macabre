@@ -179,9 +179,13 @@ fn transform_expression(
     glance.RecordUpdate(record:, fields:, ..) ->
       transform_record_update(context, record, fields)
 
-    glance.BitString(_) as expr -> {
-      pprint.debug(expr)
-      todo as "BitString expressions not supported yet"
+    glance.BitString(segments) -> {
+      segments
+      |> list.fold(
+        internal.TransformState(context, [], []),
+        fold_bitstring_segment,
+      )
+      |> internal.reverse_state_to_return(python.BitString)
     }
   }
 }
@@ -488,7 +492,7 @@ fn transform_record_update(
   let record_result = transform_expression(context, record)
   fields
   |> list.fold(
-    internal.TransformState(record_result.context, [], []),
+    internal.TransformState(record_result.context, record_result.statements, []),
     fn(state, tuple) {
       internal.merge_state_prepend(
         state,
@@ -501,4 +505,77 @@ fn transform_record_update(
     record: record_result.expression,
     fields: _,
   ))
+}
+
+fn fold_bitstring_segment(
+  state: internal.TransformState(internal.ReversedList(python.BitStringSegment)),
+  segment: #(
+    glance.Expression,
+    List(glance.BitStringSegmentOption(glance.Expression)),
+  ),
+) -> internal.TransformState(internal.ReversedList(python.BitStringSegment)) {
+  let #(expression, options) = segment
+  let expression_result = transform_expression(state.context, expression)
+  let options_result =
+    options
+    |> list.fold(
+      internal.TransformState(
+        expression_result.context,
+        expression_result.statements,
+        [],
+      ),
+      fold_bitsting_segment_option,
+    )
+
+  internal.TransformState(
+    options_result.context,
+    options_result.statements,
+    list.prepend(
+      state.item,
+      python.BitStringSegment(
+        expression_result.expression,
+        options_result.item |> list.reverse,
+      ),
+    ),
+  )
+}
+
+fn fold_bitsting_segment_option(
+  state: internal.TransformState(
+    internal.ReversedList(python.BitStringSegmentOption),
+  ),
+  option: glance.BitStringSegmentOption(glance.Expression),
+) -> internal.TransformState(
+  internal.ReversedList(python.BitStringSegmentOption),
+) {
+  case option {
+    glance.FloatOption -> internal.map_state_prepend(state, python.FloatOption)
+    glance.LittleOption ->
+      internal.map_state_prepend(state, python.LittleOption)
+    glance.BigOption -> internal.map_state_prepend(state, python.BigOption)
+    glance.NativeOption ->
+      internal.map_state_prepend(state, python.NativeOption)
+    glance.UnitOption(size) ->
+      internal.map_state_prepend(state, python.UnitOption(size))
+    glance.SizeOption(size) ->
+      internal.map_state_prepend(
+        state,
+        python.SizeValueOption(python.Number(size |> int.to_string)),
+      )
+    glance.SizeValueOption(expression) -> {
+      let expression_result = transform_expression(state.context, expression)
+      internal.merge_state_prepend(
+        state,
+        expression_result,
+        python.SizeValueOption,
+      )
+    }
+    glance.SignedOption | glance.UnsignedOption -> {
+      panic as "Signed and unsigned are not valid when constructing bitstrings"
+    }
+    _ -> {
+      pprint.debug(option)
+      todo as "Some bitstring segment options not supported yet"
+    }
+  }
 }
