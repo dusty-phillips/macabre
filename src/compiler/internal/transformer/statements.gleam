@@ -555,6 +555,9 @@ fn fold_bitsting_segment_option(
     glance.BigOption -> internal.map_state_prepend(state, python.BigOption)
     glance.NativeOption ->
       internal.map_state_prepend(state, python.NativeOption)
+    glance.BitStringOption ->
+      internal.map_state_prepend(state, python.BitStringOption)
+
     glance.UnitOption(size) ->
       internal.map_state_prepend(state, python.UnitOption(size))
     glance.SizeOption(size) ->
@@ -570,9 +573,11 @@ fn fold_bitsting_segment_option(
         python.SizeValueOption,
       )
     }
+
     glance.SignedOption | glance.UnsignedOption -> {
       panic as "Signed and unsigned are not valid when constructing bitstrings"
     }
+
     _ -> {
       pprint.debug(option)
       todo as "Some bitstring segment options not supported yet"

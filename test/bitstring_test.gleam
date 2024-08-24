@@ -182,3 +182,21 @@ def main():
     return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))",
   )
 }
+
+pub fn bitstring_test() {
+  // TODO: Pretty sure this should be :bits, not :bit_string,
+  // but glance has a bug:
+  // https://github.com/lpil/glance/issues/22
+  "pub fn main() {
+      <<<<3>>:bit_string>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))",
+  )
+}

@@ -61,6 +61,7 @@ pub type BitStringSegmentOption {
   FloatOption
   LittleOption
   BigOption
+  BitStringOption
   NativeOption
 }
 

@@ -72,6 +72,10 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 endianness = sys.byteorder
             case('Float', None):
                 type = 'float'
+            case('Integer', None):
+                type = 'int'
+            case('BitString', None):
+                type = 'bitstring'
             case _:
                 raise Exception(f'Unexpected bitstring option {option}')
 
@@ -85,13 +89,15 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 size = 8
             case 'float':
                 size = 64
+            case 'bitstring':
+                size = len(value)
 
     if unit == None:
         match type:
-            case 'int':
+            case 'int' | 'float':
                 unit = 1
-            case 'float':
-                unit = 1
+            case 'bitstring':
+                unit = 8
 
     bitsize = unit * size
     if bitsize % 8:
@@ -118,6 +124,8 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 case _:
                     raise Exception('bitstring floats must be 32 or 64 bits')
             return struct.pack(f'{order}{fmt}', value)
+        case 'bitstring':
+            return value
 
     raise Exception('Unexpected bitstring encountered')
 "

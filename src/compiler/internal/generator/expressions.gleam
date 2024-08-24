@@ -193,15 +193,18 @@ fn generate_bitstring_segment_option(
     python.SizeValueOption(expression) ->
       generate_expression(expression)
       |> string_builder.prepend("\"SizeValue\", ")
+
     python.UnitOption(integer) ->
       integer
       |> int.to_string
       |> string_builder.from_string
       |> string_builder.prepend("\"Unit\", ")
+
     python.FloatOption -> string_builder.from_string("\"Float\", None")
     python.BigOption -> string_builder.from_string("\"Big\", None")
     python.LittleOption -> string_builder.from_string("\"Little\", None")
     python.NativeOption -> string_builder.from_string("\"Native\", None")
+    python.BitStringOption -> string_builder.from_string("\"BitString\", None")
   }
   |> string_builder.prepend("(")
   |> string_builder.append(")")
