@@ -73,7 +73,7 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
                 endianness = sys.byteorder
             case ('Float', None):
                 type = 'float'
-            case ('Integer', None):
+            case ('Int', None):
                 type = 'int'
             case ('BitString', None):
                 type = 'bitstring'
