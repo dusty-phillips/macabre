@@ -201,6 +201,7 @@ fn generate_bitstring_segment_option(
       |> string_builder.prepend("\"Unit\", ")
 
     python.FloatOption -> string_builder.from_string("\"Float\", None")
+    python.IntOption -> string_builder.from_string("\"Int\", None")
     python.BigOption -> string_builder.from_string("\"Big\", None")
     python.LittleOption -> string_builder.from_string("\"Little\", None")
     python.NativeOption -> string_builder.from_string("\"Native\", None")

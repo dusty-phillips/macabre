@@ -549,6 +549,7 @@ fn fold_bitsting_segment_option(
   internal.ReversedList(python.BitStringSegmentOption),
 ) {
   case option {
+    glance.IntOption -> internal.map_state_prepend(state, python.IntOption)
     glance.FloatOption -> internal.map_state_prepend(state, python.FloatOption)
     glance.LittleOption ->
       internal.map_state_prepend(state, python.LittleOption)
@@ -577,13 +578,12 @@ fn fold_bitsting_segment_option(
       )
     }
 
-    glance.SignedOption | glance.UnsignedOption -> {
-      panic as "Signed and unsigned are not valid when constructing bitstrings"
-    }
+    glance.Utf8CodepointOption
+    | glance.Utf16CodepointOption
+    | glance.Utf32CodepointOption ->
+      todo as "codepoints not supported in bitstrings yet"
 
-    _ -> {
-      pprint.debug(option)
-      todo as "Some bitstring segment options not supported yet"
-    }
+    glance.SignedOption | glance.UnsignedOption | glance.BinaryOption ->
+      panic as "Signed, unsigned, and binary are not valid when constructing bitstrings"
   }
 }

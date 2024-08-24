@@ -183,6 +183,21 @@ def main():
   )
 }
 
+pub fn explicit_int_test() {
+  "pub fn main() {
+      <<42:int>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((42, [(\"Int\", None)]))",
+  )
+}
+
 pub fn bitstring_test() {
   // TODO: Pretty sure this should be :bits, not :bit_string,
   // but glance has a bug:
@@ -198,5 +213,65 @@ pub fn bitstring_test() {
 
 def main():
     return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))",
+  )
+}
+
+pub fn u8_test() {
+  "pub fn main() {
+      <<\"hello\":utf8>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf8\", None)]))",
+  )
+}
+
+pub fn u16_test() {
+  "pub fn main() {
+      <<\"hello\":utf16>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf16\", None)]))",
+  )
+}
+
+pub fn u32_test() {
+  "pub fn main() {
+      <<\"hello\":utf32>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None)]))",
+  )
+}
+
+pub fn u32_little_test() {
+  "pub fn main() {
+      <<\"hello\":utf32-little>>
+  }
+  "
+  |> compiler.compile
+  |> should.be_ok
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None), (\"Little\", None)]))",
   )
 }

@@ -59,6 +59,7 @@ pub type BitStringSegmentOption {
   SizeValueOption(Expression)
   UnitOption(Int)
   FloatOption
+  IntOption
   LittleOption
   BigOption
   BitStringOption
