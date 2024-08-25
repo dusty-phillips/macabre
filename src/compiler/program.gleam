@@ -10,18 +10,23 @@ import filepath
 import glance
 import gleam/dict
 import gleam/list
+import gleam/option
 import gleam/result
 import simplifile
 
 pub type GleamProgram {
   GleamProgram(
     source_directory: String,
+    main_module: String,
     modules: dict.Dict(String, glance.Module),
   )
 }
 
 pub type CompiledProgram {
-  CompiledProgram(modules: dict.Dict(String, String))
+  CompiledProgram(
+    main_module: option.Option(String),
+    modules: dict.Dict(String, String),
+  )
 }
 
 /// Load the entry_point file and recursively load and parse any modules it
@@ -33,7 +38,12 @@ pub fn load_program(
   |> simplifile.is_directory
   |> result.map_error(errors.FileOrDirectoryNotFound(source_directory, _))
   |> result.try(fn(_) { find_entrypoint(source_directory) })
-  |> result.try(load_module(GleamProgram(source_directory, dict.new()), _))
+  |> result.try(fn(entrypoint) {
+    load_module(
+      GleamProgram(source_directory, entrypoint, dict.new()),
+      entrypoint,
+    )
+  })
 }
 
 pub fn find_entrypoint(source_directory: String) -> Result(String, errors.Error) {

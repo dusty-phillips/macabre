@@ -142,3 +142,10 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
 "
 
 pub const prelude = "from gleam_builtins import *\n\n"
+
+pub fn dunder_main(module: String) -> String {
+  "from " <> module <> " import main
+
+if __name__ == \"__main__\":
+    main()"
+}

@@ -3,7 +3,10 @@ import compiler/program
 import compiler/transformer
 import glance
 import gleam/dict
+import gleam/list
+import gleam/option
 import gleam/result
+import gleam/string
 
 // called only by unit tests
 // todo: remove
@@ -22,7 +25,32 @@ pub fn compile_module(glance_module: glance.Module) -> String {
 
 pub fn compile_program(program: program.GleamProgram) -> program.CompiledProgram {
   program.CompiledProgram(
+    main_module: dict.get(program.modules, program.main_module)
+      |> result.try(fn(mod) { mod.functions |> has_main_function })
+      |> result.replace(program.main_module |> string.drop_right(6))
+      |> option.from_result,
     modules: program.modules
-    |> dict.map_values(fn(_key, value) { compile_module(value) }),
+      |> dict.map_values(fn(_key, value) { compile_module(value) }),
   )
+}
+
+pub fn has_main_function(
+  functions: List(glance.Definition(glance.Function)),
+) -> Result(Bool, Nil) {
+  functions
+  |> list.find(fn(x) {
+    case x {
+      glance.Definition(
+        definition: glance.Function(
+          name: "main",
+          publicity: glance.Public,
+          parameters: [],
+          ..,
+        ),
+        ..,
+      ) -> True
+      _ -> False
+    }
+  })
+  |> result.replace(True)
 }

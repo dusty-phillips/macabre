@@ -1,6 +1,7 @@
 import errors
 import filepath
 import gleam/io
+import gleam/option
 import gleam/result
 import python_prelude
 import simplifile
@@ -33,11 +34,23 @@ pub fn compile_result(filename: String, result: Result(Nil, String)) -> Nil {
 }
 
 pub fn write_prelude_file(build_directory: String) -> Result(Nil, errors.Error) {
-  let full_path = filepath.join(build_directory, "gleam_builtins.py")
+  build_directory
+  |> filepath.join("gleam_builtins.py")
+  |> write(python_prelude.gleam_builtins, _)
+}
 
-  full_path
-  |> simplifile.write(python_prelude.gleam_builtins)
-  |> result.map_error(errors.FileWriteError(full_path, _))
+pub fn write_py_main(
+  build_directory: String,
+  main_module: option.Option(String),
+) -> Result(Nil, errors.Error) {
+  case main_module {
+    option.Some(module) -> {
+      build_directory
+      |> filepath.join("__main__.py")
+      |> write(python_prelude.dunder_main(module), _)
+    }
+    option.None -> Ok(Nil)
+  }
 }
 
 pub fn write_error(error: errors.Error) -> Nil {
