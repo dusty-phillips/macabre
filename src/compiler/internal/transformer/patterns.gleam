@@ -42,7 +42,11 @@ fn transform_pattern(pattern: glance.Pattern) -> python.Pattern {
     glance.PatternDiscard(str) -> python.PatternVariable("_" <> str)
     glance.PatternTuple(patterns) ->
       python.PatternTuple(list.map(patterns, transform_pattern))
-    glance.PatternList(_, _) -> todo as "list patterns are not supported yet"
+    glance.PatternList(elems, rest) ->
+      python.PatternList(
+        list.map(elems, transform_pattern),
+        option.map(rest, transform_pattern),
+      )
     glance.PatternAssignment(pattern, name) ->
       python.PatternAssignment(transform_pattern(pattern), name)
     glance.PatternConcatenate(_, _) ->

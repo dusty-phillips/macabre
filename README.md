@@ -77,7 +77,6 @@ are ) in the codebase, as of the last time that I updated this list.
   - debatable whether to make them a `def` right on the class or have the def be defined somewhere and just attach it like other fields
 - Fields that are "HoleType" are not supported and I don't even know what that means
 - IN case statements, the following patterns are not supported:
-  - List patterns
   - Concatenate patterns
   - Bitstring patterns (bytes)
 - Destructuring in assignments is not supported yet
@@ -85,7 +84,7 @@ are ) in the codebase, as of the last time that I updated this list.
   - other structures will maybe need a match statement?
 - Use statements are not supported yet
 
-### Some other the things I know are missing
+### Some other things I know are missing
 
 - empty tuples are probably broken
   - (EASY) I used parens instead of a `,` like a total python NOOB

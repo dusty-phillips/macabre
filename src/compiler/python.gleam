@@ -118,6 +118,7 @@ pub type Pattern {
   PatternVariable(value: String)
   PatternAssignment(pattern: Pattern, name: String)
   PatternTuple(value: List(Pattern))
+  PatternList(elems: List(Pattern), rest: option.Option(Pattern))
   PatternAlternate(patterns: List(Pattern))
   PatternConstructor(
     module: option.Option(String),

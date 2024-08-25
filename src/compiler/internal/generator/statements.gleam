@@ -94,6 +94,7 @@ fn generate_pattern(pattern: python.Pattern) -> StringBuilder {
       |> string_builder.join(", ")
       |> string_builder.prepend("(")
       |> string_builder.append(")")
+    python.PatternList(elements, rest) -> generate_pattern_list(elements, rest)
     python.PatternAlternate(patterns) ->
       patterns
       |> list.map(generate_pattern)
@@ -121,5 +122,23 @@ fn generate_pattern_constructor_field(
       string_builder.from_strings([label, "="])
       |> string_builder.append_builder(generate_pattern(pattern))
     python.UnlabelledField(pattern) -> generate_pattern(pattern)
+  }
+}
+
+/// Lists are weird. Gleam syntax is like [a, b, c, ..rest]
+/// But the pattern in python has to match a linked list.
+/// The pattern is essentially GleamList(a, GleamList(b, GleamList(c, rest)))
+/// potential optimization: make tail recursive by carrying the number of
+/// closing parenns forward
+fn generate_pattern_list(elements, rest) -> StringBuilder {
+  case elements, rest {
+    [], option.None -> string_builder.from_string("None")
+    [], option.Some(pattern) -> generate_pattern(pattern)
+    [head, ..others], rest ->
+      string_builder.from_string("GleamList(")
+      |> string_builder.append_builder(generate_pattern(head))
+      |> string_builder.append(", ")
+      |> string_builder.append_builder(generate_pattern_list(others, rest))
+      |> string_builder.append(")")
   }
 }

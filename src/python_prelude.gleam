@@ -1,4 +1,5 @@
 pub const gleam_builtins = "
+from __future__ import annotations
 import dataclasses
 import sys
 import typing
@@ -12,36 +13,29 @@ GleamListElem = typing.TypeVar('GleamListElem')
 
 
 class GleamList(typing.Generic[GleamListElem]):
+    __slots__ = [\"value\", \"tail\"]
+    __match_args__ = (\"value\", \"tail\")
+
+    def __init__(self, value: GleamListElem, tail: GleamList[GleamListElem] | None):
+        self.value = value
+        self.tail = tail
+
     def __str__(self):
         strs = []
         head = self
 
-        while not head.is_empty:
-            strs.append(head.value)
+        while head is not None:
+            strs.append(str(head.value))
             head = head.tail
 
-        return  'GleamList([' + ', '.join(strs) + '])'
-
-
-class NonEmptyGleamList(GleamList[GleamListElem]):
-    __slots__ = ['value', 'tail']
-    is_empty = False
-
-    def __init__(self, value: GleamListElem, tail: GleamList[GleamListElem]):
-        self.value = value
-        self.tail = tail
-
-
-class EmptyGleamList(GleamList):
-    __slots__ = []
-    is_empty = True
+        return \"GleamList([\" + \", \".join(strs) + \"])\"
 
 
 
-def to_gleam_list(elements: list[GleamListElem], tail: GleamList = EmptyGleamList()):
+def to_gleam_list(elements: list[GleamListElem], tail: GleamList | None=None):
     head = tail
     for element in reversed(elements):
-        head = NonEmptyGleamList(element, head)
+        head = GleamList(element, head)
     return head
 
 def gleam_bitstring_segments_to_bytes(*segments):
