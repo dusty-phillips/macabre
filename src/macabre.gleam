@@ -1,17 +1,20 @@
 import argv
 import compiler
+import gleam/dict
 import gleam/io
 import gleam/result
 import gleam/string
 import internal/errors
 import output
+import pprint
+import program_parser
 import simplifile
 
 pub fn usage(message: String) -> Nil {
   io.println("Usage: macabre <filename.gleam>\n\n" <> message)
 }
 
-pub fn compile_module(filename: String) -> Result(Nil, String) {
+fn compile_module(filename: String) -> Result(Nil, String) {
   simplifile.read(filename)
   |> result.replace_error("Unable to read '" <> filename <> "'")
   |> result.try(fn(content) {
@@ -34,9 +37,12 @@ pub fn main() {
     [] -> usage("Not enough arguments")
     [input] ->
       case string.ends_with(input, ".gleam") {
-        False -> usage("Not a gleam input file")
+        False -> usage(input <> ":" <> " Not a gleam input file")
         True -> {
-          compile_module(input) |> output.compile_result(input, _)
+          input
+          |> program_parser.load_program()
+          |> pprint.debug
+          Nil
         }
       }
     [_, _, ..] -> usage("Too many arguments")
