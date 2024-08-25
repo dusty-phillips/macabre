@@ -1,7 +1,5 @@
 import compiler/python
-import glance
 import gleam/list
-import gleam/option
 
 pub type ReversedList(a) =
   List(a)

@@ -1,7 +1,6 @@
 import compiler/internal/generator as internal
 import compiler/python
 import gleam/string_builder.{type StringBuilder}
-import pprint
 
 pub fn generate_imports(imports: List(python.Import)) -> StringBuilder {
   internal.generate_plural(imports, generate_import, "\n")

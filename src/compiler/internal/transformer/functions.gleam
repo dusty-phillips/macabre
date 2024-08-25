@@ -1,4 +1,3 @@
-import compiler/internal/transformer as internal
 import compiler/internal/transformer/statements
 import compiler/python
 import glance

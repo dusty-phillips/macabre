@@ -5,7 +5,6 @@ import glance
 import gleam/int
 import gleam/list
 import gleam/option
-import pprint
 
 // a block is a scope, so context can be reset at this level.
 //
@@ -79,7 +78,7 @@ fn transform_statement(
         ]),
       )
     }
-    glance.Assignment(..) as expr -> {
+    glance.Assignment(..) -> {
       todo as "Non-trivial assignments are not supported yet"
     }
 
@@ -376,7 +375,7 @@ fn transform_case(
   clauses: List(glance.Clause),
 ) -> internal.ExpressionReturn {
   let subjects_result = case subjects {
-    [] -> panic("No subjects!")
+    [] -> panic as "No subjects!"
     [subject] -> transform_expression(context, subject)
     multiple -> transform_tuple(context, multiple)
   }

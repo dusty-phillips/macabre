@@ -2,7 +2,6 @@ import gleeunit/should
 import glexer
 import glexer/token
 import internal/errors
-import pprint
 
 // Reminder: glexer.Position is 0-indexed, but output columns are 1-indexed
 pub fn position_at_first_byte_test() {
