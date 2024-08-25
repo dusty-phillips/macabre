@@ -1,4 +1,3 @@
-import compiler/program
 import errors
 import filepath
 import gleam/io
@@ -11,7 +10,7 @@ pub fn write(contents: String, filename: String) -> Result(Nil, errors.Error) {
   |> result.map_error(errors.FileWriteError(filename, _))
 }
 
-fn replace_extension(filename: String) -> String {
+pub fn replace_extension(filename: String) -> String {
   filename |> filepath.strip_extension <> ".py"
 }
 
@@ -33,21 +32,25 @@ pub fn compile_result(filename: String, result: Result(Nil, String)) -> Nil {
   }
 }
 
-pub fn write_prelude_file(filepath: String) -> Result(Nil, String) {
-  filepath
-  |> simplifile.write(python_prelude.gleam_builtins)
-  |> result.replace_error("Unable to write prelude")
-}
+pub fn write_prelude_file(build_directory: String) -> Result(Nil, errors.Error) {
+  let full_path = filepath.join(build_directory, "gleam_builtins.py")
 
-pub fn write_program(
-  program: program.CompiledProgram,
-  directory: String,
-) -> Result(Nil, errors.Error) {
-  todo
+  full_path
+  |> simplifile.write(python_prelude.gleam_builtins)
+  |> result.map_error(errors.FileWriteError(full_path, _))
 }
 
 pub fn write_error(error: errors.Error) -> Nil {
   error
   |> errors.format_error
   |> io.println
+}
+
+pub fn delete(path: String) -> Result(Nil, errors.Error) {
+  simplifile.delete_all([path]) |> result.map_error(errors.DeleteError(path, _))
+}
+
+pub fn create_directory(path) -> Result(Nil, errors.Error) {
+  simplifile.create_directory(path)
+  |> result.map_error(errors.MkdirError(path, _))
 }

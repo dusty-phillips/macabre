@@ -2,56 +2,47 @@ import argv
 import compiler
 import compiler/program
 import errors
+import filepath
+import gleam/dict
 import gleam/io
 import gleam/result
-import gleam/string
-import internal/errors as error_functions
 import output
-import pprint
-import simplifile
 
 pub fn usage(message: String) -> Nil {
   io.println("Usage: macabre <filename.gleam>\n\n" <> message)
 }
 
-fn compile_module(filename: String) -> Result(Nil, String) {
-  simplifile.read(filename)
-  |> result.replace_error("Unable to read '" <> filename <> "'")
-  |> result.try(fn(content) {
-    content
-    |> compiler.compile
-    |> result.map_error(error_functions.format_glance_error(
-      _,
-      filename,
-      content,
-    ))
-  })
-  |> result.try(output.write(_, output.replace_extension(filename)))
+fn write_program(
+  program: program.CompiledProgram,
+  build_directory: String,
+) -> Result(Nil, errors.Error) {
+  build_directory
+  |> output.delete
+  |> result.try(fn(_) { output.create_directory(build_directory) })
+  |> result.try(fn(_) { output.write_prelude_file(build_directory) })
   |> result.try(fn(_) {
-    // TODO: eventually, this has to be output to a base directory,
-    // not one copy per module.
-    filename
-    |> output.replace_file("gleam_builtins.py")
-    |> output.write_prelude_file
+    dict.fold(program.modules, Ok(Nil), fn(state, name, module) {
+      result.try(state, fn(_) {
+        build_directory
+        |> filepath.join(name)
+        |> output.replace_extension()
+        |> output.write(module, _)
+      })
+    })
   })
 }
 
 pub fn main() {
   case argv.load().arguments {
     [] -> usage("Not enough arguments")
-    [input] ->
-      case string.ends_with(input, ".gleam") {
-        False -> usage(input <> ":" <> " Not a gleam input file")
-        True -> {
-          input
-          |> program.load_program
-          |> result.map(compiler.compile_program)
-          |> result.try(output.write_program(_, "build"))
-          |> result.map_error(output.write_error)
-          |> result.unwrap_both
-          // both nil
-        }
-      }
+    [directory] ->
+      directory
+      |> program.load_program
+      |> result.map(compiler.compile_program)
+      |> result.try(write_program(_, filepath.join(directory, "build/")))
+      |> result.map_error(output.write_error)
+      |> result.unwrap_both
+    // both nil
     [_, _, ..] -> usage("Too many arguments")
   }
 }
