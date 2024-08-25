@@ -3,6 +3,7 @@ import compiler
 import gleam/io
 import gleam/result
 import gleam/string
+import internal/errors
 import output
 import simplifile
 
@@ -16,9 +17,7 @@ pub fn compile_module(filename: String) -> Result(Nil, String) {
   |> result.try(fn(content) {
     content
     |> compiler.compile
-    |> result.map_error(fn(error) {
-      "Unable to compile " <> filename <> ":\n    " <> error
-    })
+    |> result.map_error(errors.format_glance_error(_, filename, content))
   })
   |> result.try(output.write(_, output.replace_extension(filename)))
   |> result.try(fn(_) {

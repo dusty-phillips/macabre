@@ -2,20 +2,10 @@ import compiler/generator
 import compiler/transformer
 import glance
 import gleam/result
-import pprint
 
-pub fn parse(contents: String) -> Result(glance.Module, String) {
-  contents
-  |> glance.module
-  |> result.map_error(fn(x) {
-    pprint.debug(x)
-    "Unable to parse"
-  })
-}
-
-pub fn compile(module_contents: String) -> Result(String, String) {
+pub fn compile(module_contents: String) -> Result(String, glance.Error) {
   module_contents
-  |> parse
+  |> glance.module
   |> result.map(transformer.transform)
   |> result.map(generator.generate)
 }

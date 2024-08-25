@@ -79,6 +79,9 @@ are ) in the codebase, as of the last time that I updated this list.
 - IN case statements, the following patterns are not supported:
   - Concatenate patterns
   - Bitstring patterns (bytes)
+  - The problem with both is python match has no way to match on "parts" of bytes or strings. Possible solutions:
+    - convert the entity to a python list and match on that
+    - construct a potentially massive match guard ('case ... if') to compare elements.
 - Destructuring in assignments is not supported yet
   - (EASY) tuple destructuring can map straight to python destructuring
   - other structures will maybe need a match statement?
@@ -97,7 +100,6 @@ are ) in the codebase, as of the last time that I updated this list.
 - glance doesn't have (much of) a typechecker
 - not currently generating python type hints (e.g. function arguments and
   return types), but gleam gives us that info so may as well use it
-- need to print out nice errors when glance fails to parse
 - no concept of a "project", gleam.toml, downloading dependencies
 - only compiles one module at a time, doesn't follow imports
 - copies the prelude module blindly into the directory that contains that one module instead of a top level

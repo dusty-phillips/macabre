@@ -80,7 +80,6 @@ fn transform_statement(
       )
     }
     glance.Assignment(..) as expr -> {
-      pprint.debug(expr)
       todo as "Non-trivial assignments are not supported yet"
     }
 
