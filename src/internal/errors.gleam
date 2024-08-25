@@ -9,14 +9,12 @@ import gleam/string
 import glexer
 import glexer/token
 import internal/bytes
-import pprint
 
 pub fn format_glance_error(
   error: glance.Error,
   filename: String,
   contents: String,
 ) -> String {
-  pprint.debug(error)
   let error_message = case error {
     glance.UnexpectedEndOfInput -> "Unexpected EOF"
     glance.UnexpectedToken(token, position) ->
@@ -61,29 +59,27 @@ pub fn format_unexpected_token(
       <> format_token(token)
       <> " at position "
       <> int.to_string(position_state.target_position)
-    _ ->
-      {
-        let column =
-          position_state.target_position
-          - position_state.current_line_first_byte_position
-        "Unexpected Token "
-        <> format_token(token)
-        <> "\nAt line "
-        <> int.to_string(position_state.current_line_number)
-        <> " column "
-        <> int.to_string(column)
-        <> "\n\n"
-        <> {
-          position_state.current_line_bytes
-          |> bytes_builder.to_bit_array
-          |> bit_array.to_string
-          |> result.unwrap("Unexpected unicode")
-        }
-        <> "\n"
-        <> string.repeat(" ", column - 1)
-        <> "^\n"
+    _ -> {
+      let column =
+        position_state.target_position
+        - position_state.current_line_first_byte_position
+      "Unexpected Token "
+      <> format_token(token)
+      <> "\nAt line "
+      <> int.to_string(position_state.current_line_number)
+      <> " column "
+      <> int.to_string(column)
+      <> "\n\n"
+      <> {
+        position_state.current_line_bytes
+        |> bytes_builder.to_bit_array
+        |> bit_array.to_string
+        |> result.unwrap("Unexpected unicode")
       }
-      |> pprint.debug
+      <> "\n"
+      <> string.repeat(" ", column - 1)
+      <> "^\n"
+    }
   }
 }
 
@@ -94,10 +90,6 @@ fn fold_position_to_lines(
   state: PositionState,
   byte: Int,
 ) -> list.ContinueOrStop(PositionState) {
-  pprint.debug(#(
-    PositionState(..state, current_line_bytes: bytes_builder.new()),
-    byte,
-  ))
   case byte, state.current_position, state.target_position {
     10, curr, target if curr < target ->
       list.Continue(
@@ -128,7 +120,6 @@ fn format_token(token: token.Token) -> String {
   case token {
     token.Int(num_str) -> num_str
     _ -> {
-      pprint.debug(token)
       "<TODO Unknown Token>"
     }
   }

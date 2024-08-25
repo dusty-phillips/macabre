@@ -25,7 +25,6 @@ pub fn position_in_second_line_test() {
 }
 
 pub fn position_after_newline_test() {
-  pprint.debug("abc\n\nd5fg")
   errors.format_unexpected_token(
     token.Int("5"),
     glexer.Position(6),

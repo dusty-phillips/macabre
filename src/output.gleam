@@ -1,15 +1,17 @@
+import compiler/program
+import errors
 import filepath
 import gleam/io
 import gleam/result
 import python_prelude
 import simplifile
 
-pub fn write(contents: String, filename: String) -> Result(Nil, String) {
+pub fn write(contents: String, filename: String) -> Result(Nil, errors.Error) {
   simplifile.write(filename, contents)
-  |> result.replace_error("Unable to write to '" <> filename <> "'")
+  |> result.map_error(errors.FileWriteError(filename, _))
 }
 
-pub fn replace_extension(filename: String) -> String {
+fn replace_extension(filename: String) -> String {
   filename |> filepath.strip_extension <> ".py"
 }
 
@@ -35,4 +37,17 @@ pub fn write_prelude_file(filepath: String) -> Result(Nil, String) {
   filepath
   |> simplifile.write(python_prelude.gleam_builtins)
   |> result.replace_error("Unable to write prelude")
+}
+
+pub fn write_program(
+  program: program.CompiledProgram,
+  directory: String,
+) -> Result(Nil, errors.Error) {
+  todo
+}
+
+pub fn write_error(error: errors.Error) -> Nil {
+  error
+  |> errors.format_error
+  |> io.println
 }
