@@ -6,14 +6,12 @@ import glance
 import gleam/list
 import gleam/option
 import gleam/string
-import pprint
 
-pub fn transform(input: glance.Module) -> Result(python.Module, String) {
+pub fn transform(input: glance.Module) -> python.Module {
   python.empty_module()
   |> list.fold(input.imports, _, transform_import)
   |> list.fold(input.functions, _, transform_function_or_external)
   |> list.fold(input.custom_types, _, transform_custom_type_in_module)
-  |> Ok
 }
 
 fn transform_function_or_external(

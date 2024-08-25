@@ -6,7 +6,7 @@ import compiler/python
 import gleam/string_builder
 import python_prelude
 
-pub fn generate(module: python.Module) -> Result(String, String) {
+pub fn generate(module: python.Module) -> String {
   string_builder.new()
   |> string_builder.append(python_prelude.prelude)
   |> string_builder.append_builder(imports.generate_imports(module.imports))
@@ -21,5 +21,4 @@ pub fn generate(module: python.Module) -> Result(String, String) {
     "\n\n\n",
   ))
   |> string_builder.to_string
-  |> Ok
 }

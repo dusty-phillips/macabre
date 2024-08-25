@@ -16,6 +16,6 @@ pub fn parse(contents: String) -> Result(glance.Module, String) {
 pub fn compile(module_contents: String) -> Result(String, String) {
   module_contents
   |> parse
-  |> result.try(transformer.transform)
-  |> result.try(generator.generate)
+  |> result.map(transformer.transform)
+  |> result.map(generator.generate)
 }

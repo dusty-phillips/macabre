@@ -13,7 +13,13 @@ pub fn usage(message: String) -> Nil {
 pub fn compile_module(filename: String) -> Result(Nil, String) {
   simplifile.read(filename)
   |> result.replace_error("Unable to read '" <> filename <> "'")
-  |> result.try(compiler.compile)
+  |> result.try(fn(content) {
+    content
+    |> compiler.compile
+    |> result.map_error(fn(error) {
+      "Unable to compile " <> filename <> ":\n    " <> error
+    })
+  })
   |> result.try(output.write(_, output.replace_extension(filename)))
   |> result.try(fn(_) {
     // TODO: eventually, this has to be output to a base directory,
