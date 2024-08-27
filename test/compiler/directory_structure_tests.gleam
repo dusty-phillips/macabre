@@ -1,5 +1,5 @@
 import compiler
-import compiler/program
+import compiler/package
 import filepath
 import gleam/dict
 import gleam/list
@@ -51,7 +51,7 @@ fn init_folders(
   use_function(project_files)
 }
 
-pub fn program_compile_test_with_nested_folders_test() {
+pub fn package_compile_test_with_nested_folders_test() {
   // src/<dirname.gleam>
   // src/baz.py
   // src/foo/bar.gleam
@@ -94,38 +94,38 @@ pub fn program_compile_test_with_nested_folders_test() {
   )
   |> should.be_ok
 
-  let gleam_program =
-    program.load_program(project_files.base_dir)
+  let gleam_package =
+    package.load_package(project_files.base_dir)
     |> should.be_ok
 
   // load
 
-  should.equal(gleam_program.base_directory, project_files.base_dir)
+  should.equal(gleam_package.base_directory, project_files.base_dir)
   should.equal(
-    gleam_program.main_module,
+    gleam_package.main_module,
     filepath.base_name(project_files.main_path),
   )
-  gleam_program.modules
+  gleam_package.modules
   |> dict.size
   |> should.equal(2)
-  gleam_program.external_import_files |> set.size |> should.equal(2)
+  gleam_package.external_import_files |> set.size |> should.equal(2)
 
   // ---  compile
-  let compiled_program = compiler.compile_program(gleam_program)
-  should.equal(compiled_program.base_directory, project_files.base_dir)
+  let compiled_package = compiler.compile_package(gleam_package)
+  should.equal(compiled_package.base_directory, project_files.base_dir)
   should.equal(
-    compiled_program.main_module,
+    compiled_package.main_module,
     option.Some(
       filepath.base_name(project_files.main_path) |> string.drop_right(6),
     ),
   )
-  compiled_program.modules
+  compiled_package.modules
   |> dict.size
   |> should.equal(2)
-  compiled_program.external_import_files |> set.size |> should.equal(2)
+  compiled_package.external_import_files |> set.size |> should.equal(2)
 
   // --- write output
-  macabre.write_program(compiled_program) |> should.be_ok
+  macabre.write_package(compiled_package) |> should.be_ok
 
   simplifile.read_directory(project_files.build_dir)
   |> should.be_ok
