@@ -16,7 +16,7 @@ pub fn main() {
       directory
       |> program.load_program
       |> result.map(compiler.compile_program)
-      |> result.try(write_program(_, filepath.join(directory, "build/")))
+      |> result.try(write_program)
       |> result.map_error(output.write_error)
       |> result.unwrap_both
     // both nil
@@ -28,13 +28,11 @@ pub fn usage(message: String) -> Nil {
   io.println("Usage: macabre <filename.gleam>\n\n" <> message)
 }
 
-fn write_program(
-  program: program.CompiledProgram,
-  build_directory: String,
-) -> Result(Nil, errors.Error) {
+fn write_program(program: program.CompiledProgram) -> Result(Nil, errors.Error) {
+  let build_directory = program.build_directory(program.base_directory)
+  let source_directory = program.source_directory(program.base_directory)
   // TODO: would use make this more pleasant?
-  build_directory
-  |> output.delete
+  output.delete(build_directory)
   |> result.try(fn(_) { output.create_directory(build_directory) })
   |> result.try(fn(_) { output.write_prelude_file(build_directory) })
   |> result.try(fn(_) {
@@ -43,7 +41,7 @@ fn write_program(
   |> result.try(fn(_) {
     output.copy_externals(
       build_directory,
-      program.source_directory,
+      source_directory,
       program.external_import_files |> set.to_list,
     )
   })

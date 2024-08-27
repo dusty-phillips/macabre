@@ -17,7 +17,7 @@ import simplifile
 
 pub type GleamProgram {
   GleamProgram(
-    source_directory: String,
+    base_directory: String,
     main_module: String,
     modules: dict.Dict(String, glance.Module),
     external_import_files: set.Set(String),
@@ -26,7 +26,7 @@ pub type GleamProgram {
 
 pub type CompiledProgram {
   CompiledProgram(
-    source_directory: String,
+    base_directory: String,
     main_module: option.Option(String),
     modules: dict.Dict(String, String),
     external_import_files: set.Set(String),
@@ -63,6 +63,14 @@ pub fn find_entrypoint(source_directory: String) -> Result(String, errors.Error)
   |> result.map_error(errors.FileOrDirectoryNotFound(entrypoint, _))
 }
 
+pub fn source_directory(base_directory: String) -> String {
+  filepath.join(base_directory, "src")
+}
+
+pub fn build_directory(base_directory: String) -> String {
+  filepath.join(base_directory, "build")
+}
+
 /// Parse the module and add it to the program's modules, if it can be parsed.
 /// Then recursively parse any modules it imports.
 fn load_module(
@@ -73,8 +81,9 @@ fn load_module(
     Ok(_) -> Ok(program)
     Error(_) -> {
       let module_result =
-        module_path
-        |> filepath.join(program.source_directory, _)
+        program.base_directory
+        |> source_directory
+        |> filepath.join(module_path)
         |> simplifile.read
         |> result.map_error(errors.FileReadError(module_path, _))
         |> result.try(parse(_, module_path))
