@@ -28,7 +28,9 @@ pub fn usage(message: String) -> Nil {
   io.println("Usage: macabre <filename.gleam>\n\n" <> message)
 }
 
-fn write_program(program: program.CompiledProgram) -> Result(Nil, errors.Error) {
+pub fn write_program(
+  program: program.CompiledProgram,
+) -> Result(Nil, errors.Error) {
   let build_directory = program.build_directory(program.base_directory)
   let source_directory = program.source_directory(program.base_directory)
   output.delete(build_directory)
