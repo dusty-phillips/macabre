@@ -79,7 +79,9 @@ pub fn copy_externals(
       Ok(Nil) -> {
         let src = filepath.join(source_directory, file)
         let dst = filepath.join(build_directory, file)
-        simplifile.copy_file(src, dst)
+        let dst_dir = filepath.directory_name(dst)
+        simplifile.create_directory_all(dst_dir)
+        |> result.try(fn(__main__) { simplifile.copy_file(src, dst) })
         |> result.map_error(errors.CopyFileError(src, dst, _))
       }
       Error(error) -> Error(error)

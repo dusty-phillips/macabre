@@ -13,6 +13,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/set
+import gleam/string
 import simplifile
 
 pub type GleamProgram {
@@ -150,7 +151,7 @@ fn identify_python_external_attribute(
     glance.Attribute(
       "external",
       [glance.Variable("python"), glance.String(module), ..],
-    ) -> Ok(module <> ".py")
+    ) -> Ok(string.replace(module, ".", "/") <> ".py")
     _ -> Error(Nil)
   }
 }
