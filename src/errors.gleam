@@ -8,6 +8,7 @@ pub type Error {
   FileWriteError(path: String, error: simplifile.FileError)
   DeleteError(path: String, error: simplifile.FileError)
   MkdirError(path: String, error: simplifile.FileError)
+  CopyFileError(src: String, dst: String, error: simplifile.FileError)
   GlanceParseError(error: glance.Error, module: String, contents: String)
 }
 
@@ -20,6 +21,7 @@ pub fn format_error(error: Error) -> String {
     FileWriteError(filename, _) -> "Unable to write " <> filename
     DeleteError(filename, _) -> "Unable to delete " <> filename
     MkdirError(filename, _) -> "Unable to mkdir " <> filename
+    CopyFileError(src, dst, _) -> "Unable to copy " <> src <> " to " <> dst
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
   }

@@ -12,6 +12,7 @@ import gleam/dict
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/set
 import simplifile
 
 pub type GleamProgram {
@@ -19,13 +20,16 @@ pub type GleamProgram {
     source_directory: String,
     main_module: String,
     modules: dict.Dict(String, glance.Module),
+    external_import_files: set.Set(String),
   )
 }
 
 pub type CompiledProgram {
   CompiledProgram(
+    source_directory: String,
     main_module: option.Option(String),
     modules: dict.Dict(String, String),
+    external_import_files: set.Set(String),
   )
 }
 
@@ -40,7 +44,12 @@ pub fn load_program(
   |> result.try(fn(_) { find_entrypoint(source_directory) })
   |> result.try(fn(entrypoint) {
     load_module(
-      GleamProgram(source_directory, entrypoint, dict.new()),
+      GleamProgram(
+        source_directory,
+        entrypoint,
+        dict.new(),
+        external_import_files: set.new(),
+      ),
       entrypoint,
     )
   })
@@ -109,5 +118,30 @@ fn add_module(
   GleamProgram(
     ..program,
     modules: dict.insert(program.modules, module_path, module_contents),
+    external_import_files: set.union(
+      python_external_modules(module_contents.functions),
+      program.external_import_files,
+    ),
   )
+}
+
+fn python_external_modules(
+  functions: List(glance.Definition(glance.Function)),
+) -> set.Set(String) {
+  list.filter_map(functions, fn(definition) {
+    list.find_map(definition.attributes, identify_python_external_attribute)
+  })
+  |> set.from_list
+}
+
+fn identify_python_external_attribute(
+  attribute: glance.Attribute,
+) -> Result(String, Nil) {
+  case attribute {
+    glance.Attribute(
+      "external",
+      [glance.Variable("python"), glance.String(module), ..],
+    ) -> Ok(module <> ".py")
+    _ -> Error(Nil)
+  }
 }

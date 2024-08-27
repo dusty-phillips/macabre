@@ -6,6 +6,7 @@ import filepath
 import gleam/dict
 import gleam/io
 import gleam/result
+import gleam/set
 import output
 
 pub fn main() {
@@ -31,12 +32,20 @@ fn write_program(
   program: program.CompiledProgram,
   build_directory: String,
 ) -> Result(Nil, errors.Error) {
+  // TODO: would use make this more pleasant?
   build_directory
   |> output.delete
   |> result.try(fn(_) { output.create_directory(build_directory) })
   |> result.try(fn(_) { output.write_prelude_file(build_directory) })
   |> result.try(fn(_) {
     output.write_py_main(build_directory, program.main_module)
+  })
+  |> result.try(fn(_) {
+    output.copy_externals(
+      build_directory,
+      program.source_directory,
+      program.external_import_files |> set.to_list,
+    )
   })
   |> result.try(fn(_) {
     dict.fold(program.modules, Ok(Nil), fn(state, name, module) {

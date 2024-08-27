@@ -16,12 +16,14 @@ pub fn compile_module(glance_module: glance.Module) -> String {
 
 pub fn compile_program(program: program.GleamProgram) -> program.CompiledProgram {
   program.CompiledProgram(
+    source_directory: program.source_directory,
     main_module: dict.get(program.modules, program.main_module)
       |> result.try(fn(mod) { mod.functions |> has_main_function })
       |> result.replace(program.main_module |> string.drop_right(6))
       |> option.from_result,
     modules: program.modules
       |> dict.map_values(fn(_key, value) { compile_module(value) }),
+    external_import_files: program.external_import_files,
   )
 }
 

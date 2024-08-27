@@ -1,6 +1,7 @@
 import errors
 import filepath
 import gleam/io
+import gleam/list
 import gleam/option
 import gleam/result
 import python_prelude
@@ -66,4 +67,22 @@ pub fn delete(path: String) -> Result(Nil, errors.Error) {
 pub fn create_directory(path) -> Result(Nil, errors.Error) {
   simplifile.create_directory(path)
   |> result.map_error(errors.MkdirError(path, _))
+}
+
+pub fn copy_externals(
+  build_directory: String,
+  source_directory: String,
+  files: List(String),
+) -> Result(Nil, errors.Error) {
+  list.fold(files, Ok(Nil), fn(state, file) {
+    case state {
+      Ok(Nil) -> {
+        let src = filepath.join(source_directory, file)
+        let dst = filepath.join(build_directory, file)
+        simplifile.copy_file(src, dst)
+        |> result.map_error(errors.CopyFileError(src, dst, _))
+      }
+      Error(error) -> Error(error)
+    }
+  })
 }
