@@ -31,7 +31,6 @@ pub fn usage(message: String) -> Nil {
 fn write_program(program: program.CompiledProgram) -> Result(Nil, errors.Error) {
   let build_directory = program.build_directory(program.base_directory)
   let source_directory = program.source_directory(program.base_directory)
-  // TODO: would use make this more pleasant?
   output.delete(build_directory)
   |> result.try(fn(_) { output.create_directory(build_directory) })
   |> result.try(fn(_) { output.write_prelude_file(build_directory) })
