@@ -1,11 +1,13 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn no_variant_custom_type_test() {
   "pub type Foo {
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -17,8 +19,9 @@ pub fn single_variant_custom_type_test() {
   "pub type Foo {
   Bar(a: Int)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -36,8 +39,9 @@ pub fn multi_variant_custom_type_test() {
   Bar(a: Int)
   Baz(a: String)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -62,8 +66,9 @@ pub fn single_variant_with_no_fields_test() {
   "pub type Foo {
   Bar
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -81,8 +86,9 @@ pub fn multi_variant_with_no_fields_test() {
   Bar
   Baz
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -107,8 +113,9 @@ pub fn tuple_type_test() {
   "pub type Foo {
     Foo(point: #(Int, Int))
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -125,8 +132,9 @@ pub fn variant_generic_test() {
   "pub type Foo(elem) {
     Foo(item: elem)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -145,8 +153,9 @@ pub fn multi_variant_generic_test() {
     Bar(item: elem)
     Baz(elem: elem)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -177,8 +186,9 @@ pub fn generic_field_type_test() {
   pub type Bar {
     Bar(foo: Foo(String))
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 

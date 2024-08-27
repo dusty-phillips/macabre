@@ -1,4 +1,5 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn single_int_case_test() {
@@ -8,8 +9,9 @@ pub fn single_int_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -29,8 +31,9 @@ pub fn single_float_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -50,8 +53,9 @@ pub fn single_string_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -71,8 +75,9 @@ pub fn variable_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -92,8 +97,9 @@ pub fn tuple_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -113,8 +119,9 @@ pub fn pattern_assignment_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -134,8 +141,9 @@ pub fn grouped_pattern_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -155,8 +163,9 @@ pub fn alternate_pattern_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -176,8 +185,9 @@ pub fn alternate_grouped_pattern_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -201,8 +211,9 @@ pub fn case_block_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -224,8 +235,9 @@ pub fn case_empty_list_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -245,8 +257,9 @@ pub fn case_single_element_list_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -266,8 +279,9 @@ pub fn case_multi_element_list_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -289,8 +303,9 @@ pub fn case_empty_rest_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -310,8 +325,9 @@ pub fn single_element_with_rest_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -331,8 +347,9 @@ pub fn multi_element_with_rest_case_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -352,8 +369,9 @@ pub fn unnamed_rest_test() {
     }
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 

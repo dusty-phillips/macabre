@@ -8,15 +8,6 @@ import gleam/option
 import gleam/result
 import gleam/string
 
-// called only by unit tests
-// todo: remove
-pub fn compile(module_contents: String) -> Result(String, glance.Error) {
-  module_contents
-  |> glance.module
-  |> result.map(transformer.transform)
-  |> result.map(generator.generate)
-}
-
 pub fn compile_module(glance_module: glance.Module) -> String {
   glance_module
   |> transformer.transform

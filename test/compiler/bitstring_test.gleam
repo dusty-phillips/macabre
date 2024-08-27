@@ -1,4 +1,5 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn single_byte_case_test() {
@@ -6,8 +7,9 @@ pub fn single_byte_case_test() {
       <<16>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -21,8 +23,9 @@ pub fn multiple_bytes_case_test() {
       <<16, 42, 255>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -36,8 +39,9 @@ pub fn two_byte_integers_test() {
       <<62_000:16, 63_000:16>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -52,8 +56,9 @@ pub fn size_expression_test() {
       <<62_000:size(x)>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -68,8 +73,9 @@ pub fn little_endian_test() {
       <<4_666_000:32-little>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -83,8 +89,9 @@ pub fn big_endian_test() {
       <<4_666_000:32-big>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -98,8 +105,9 @@ pub fn native_endian_test() {
       <<4_666_000:32-native>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -113,8 +121,9 @@ pub fn size_unit_test() {
       <<64_003:2-unit(8)>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -128,8 +137,9 @@ pub fn float_default_double_test() {
       <<64.888889:float>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -143,8 +153,9 @@ pub fn float_explicit_double_test() {
       <<64.888889:64-float>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -158,8 +169,9 @@ pub fn float_explicit_single_test() {
       <<64.888889:32-float>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -173,8 +185,9 @@ pub fn float_single_little_test() {
       <<64.888889:32-float>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -188,8 +201,9 @@ pub fn explicit_int_test() {
       <<42:int>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -206,8 +220,9 @@ pub fn bitstring_test() {
       <<<<3>>:bit_string>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -221,8 +236,9 @@ pub fn u8_test() {
       <<\"hello\":utf8>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -236,8 +252,9 @@ pub fn u16_test() {
       <<\"hello\":utf16>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -251,8 +268,9 @@ pub fn u32_test() {
       <<\"hello\":utf32>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -266,8 +284,9 @@ pub fn u32_little_test() {
       <<\"hello\":utf32-little>>
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 

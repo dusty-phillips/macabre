@@ -1,11 +1,13 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn external_python_test() {
   "@external(python, \"mylib\", \"println\")
   fn println() -> nil"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -20,8 +22,9 @@ pub fn skip_external_javascript_test() {
   //
   "@external(javascript, \"mylib\", \"println\")
 fn println() -> nil"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -37,8 +40,9 @@ pub fn skip_external_erlang_test() {
   //
   "@external(erlang, \"mylib\", \"println\")
 fn println() -> nil"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -49,8 +53,9 @@ def println():
 
 pub fn empty_body_no_external_test() {
   "fn println() -> nil"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -61,8 +66,9 @@ def println():
 
 pub fn function_with_string_param_test() {
   "fn println(arg: String) -> nil {}"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -73,8 +79,9 @@ def println(arg):
 
 pub fn function_with_two_string_params_test() {
   "fn println(arg: String, other: String) -> nil {}"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -88,8 +95,9 @@ pub fn two_functions_test() {
 
 fn func2() -> nil {}
 "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -106,8 +114,9 @@ pub fn function_with_return_value_test() {
   "fn greet() -> String {
   \"hello world\"
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 

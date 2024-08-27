@@ -1,12 +1,14 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn string_expression_test() {
   "fn main() {
       \"bar\"
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -19,8 +21,9 @@ pub fn int_expression_test() {
   "fn main() {
       42
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -33,8 +36,9 @@ pub fn float_expression_test() {
   "fn main() {
       12.5
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -47,8 +51,9 @@ pub fn tuple_expression_test() {
   "fn main() {
   #(42, 12.5, \"foo\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -61,8 +66,9 @@ pub fn empty_list_expression_test() {
   "fn main() {
   []
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -75,8 +81,9 @@ pub fn list_expression_with_contents_test() {
   "fn main() {
   [1, 2, 3]
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -89,8 +96,9 @@ pub fn list_expression_with_tail_test() {
   "fn main() {
   [1, 2, ..[3, 4]]
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -103,8 +111,9 @@ pub fn true_expression_test() {
   "fn main() {
       True
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -117,8 +126,9 @@ pub fn false_expression_test() {
   "fn main() {
       False
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -131,8 +141,9 @@ pub fn variable_expression_test() {
   "fn main() {
   println(a)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -146,8 +157,9 @@ pub fn negate_int_test() {
   let a = -1
   let b = -a
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -161,8 +173,9 @@ pub fn negate_bool_test() {
   "fn main() {
   let b = !True
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -175,8 +188,9 @@ pub fn empty_panic_test() {
   "fn main() {
   panic
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -189,8 +203,9 @@ pub fn string_panic_test() {
   "fn main() {
   panic as \"my custom panic\"
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -203,8 +218,9 @@ pub fn empty_todo_test() {
   "fn main() {
   todo
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -217,8 +233,9 @@ pub fn string_todo_test() {
   "fn main() {
   todo as \"much is yet to be done\"
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -231,8 +248,9 @@ pub fn tuple_index_test() {
   "fn main() {
   #(42, 12.5, \"foo\").1
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -245,8 +263,9 @@ pub fn field_access_test() {
   "fn main() {
     foo.b
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -259,8 +278,9 @@ pub fn binop_int_add_test() {
   "fn main() {
     40 + 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -273,8 +293,9 @@ pub fn binop_float_add_test() {
   "fn main() {
     40.2 +. 2.5
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -287,8 +308,9 @@ pub fn binop_concat_add_test() {
   "fn main() {
     \"hello \" <> \"world\"
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -301,8 +323,9 @@ pub fn binop_int_sub_test() {
   "fn main() {
     40 - 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -315,8 +338,9 @@ pub fn binop_float_sub_test() {
   "fn main() {
     40.2 -. 2.5
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -329,8 +353,9 @@ pub fn binop_int_div_test() {
   "fn main() {
     40 / 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -343,8 +368,9 @@ pub fn binop_float_div_test() {
   "fn main() {
     40.2 /. 2.5
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -357,8 +383,9 @@ pub fn binop_int_modulo_test() {
   "fn main() {
     5 % 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -371,8 +398,9 @@ pub fn equality_test() {
   "fn main() {
     5 == 5
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -385,8 +413,9 @@ pub fn inequality_test() {
   "fn main() {
     5 != 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -399,8 +428,9 @@ pub fn lt_int_test() {
   "fn main() {
     5 < 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -413,8 +443,9 @@ pub fn lt_float_test() {
   "fn main() {
     5.0 <. 2.0
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -427,8 +458,9 @@ pub fn lt_eq_int_test() {
   "fn main() {
     5 <= 2
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -441,8 +473,9 @@ pub fn lt_eq_float_test() {
   "fn main() {
     5.0 <=. 2.0
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -455,8 +488,9 @@ pub fn logical_or_test() {
   "fn main() {
     True || False
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -469,8 +503,9 @@ pub fn logical_and_test() {
   "fn main() {
     True && False
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -483,8 +518,9 @@ pub fn simple_pipe_test() {
   "fn main() {
     \"foo\" |> println
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -497,8 +533,9 @@ pub fn capture_pipe_test() {
   "fn main() {
     \"foo\" |> println(\"a\", _, \"b\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -511,8 +548,9 @@ pub fn simple_call_expression_test() {
   "fn main() {
       foo(\"bar\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -525,8 +563,9 @@ pub fn labelled_argument_call_expression_test() {
   "fn main() {
       foo(\"bar\", baz: \"baz\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -540,8 +579,9 @@ pub fn fn_capture_test() {
       let x = foo(\"a\", _, \"b\")
       x(\"c\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -560,8 +600,9 @@ pub fn record_update_test() {
     let foo = Bar(1, \"who\")
     let bar = Bar(..foo, b: \"you\")
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -585,8 +626,9 @@ pub fn construct_record_with_label_test() {
   pub fn main() {
     let foo = Bar(b: \"who\", a: 1)
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -605,8 +647,9 @@ pub fn simple_fn_test() {
   "pub fn main() {
     let foo = fn(a, b) {}
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -621,8 +664,9 @@ pub fn multiple_fn_test() {
   "pub fn main() {
     let foo = #(fn(a, b) {}, fn(c, d) {})
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -641,8 +685,9 @@ pub fn nested_fn_test() {
       let bar = fn(c, d) {}
     }
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -659,8 +704,9 @@ pub fn simple_block_test() {
   "pub fn main() {
     let foo = {1}
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -676,8 +722,9 @@ pub fn multiple_block_test() {
     let foo = {1}
     let bar = {2}
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -697,8 +744,9 @@ pub fn nested_block_test() {
       { 1 }
     }
   }"
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 

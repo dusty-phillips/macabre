@@ -1,4 +1,5 @@
 import compiler
+import glance
 import gleeunit/should
 
 pub fn simple_assignment_test() {
@@ -6,8 +7,9 @@ pub fn simple_assignment_test() {
     let a = \"hello world\"
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
@@ -22,8 +24,9 @@ pub fn mulitple_simple_assignment_test() {
     let b = 42
   }
   "
-  |> compiler.compile
+  |> glance.module
   |> should.be_ok
+  |> compiler.compile_module
   |> should.equal(
     "from gleam_builtins import *
 
