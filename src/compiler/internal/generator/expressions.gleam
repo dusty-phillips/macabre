@@ -57,7 +57,7 @@ pub fn generate_expression(expression: python.Expression) -> StringBuilder {
         expressions
         |> internal.generate_plural(generate_expression, ", "),
       )
-      |> string_builder.append(")")
+      |> string_builder.append(",)")
 
     python.TupleIndex(expression, index) ->
       generate_expression(expression)

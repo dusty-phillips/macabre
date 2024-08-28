@@ -108,7 +108,7 @@ def main():
         match _case_subject:
             case (1, 2):
                 return \"one\"
-    return _fn_case_0((1, 2))",
+    return _fn_case_0((1, 2,))",
   )
 }
 
@@ -152,7 +152,7 @@ def main():
         match _case_subject:
             case (1, x):
                 return x + 50
-    return _fn_case_0((1, 2))",
+    return _fn_case_0((1, 2,))",
   )
 }
 
@@ -196,7 +196,7 @@ def main():
         match _case_subject:
             case (1, 2) | (2, 3):
                 return 5
-    return _fn_case_0((1, 2))",
+    return _fn_case_0((1, 2,))",
   )
 }
 

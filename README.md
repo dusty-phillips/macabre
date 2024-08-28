@@ -146,15 +146,15 @@ are ) in the codebase, as of the last time that I updated this list.
 
 ### Some other things I know are missing
 
-- empty tuples are probably broken
-  - (EASY) I used parens instead of a `,` like a total python NOOB
 - no let assert
 - (EASY) const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)
+- macabre_stdlib only has `io.println`
 - Not doing anything to avoid collision between gleam identifiers with python keywords
   - Especially: shadowed variable names behave differently if used in closures
 - glance itself doesn't support comments, so these are stripped out of the compiled code
 - glance doesn't have (much of) a typechecker
+- the standard gleam LSP chokes on the fact that I don't have dependencies in hex
 - not currently generating python type hints (e.g. function arguments and
   return types), but gleam gives us that info so may as well use it
   - No Result custom type yet (I thought this needed to be in the prelude, but I don't see any result-specific syntax anywhere)

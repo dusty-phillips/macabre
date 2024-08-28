@@ -58,7 +58,7 @@ pub fn tuple_expression_test() {
     "from gleam_builtins import *
 
 def main():
-    return (42, 12.5, \"foo\")",
+    return (42, 12.5, \"foo\",)",
   )
 }
 
@@ -255,7 +255,7 @@ pub fn tuple_index_test() {
     "from gleam_builtins import *
 
 def main():
-    return (42, 12.5, \"foo\")[1]",
+    return (42, 12.5, \"foo\",)[1]",
   )
 }
 
@@ -675,7 +675,7 @@ def main():
         pass
     def _fn_def_1(c, d):
         pass
-    foo = (_fn_def_0, _fn_def_1)",
+    foo = (_fn_def_0, _fn_def_1,)",
   )
 }
 
