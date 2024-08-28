@@ -758,3 +758,17 @@ def main():
     foo = _fn_block_0()",
   )
 }
+
+pub fn const_test() {
+  "const foo = 5"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+foo = 5
+
+",
+  )
+}

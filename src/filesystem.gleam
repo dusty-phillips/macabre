@@ -5,7 +5,6 @@ import filepath
 import gleam/io
 import gleam/list
 import gleam/result
-import pprint
 import python_prelude
 import simplifile
 
@@ -52,7 +51,6 @@ pub fn write_py_main(
   build_dir: String,
   module: String,
 ) -> Result(Nil, errors.Error) {
-  pprint.debug(has_main)
   case has_main {
     True ->
       filepath.join(build_dir, "__main__.py")

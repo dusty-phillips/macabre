@@ -4,12 +4,10 @@ import compiler/project
 import filepath
 import gleam/dict
 import gleam/list
-import gleam/option
 import gleam/set
 import gleam/string
 import gleeunit/should
 import macabre
-import pprint
 import simplifile
 import temporary
 

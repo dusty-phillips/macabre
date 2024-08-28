@@ -5,7 +5,6 @@ import glance
 import gleam/dict
 import gleam/list
 import gleam/result
-import pprint
 
 pub fn compile_module(glance_module: glance.Module) -> String {
   glance_module
@@ -14,7 +13,6 @@ pub fn compile_module(glance_module: glance.Module) -> String {
 }
 
 pub fn compile_package(package: package.GleamPackage) -> package.CompiledPackage {
-  pprint.debug(package.modules)
   package.CompiledPackage(
     project: package.project,
     has_main: dict.get(package.modules, package.project.name <> ".gleam")

@@ -10,6 +10,14 @@ pub fn generate(module: python.Module) -> String {
   string_builder.new()
   |> string_builder.append(python_prelude.prelude)
   |> string_builder.append_builder(imports.generate_imports(module.imports))
+  |> string_builder.append_builder(
+    internal.generate_plural(
+      module.constants,
+      statements.generate_constant,
+      "\n",
+    )
+    |> internal.append_if_not_empty("\n\n"),
+  )
   |> string_builder.append_builder(internal.generate_plural(
     module.custom_types,
     types.generate_custom_type,

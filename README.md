@@ -147,7 +147,6 @@ are ) in the codebase, as of the last time that I updated this list.
 ### Some other things I know are missing
 
 - no let assert
-- (EASY) const definitions aren't supported yet (module.constants)
 - type aliases aren't supported yet (module.type_aliases)
 - macabre_stdlib only has `io.println`
 - Not doing anything to avoid collision between gleam identifiers with python keywords
@@ -164,10 +163,7 @@ are ) in the codebase, as of the last time that I updated this list.
 1), mystr: "Foo")` in gleam
   - javascript seems to solve this by automatically reordering the arguments to
     match the input type
-- (EASY) I notice that the javascript doesn't generate the wrapping class for custom
-  variants. I think we should make top level types for each constructor and then a type union
-  for all the types in a single class.
-- Related: if you have a multi-variant type where the first constructor shadows
-  the type's name, it breaks
-- (EASY) maybe call ruff or black on the files after they are output, if they are installed.
+    for all the types in a single class.
+- (EASY) maybe call ruff or black on the files after they are output, if they are installed. (shellout is already available)
 - Code is very not commented
+- Should be putting public types, functions, and constants in `__all__`

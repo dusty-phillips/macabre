@@ -61,6 +61,14 @@ pub fn generate_statement(statement: python.Statement) -> StringBuilder {
   }
 }
 
+pub fn generate_constant(constant: python.Constant) -> StringBuilder {
+  string_builder.from_string(constant.name)
+  |> string_builder.append(" = ")
+  |> string_builder.append_builder(expressions.generate_expression(
+    constant.value,
+  ))
+}
+
 fn generate_cases(cases: List(python.MatchCase)) -> StringBuilder {
   case cases {
     [] -> string_builder.from_string("pass")

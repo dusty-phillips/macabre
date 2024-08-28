@@ -8,37 +8,18 @@ pub fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
     // empty types get discarded
     [] -> string_builder.new()
 
-    // we just discard the outer class if there is only one variant
-    [one_variant] -> {
-      internal.generate_plural(
-        custom_type.parameters,
-        generate_generic_var,
-        "\n",
-      )
-      |> string_builder.append_builder(generate_type_variant(one_variant))
-      |> string_builder.append("\n\n\n")
-    }
-
     variants -> {
+      string_builder.from_string("// pub type " <> custom_type.name)
       internal.generate_plural(
         custom_type.parameters,
         generate_generic_var,
         "\n",
       )
-      |> string_builder.append("class ")
-      |> string_builder.append(custom_type.name)
-      |> string_builder.append(":\n")
       |> string_builder.append_builder(
         internal.generate_plural(variants, generate_type_variant, "\n\n")
-        |> internal.indent(4)
         |> internal.append_if_not_empty("\n\n"),
       )
-      |> string_builder.append_builder(internal.generate_plural(
-        custom_type.variants,
-        generate_variant_reassign(custom_type.name),
-        "\n",
-      ))
-      |> string_builder.append("\n\n\n")
+      |> string_builder.append("\n")
     }
   }
 }
@@ -115,18 +96,5 @@ fn generate_type(type_: python.Type) -> StringBuilder {
     python.GenericType(name) ->
       string_builder.from_string(name)
       |> string_builder.uppercase
-  }
-}
-
-fn generate_variant_reassign(
-  namespace: String,
-) -> fn(python.Variant) -> StringBuilder {
-  fn(variant: python.Variant) -> StringBuilder {
-    string_builder.new()
-    |> string_builder.append(variant.name)
-    |> string_builder.append(" = ")
-    |> string_builder.append(namespace)
-    |> string_builder.append(".")
-    |> string_builder.append(variant.name)
   }
 }

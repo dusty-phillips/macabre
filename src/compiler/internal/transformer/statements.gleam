@@ -16,14 +16,7 @@ import gleam/option
 pub fn transform_statement_block(
   statements: List(glance.Statement),
 ) -> List(python.Statement) {
-  transform_statement_block_with_context(
-    internal.TransformerContext(
-      next_function_id: 0,
-      next_block_id: 0,
-      next_case_id: 0,
-    ),
-    statements,
-  ).statements
+  transform_statement_block_with_context(internal.empty_context, statements).statements
 }
 
 pub fn transform_statement_block_with_context(
@@ -47,6 +40,25 @@ pub fn transform_statement_block_with_context(
     ..result,
     statements: result.statements
       |> internal.transform_last(internal.add_return_if_returnable_expression),
+  )
+}
+
+pub fn transform_constant(
+  module: python.Module,
+  constant: glance.Definition(glance.Constant),
+) -> python.Module {
+  python.Module(
+    ..module,
+    constants: [
+      python.Constant(
+        name: constant.definition.name,
+        value: transform_expression(
+          internal.empty_context,
+          constant.definition.value,
+        ).expression,
+      ),
+      ..module.constants
+    ],
   )
 }
 

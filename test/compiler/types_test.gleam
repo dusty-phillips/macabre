@@ -45,17 +45,13 @@ pub fn multi_variant_custom_type_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-class Foo:
-    @dataclasses.dataclass(frozen=True)
-    class Bar:
-        a: int
-    
-    @dataclasses.dataclass(frozen=True)
-    class Baz:
-        a: str
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    a: int
 
-Bar = Foo.Bar
-Baz = Foo.Baz
+@dataclasses.dataclass(frozen=True)
+class Baz:
+    a: str
 
 
 ",
@@ -92,17 +88,13 @@ pub fn multi_variant_with_no_fields_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-class Foo:
-    @dataclasses.dataclass(frozen=True)
-    class Bar:
-        pass
-    
-    @dataclasses.dataclass(frozen=True)
-    class Baz:
-        pass
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    pass
 
-Bar = Foo.Bar
-Baz = Foo.Baz
+@dataclasses.dataclass(frozen=True)
+class Baz:
+    pass
 
 
 ",
@@ -160,17 +152,13 @@ pub fn multi_variant_generic_test() {
     "from gleam_builtins import *
 
 ELEM = typing.TypeVar('ELEM')
-class Foo:
-    @dataclasses.dataclass(frozen=True)
-    class Bar:
-        item: ELEM
-    
-    @dataclasses.dataclass(frozen=True)
-    class Baz:
-        elem: ELEM
+@dataclasses.dataclass(frozen=True)
+class Bar:
+    item: ELEM
 
-Bar = Foo.Bar
-Baz = Foo.Baz
+@dataclasses.dataclass(frozen=True)
+class Baz:
+    elem: ELEM
 
 
 ",

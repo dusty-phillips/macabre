@@ -30,6 +30,10 @@ pub type BinaryOperator {
   Modulo
 }
 
+pub type Constant {
+  Constant(name: String, value: Expression)
+}
+
 pub type Expression {
   String(String)
   Number(String)
@@ -140,9 +144,10 @@ pub type Module {
     imports: List(Import),
     functions: List(Function),
     custom_types: List(CustomType),
+    constants: List(Constant),
   )
 }
 
 pub fn empty_module() -> Module {
-  Module(imports: [], functions: [], custom_types: [])
+  Module(imports: [], functions: [], custom_types: [], constants: [])
 }

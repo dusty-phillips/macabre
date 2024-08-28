@@ -1,5 +1,6 @@
 import compiler/internal/transformer as internal
 import compiler/internal/transformer/functions
+import compiler/internal/transformer/statements
 import compiler/internal/transformer/types
 import compiler/python
 import glance
@@ -10,6 +11,7 @@ import gleam/string
 pub fn transform(input: glance.Module) -> python.Module {
   python.empty_module()
   |> list.fold(input.imports, _, transform_import)
+  |> list.fold(input.constants, _, statements.transform_constant)
   |> list.fold(input.functions, _, transform_function_or_external)
   |> list.fold(input.custom_types, _, transform_custom_type_in_module)
 }
@@ -117,7 +119,7 @@ fn transform_custom_type_in_module(
   )
 }
 
-pub fn maybe_extract_external(
+fn maybe_extract_external(
   function_attribute: glance.Attribute,
 ) -> Result(python.Import, internal.TransformError) {
   case function_attribute {

@@ -16,6 +16,12 @@ pub type TransformerContext {
   )
 }
 
+pub const empty_context = TransformerContext(
+  next_function_id: 0,
+  next_block_id: 0,
+  next_case_id: 0,
+)
+
 pub type ExpressionReturn {
   ExpressionReturn(
     context: TransformerContext,
