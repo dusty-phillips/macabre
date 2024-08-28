@@ -83,6 +83,7 @@ pub type Statement {
 
 pub type FunctionParameter {
   NameParam(String)
+  DiscardParam(discard_index: Int)
 }
 
 pub type Field(t) {

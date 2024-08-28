@@ -1,6 +1,7 @@
 import compiler/internal/generator as internal
 import compiler/internal/generator/expressions
 import compiler/python
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_builder.{type StringBuilder}
@@ -25,6 +26,12 @@ pub fn generate_function(function: python.Function) -> StringBuilder {
 fn generate_parameter(param: python.FunctionParameter) -> StringBuilder {
   case param {
     python.NameParam(name) -> string_builder.from_string(name)
+    python.DiscardParam(index) ->
+      string_builder.from_string("_")
+      |> string_builder.append(case index {
+        0 -> ""
+        idx -> idx |> int.to_string
+      })
   }
 }
 

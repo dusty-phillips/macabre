@@ -126,7 +126,6 @@ are ) in the codebase, as of the last time that I updated this list.
     dict of names to indices, and a custom **match_args** that can handle
     tuple-like _or_ record-like syntax?
 - Labelled parameters in function calls are not transformed (ie `fn foo(bar baz: Str)`)
-- (EASY) Discard parameters in function arguments are not transformed
 - Codepoints in bistrings are not supported yet
 - non-byte-aligned bitstrings are not supported yet
 - case guards are not supported yet

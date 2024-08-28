@@ -124,3 +124,18 @@ def greet():
     return \"hello world\"",
   )
 }
+
+pub fn function_with_discard_params_test() {
+  "fn greet(_: String, _: String, _foo: String) -> String {
+  \"hello world\"
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def greet(_, _1, _foo):
+    return \"hello world\"",
+  )
+}
