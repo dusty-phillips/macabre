@@ -134,7 +134,7 @@ fn load_dependency_list(
 ) -> Result(dict.Dict(String, String), tom.GetError) {
   case tom.get_table(toml, ["dependencies"]) {
     Ok(dependencies) -> {
-      use state, key, value <- dict.fold(dependencies, Ok(dict.new()))
+      use state, key, _value <- dict.fold(dependencies, Ok(dict.new()))
       use state_dict <- result.try(state)
       use string_value <- result.try(tom.get_string(dependencies, [key]))
       Ok(dict.insert(state_dict, key, string_value))
