@@ -5,21 +5,20 @@
 //// filesystem. 
 //// It does not write to the filesystem.
 
+import compiler/project
 import errors
 import filepath
+import filesystem
 import glance
 import gleam/dict
 import gleam/list
-import gleam/option
 import gleam/result
 import gleam/set
 import gleam/string
-import simplifile
 
 pub type GleamPackage {
   GleamPackage(
-    base_directory: String,
-    main_module: String,
+    project: project.Project,
     modules: dict.Dict(String, glance.Module),
     external_import_files: set.Set(String),
   )
@@ -27,8 +26,8 @@ pub type GleamPackage {
 
 pub type CompiledPackage {
   CompiledPackage(
-    base_directory: String,
-    main_module: option.Option(String),
+    project: project.Project,
+    has_main: Bool,
     modules: dict.Dict(String, String),
     external_import_files: set.Set(String),
   )
@@ -36,40 +35,15 @@ pub type CompiledPackage {
 
 /// Load the entry_point file and recursively load and parse any modules it
 ///returns.
-pub fn load_package(
-  source_directory: String,
+pub fn load(
+  gleam_project: project.Project,
 ) -> Result(GleamPackage, errors.Error) {
-  source_directory
-  |> simplifile.is_directory
-  |> result.map_error(errors.FileOrDirectoryNotFound(source_directory, _))
-  |> result.try(fn(_) { find_entrypoint(source_directory) })
-  |> result.try(fn(entrypoint) {
-    load_module(
-      GleamPackage(
-        source_directory,
-        entrypoint,
-        dict.new(),
-        external_import_files: set.new(),
-      ),
-      entrypoint,
-    )
-  })
-}
-
-pub fn find_entrypoint(source_directory: String) -> Result(String, errors.Error) {
-  let base_name = filepath.base_name(source_directory)
-  let entrypoint = base_name <> ".gleam"
-  simplifile.is_file(filepath.join(source_directory, entrypoint))
-  |> result.replace(entrypoint)
-  |> result.map_error(errors.FileOrDirectoryNotFound(entrypoint, _))
-}
-
-pub fn source_directory(base_directory: String) -> String {
-  filepath.join(base_directory, "src")
-}
-
-pub fn build_directory(base_directory: String) -> String {
-  filepath.join(base_directory, "build")
+  use _ <- result.try(filesystem.is_directory(project.src_dir(gleam_project)))
+  use package <- result.try(load_module(
+    GleamPackage(gleam_project, dict.new(), external_import_files: set.new()),
+    project.entry_point(gleam_project),
+  ))
+  Ok(package)
 }
 
 /// Parse the module and add it to the package's modules, if it can be parsed.
@@ -82,11 +56,9 @@ fn load_module(
     Ok(_) -> Ok(package)
     Error(_) -> {
       let module_result =
-        package.base_directory
-        |> source_directory
+        project.build_src_dir(package.project)
         |> filepath.join(module_path)
-        |> simplifile.read
-        |> result.map_error(errors.FileReadError(module_path, _))
+        |> filesystem.read
         |> result.try(parse(_, module_path))
 
       case module_result {

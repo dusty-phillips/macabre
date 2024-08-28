@@ -19,8 +19,66 @@ I have no idea. It's fun and educational. (I'm on a roll with this redefining wo
 
 ## Usage
 
+The complier runs on gleam erlang successfully. I think it might work with
+Javascript as I don't think I'm using any erlang-specific libraries yet. It
+can't compile itself to python yet, but I'm hoping to get there.
+
+To run it, pass it a properly structured macabre folder as the only argument:
+
 ```sh
-gleam run -- some_very_simple_file.gleam  # compile to python
+gleam run -- some_package_folder
+```
+
+The package folder should have a structure similar to a normal Gleam project:
+
+```
+folder
+├── gleam.toml
+├── build
+│   └── <generated stuff>
+└─ src
+    ├── <repo_name>.gleam
+    ├── some_folder
+    │   ├── something.gleam
+    │   └── bindings.py
+    ├── some_file.gleam
+    └── some_bindings.py
+```
+
+The `gleam.toml` only supports two keys, name and dependencies:
+
+```toml
+name = "example"
+
+[dependencies]
+macabre_stdlib = "git@github.com:dusty-phillips/macabre_stdlib.git"
+```
+
+Note that dependencies are currently _not_ hex packages like a normal gleam
+project. Rather, they are git repositories. This is mostly because I didn't
+feel comfortable cluttering hex with silly dependencies for my silly project.
+
+The compiler expects git to be installed, and will clone any git repos that are
+listed.
+
+> [!WARNING} It currently downloads everything from scratch every time you
+> invoke it, so don't try this on a metered connection!
+
+Macabre copies the `src/` folder of each package into the build directory and
+then builds all dependencies from scratch (every single time). Your source
+files are also copied into this folder.
+
+Your main module will always be `<repo_name>.gleam` where `<repo_name>` is whatever
+you put in the `name` in `gleam.toml`.
+
+Your files are compiled to `build/dev/python`. If your `<repo_name>.gleam` has
+a `main` function in it, then the compiler will generate a
+`build/dev/python/__main__.py` to call that function.
+
+Use this command to invoke it:
+
+```shell
+python build/dev/python
 ```
 
 ## Development
@@ -39,14 +97,12 @@ fd .gleam | entr gleam test
 
 ## Contributing
 
-Are you insane?
-
-Sweet, me too.
-
 PRs are welcome.
 
 The main entry point is `macabre.gleam`, which handles all file loading and
-other side effects. The compiler is pure gleam. Most of the work happens in
+other side effects.
+
+The compiler is pure gleam. Most of the work happens in
 `transformer.gleam` and `generator.gleam`. The former converts the Gleam AST to
 a Python AST, the latter generates python code. There are tons of helper
 functions in various other files.
@@ -61,6 +117,7 @@ Some tasks below are marked easy if you want to get started.
 This is a list of all outstanding `todo` expressions (Gleam todo expressions
 are ) in the codebase, as of the last time that I updated this list.
 
+- (EASY) Turn this list into github issues
 - imports with attributes are not handled yet
 - type imports are not implemented yet
 - Unlabelled fields in custom types are not generated yet
@@ -100,12 +157,7 @@ are ) in the codebase, as of the last time that I updated this list.
 - glance doesn't have (much of) a typechecker
 - not currently generating python type hints (e.g. function arguments and
   return types), but gleam gives us that info so may as well use it
-- no concept of a "project", gleam.toml, downloading dependencies
-- only compiles one module at a time, doesn't follow imports
-- copies the prelude module blindly into the directory that contains that one module instead of a top level
-- No standard library
   - No Result custom type yet (I thought this needed to be in the prelude, but I don't see any result-specific syntax anywhere)
-- generate `__main__.py` if a module has a main function
 - calling functions or constructors with out-of-order positional args doesn't
   work in python
   - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1,

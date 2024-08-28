@@ -4,9 +4,8 @@ import compiler/transformer
 import glance
 import gleam/dict
 import gleam/list
-import gleam/option
 import gleam/result
-import gleam/string
+import pprint
 
 pub fn compile_module(glance_module: glance.Module) -> String {
   glance_module
@@ -15,12 +14,12 @@ pub fn compile_module(glance_module: glance.Module) -> String {
 }
 
 pub fn compile_package(package: package.GleamPackage) -> package.CompiledPackage {
+  pprint.debug(package.modules)
   package.CompiledPackage(
-    base_directory: package.base_directory,
-    main_module: dict.get(package.modules, package.main_module)
+    project: package.project,
+    has_main: dict.get(package.modules, package.project.name <> ".gleam")
       |> result.try(fn(mod) { mod.functions |> has_main_function })
-      |> result.replace(package.main_module |> string.drop_right(6))
-      |> option.from_result,
+      |> result.is_ok,
     modules: package.modules
       |> dict.map_values(fn(_key, value) { compile_module(value) }),
     external_import_files: package.external_import_files,

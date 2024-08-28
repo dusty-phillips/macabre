@@ -1,5 +1,6 @@
 import compiler
 import compiler/package
+import compiler/project
 import filepath
 import gleam/dict
 import gleam/list
@@ -8,6 +9,7 @@ import gleam/set
 import gleam/string
 import gleeunit/should
 import macabre
+import pprint
 import simplifile
 import temporary
 
@@ -26,7 +28,7 @@ pub type ProjectFiles {
     base_dir: String,
     src_dir: String,
     build_dir: String,
-    main_path: String,
+    package_src_dir: String,
   )
 }
 
@@ -34,19 +36,20 @@ fn init_folders(
   use_function: fn(ProjectFiles) -> a,
 ) -> Result(a, simplifile.FileError) {
   use dir <- temporary.create(temporary.directory())
-  let project_name = filepath.base_name(dir)
   let src = filepath.join(dir, "src")
-  let build = filepath.join(dir, "build")
-  let main_path = filepath.join(src, project_name <> ".gleam")
+  let package_src_dir = filepath.join(dir, "build/src")
+  let build = filepath.join(dir, "build/dev/python")
 
   simplifile.create_directory_all(src)
+  |> should.be_ok
+  simplifile.create_directory_all(build)
   |> should.be_ok
   let project_files =
     ProjectFiles(
       base_dir: dir,
       src_dir: src,
       build_dir: build,
-      main_path: main_path,
+      package_src_dir: package_src_dir,
     )
   use_function(project_files)
 }
@@ -58,7 +61,7 @@ pub fn package_compile_test_with_nested_folders_test() {
   // src/foo/bindings.py
   use project_files <- init_folders()
   simplifile.write(
-    to: project_files.main_path,
+    to: filepath.join(project_files.src_dir, "nested_sample.gleam"),
     contents: "import foo/bar
 
   @external(python, \"baz\", \"baz\")
@@ -94,17 +97,35 @@ pub fn package_compile_test_with_nested_folders_test() {
   )
   |> should.be_ok
 
+  simplifile.write(
+    to: filepath.join(project_files.base_dir, "gleam.toml"),
+    contents: "name = \"nested_sample\"",
+  )
+  |> should.be_ok
+
+  let gleam_project =
+    project.load(project_files.base_dir)
+    |> should.be_ok
+
+  project.copy_project_srcs(gleam_project)
+  |> should.be_ok
+
+  simplifile.read_directory(project_files.package_src_dir)
+  |> should.be_ok
+  |> list.sort(string.compare)
+  |> should.equal(["baz.py", "foo", "nested_sample.gleam"])
+  simplifile.read_directory(filepath.join(project_files.package_src_dir, "foo"))
+  |> should.be_ok
+  |> list.sort(string.compare)
+  |> should.equal(["bar.gleam", "bindings.py"])
+
   let gleam_package =
-    package.load_package(project_files.base_dir)
+    package.load(gleam_project)
     |> should.be_ok
 
   // load
 
-  should.equal(gleam_package.base_directory, project_files.base_dir)
-  should.equal(
-    gleam_package.main_module,
-    filepath.base_name(project_files.main_path),
-  )
+  should.equal(gleam_project.base_directory, project_files.base_dir)
   gleam_package.modules
   |> dict.size
   |> should.equal(2)
@@ -112,13 +133,6 @@ pub fn package_compile_test_with_nested_folders_test() {
 
   // ---  compile
   let compiled_package = compiler.compile_package(gleam_package)
-  should.equal(compiled_package.base_directory, project_files.base_dir)
-  should.equal(
-    compiled_package.main_module,
-    option.Some(
-      filepath.base_name(project_files.main_path) |> string.drop_right(6),
-    ),
-  )
   compiled_package.modules
   |> dict.size
   |> should.equal(2)
@@ -131,11 +145,7 @@ pub fn package_compile_test_with_nested_folders_test() {
   |> should.be_ok
   |> list.sort(string.compare)
   |> should.equal([
-    filepath.base_name(project_files.main_path) |> string.drop_right(6) <> ".py",
-    "__main__.py",
-    "baz.py",
-    "foo",
-    "gleam_builtins.py",
+    "__main__.py", "baz.py", "foo", "gleam_builtins.py", "nested_sample.py",
   ])
 
   project_files.build_dir

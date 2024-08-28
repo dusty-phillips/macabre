@@ -1,15 +1,22 @@
+//// Mostly a wrapper of simplifile that translates to errors to errors.Error
+
 import errors
 import filepath
 import gleam/io
 import gleam/list
-import gleam/option
 import gleam/result
+import pprint
 import python_prelude
 import simplifile
 
 pub fn write(contents: String, filename: String) -> Result(Nil, errors.Error) {
   simplifile.write(filename, contents)
   |> result.map_error(errors.FileWriteError(filename, _))
+}
+
+pub fn read(filename: String) -> Result(String, errors.Error) {
+  simplifile.read(filename)
+  |> result.map_error(errors.FileReadError(filename, _))
 }
 
 pub fn replace_extension(filename: String) -> String {
@@ -41,16 +48,16 @@ pub fn write_prelude_file(build_directory: String) -> Result(Nil, errors.Error) 
 }
 
 pub fn write_py_main(
-  build_directory: String,
-  main_module: option.Option(String),
+  has_main: Bool,
+  build_dir: String,
+  module: String,
 ) -> Result(Nil, errors.Error) {
-  case main_module {
-    option.Some(module) -> {
-      build_directory
-      |> filepath.join("__main__.py")
+  pprint.debug(has_main)
+  case has_main {
+    True ->
+      filepath.join(build_dir, "__main__.py")
       |> write(python_prelude.dunder_main(module), _)
-    }
-    option.None -> Ok(Nil)
+    False -> Ok(Nil)
   }
 }
 
@@ -64,9 +71,19 @@ pub fn delete(path: String) -> Result(Nil, errors.Error) {
   simplifile.delete_all([path]) |> result.map_error(errors.DeleteError(path, _))
 }
 
+pub fn is_directory(path) -> Result(Bool, errors.Error) {
+  simplifile.is_directory(path)
+  |> result.map_error(errors.FileOrDirectoryNotFound(path, _))
+}
+
 pub fn create_directory(path) -> Result(Nil, errors.Error) {
-  simplifile.create_directory(path)
+  simplifile.create_directory_all(path)
   |> result.map_error(errors.MkdirError(path, _))
+}
+
+pub fn copy_dir(src: String, dest: String) -> Result(Nil, errors.Error) {
+  simplifile.copy_directory(src, dest)
+  |> result.map_error(errors.CopyFileError(src, dest, _))
 }
 
 pub fn copy_externals(
