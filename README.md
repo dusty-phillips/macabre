@@ -112,26 +112,13 @@ subset that is needed to map Gleam expressions to.
 
 Some tasks below are marked easy if you want to get started.
 
-### Outstanding Todos
+### Outstanding tasks
 
-This is a list of all outstanding `todo` expressions (Gleam todo expressions
-are ) in the codebase, as of the last time that I updated this list.
+### High Pri
 
-- (EASY) Turn this list into github issues
-- imports with attributes are not handled yet
-- type imports are not implemented yet
-- Unlabelled fields in custom types are not generated yet
-  - Given that labelled and unlabelled fields can be mixed on one class, I have
-    a feeling we have to ditch dataclasses. Probably a custom class with slots, a
-    dict of names to indices, and a custom **match_args** that can handle
-    tuple-like _or_ record-like syntax?
-- Labelled parameters in function calls are not transformed (ie `fn foo(bar baz: Str)`)
-- Codepoints in bistrings are not supported yet
-- non-byte-aligned bitstrings are not supported yet
 - case guards are not supported yet
 - Functions as type fields are not supported yet
   - debatable whether to make them a `def` right on the class or have the def be defined somewhere and just attach it like other fields
-- Fields that are "HoleType" are not supported and I don't even know what that means
 - IN case statements, the following patterns are not supported:
   - Concatenate patterns
   - Bitstring patterns (bytes)
@@ -142,20 +129,35 @@ are ) in the codebase, as of the last time that I updated this list.
   - (EASY) tuple destructuring can map straight to python destructuring
   - other structures will maybe need a match statement?
 - Use statements are not supported yet
-
-### Some other things I know are missing
-
-- no let assert
 - type aliases aren't supported yet (module.type_aliases)
+- glance doesn't have (much of) a typechecker
+  - Might be able to extract one from [gig](https://github.com/schurhammer/gig)
+- Code is very not commented
+- Should be putting public types, functions, and constants in `__all__`
+
+### Low Pri
+
+- (EASY) Turn this list into github issues
+- imports with attributes are not handled yet
+- type imports are not implemented yet
+- not currently generating python type hints (e.g. function arguments and
+  return types), but gleam gives us that info so may as well use it
+  - No Result custom type yet (I thought this needed to be in the prelude, but I don't see any result-specific syntax anywhere)
+- Unlabelled fields in custom types are not generated yet
+  - Given that labelled and unlabelled fields can be mixed on one class, I have
+    a feeling we have to ditch dataclasses. Probably a custom class with slots, a
+    dict of names to indices, and a custom **match_args** that can handle
+    tuple-like _or_ record-like syntax?
+- Labelled parameters in function calls are not transformed (ie `fn foo(bar baz: Str)`)
+- Codepoints in bistrings are not supported yet
+- non-byte-aligned bitstrings are not supported yet
+- Fields that are "HoleType" are not supported and I don't even know what that means
+- no let assert
 - macabre_stdlib only has `io.println`
 - Not doing anything to avoid collision between gleam identifiers with python keywords
   - Especially: shadowed variable names behave differently if used in closures
 - glance itself doesn't support comments, so these are stripped out of the compiled code
-- glance doesn't have (much of) a typechecker
 - the standard gleam LSP chokes on the fact that I don't have dependencies in hex
-- not currently generating python type hints (e.g. function arguments and
-  return types), but gleam gives us that info so may as well use it
-  - No Result custom type yet (I thought this needed to be in the prelude, but I don't see any result-specific syntax anywhere)
 - calling functions or constructors with out-of-order positional args doesn't
   work in python
   - e.g. `Foo(mystr: String, point: #(Int, Int))` can be called with `Foo(#(1,
@@ -164,5 +166,5 @@ are ) in the codebase, as of the last time that I updated this list.
     match the input type
     for all the types in a single class.
 - (EASY) maybe call ruff or black on the files after they are output, if they are installed. (shellout is already available)
-- Code is very not commented
-- Should be putting public types, functions, and constants in `__all__`
+
+### Some other things I know are missing
