@@ -112,7 +112,11 @@ pub type CustomType {
 pub type MatchCase {
   // Inner List is collecting tuples together, outer list is patterns that get or'd together
   // e.g. 1,2 | 3, 4 becomes [[1,2], [3, 4]]
-  MatchCase(pattern: Pattern, body: List(Statement))
+  MatchCase(
+    pattern: Pattern,
+    guard: option.Option(Expression),
+    body: List(Statement),
+  )
 }
 
 pub type Pattern {

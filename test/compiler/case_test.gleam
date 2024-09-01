@@ -383,3 +383,33 @@ def main():
     return _fn_case_0(to_gleam_list([1, 2, 3]))",
   )
 }
+
+pub fn case_guard_test() {
+  "pub fn main() -> Nil {
+    case num {
+      0 -> \"Just zero\"
+      x if x < 0 -> \"So negative\"
+      x if x % 2 == 0 -> \"Positively even\"
+      _ -> \"Somewhat odd\"
+    }
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 0:
+                return \"Just zero\"
+            case x if x < 0:
+                return \"So negative\"
+            case x if x % 2 == 0:
+                return \"Positively even\"
+            case _:
+                return \"Somewhat odd\"
+    return _fn_case_0(num)",
+  )
+}

@@ -6,6 +6,7 @@ import glance
 import gleam/int
 import gleam/list
 import gleam/option
+import pprint
 
 // a block is a scope, so context can be reset at this level.
 //
@@ -452,31 +453,50 @@ fn fold_case_clause(
   clause: glance.Clause,
 ) -> internal.TransformState(internal.ReversedList(python.MatchCase)) {
   case clause {
-    glance.Clause(guard: option.Some(_), ..) ->
-      todo as "Case guards not implemented yet"
-
-    glance.Clause(pattern_list, option.None, glance.Block(statements)) -> {
+    glance.Clause(pattern_list, guard, glance.Block(statements)) -> {
       let python_pattern = patterns.transform_alternative_patterns(pattern_list)
+      let guard_return = transform_optional_expression(state.context, guard)
       let statements_result =
-        transform_statement_block_with_context(state.context, statements)
+        transform_statement_block_with_context(guard_return.context, statements)
       internal.TransformState(
         statements_result.context,
         state.statements,
         state.item
           |> list.prepend(python.MatchCase(
             python_pattern,
+            guard_return.expression,
             statements_result.statements,
           )),
       )
     }
 
-    glance.Clause(pattern_list, option.None, body) -> {
+    glance.Clause(pattern_list, guard, body) -> {
       let python_pattern = patterns.transform_alternative_patterns(pattern_list)
-      let body_result = transform_expression(state.context, body)
+      let guard_return = transform_optional_expression(state.context, guard)
+      let body_result = transform_expression(guard_return.context, body)
 
       internal.merge_state_prepend(state, body_result, fn(expr) {
-        python.MatchCase(python_pattern, [python.Return(expr)])
+        python.MatchCase(python_pattern, guard_return.expression, [
+          python.Return(expr),
+        ])
       })
+    }
+  }
+}
+
+fn transform_optional_expression(
+  context: internal.TransformerContext,
+  expression: option.Option(glance.Expression),
+) -> internal.OptionalExpressionReturn {
+  case expression {
+    option.None -> internal.OptionalExpressionReturn(context, [], option.None)
+    option.Some(expression) -> {
+      let expression_return = transform_expression(context, expression)
+      internal.OptionalExpressionReturn(
+        expression_return.context,
+        expression_return.statements,
+        option.Some(expression_return.expression),
+      )
     }
   }
 }

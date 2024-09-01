@@ -1,5 +1,6 @@
 import compiler/python
 import gleam/list
+import gleam/option
 
 pub type ReversedList(a) =
   List(a)
@@ -29,6 +30,14 @@ pub type ExpressionReturn {
     context: TransformerContext,
     statements: List(python.Statement),
     expression: python.Expression,
+  )
+}
+
+pub type OptionalExpressionReturn {
+  OptionalExpressionReturn(
+    context: TransformerContext,
+    statements: List(python.Statement),
+    expression: option.Option(python.Expression),
   )
 }
 

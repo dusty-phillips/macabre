@@ -86,6 +86,7 @@ fn generate_cases(cases: List(python.MatchCase)) -> StringBuilder {
 fn generate_case(case_: python.MatchCase) -> StringBuilder {
   string_builder.from_string("case ")
   |> string_builder.append_builder(generate_pattern(case_.pattern))
+  |> string_builder.append_builder(generate_case_guard(case_.guard))
   |> string_builder.append(":\n")
   |> string_builder.append_builder(
     generate_block(case_.body) |> internal.indent(4),
@@ -155,5 +156,16 @@ fn generate_pattern_list(elements, rest) -> StringBuilder {
       |> string_builder.append(", ")
       |> string_builder.append_builder(generate_pattern_list(others, rest))
       |> string_builder.append(")")
+  }
+}
+
+fn generate_case_guard(guard: option.Option(python.Expression)) -> StringBuilder {
+  case guard {
+    option.None -> string_builder.new()
+    option.Some(expression) ->
+      string_builder.from_string(" if ")
+      |> string_builder.append_builder(expressions.generate_expression(
+        expression,
+      ))
   }
 }

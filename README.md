@@ -116,8 +116,8 @@ Some tasks below are marked easy if you want to get started.
 
 ### High Pri
 
-- case guards are not supported yet
 - Functions as type fields are not supported yet
+  - e.g pub type Foo {Foo(x: () -> String)}
   - debatable whether to make them a `def` right on the class or have the def be defined somewhere and just attach it like other fields
 - IN case statements, the following patterns are not supported:
   - Concatenate patterns
@@ -133,7 +133,7 @@ Some tasks below are marked easy if you want to get started.
 - glance doesn't have (much of) a typechecker
   - Might be able to extract one from [gig](https://github.com/schurhammer/gig)
 - Code is very not commented
-- Should be putting public types, functions, and constants in `__all__`
+- (EASY) Should be putting public types, functions, and constants in `__all__`
 
 ### Low Pri
 
