@@ -1,4 +1,5 @@
 import compiler/internal/transformer as internal
+import compiler/internal/transformer/desugar
 import compiler/internal/transformer/patterns
 import compiler/python
 import glance
@@ -25,6 +26,7 @@ pub fn transform_statement_block_with_context(
 ) -> internal.StatementReturn {
   let result =
     statements
+    |> desugar.desugar_use
     |> list.fold(
       internal.StatementReturn(context, statements: []),
       fn(state, next_statement) {
@@ -339,29 +341,56 @@ fn transform_fn(
   arguments: List(glance.FnParameter),
   body: List(glance.Statement),
 ) -> internal.ExpressionReturn {
-  let parameters =
-    arguments
-    |> list.map(fn(argument) {
-      // TODO: shouldn't be ignoring type here
-      case argument.name {
-        glance.Named(name) -> python.NameParam(name)
-        glance.Discarded(_) ->
-          todo as "discard parameters not supported in function arguments yet"
-      }
-    })
+  let parameters_result =
+    list.fold(
+      arguments,
+      internal.TransformState(context, [], []),
+      fold_fn_parameter,
+    )
 
   let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
   let function =
-    python.Function(function_name, parameters, transform_statement_block(body))
+    python.Function(
+      function_name,
+      list.reverse(parameters_result.item),
+      transform_statement_block(body),
+    )
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(
-      ..context,
+      ..parameters_result.context,
       next_function_id: context.next_function_id + 1,
     ),
-    statements: [python.FunctionDef(function)],
+    statements: list.append(parameters_result.statements, [
+      python.FunctionDef(function),
+    ]),
     expression: python.Variable(function_name),
   )
+}
+
+fn fold_fn_parameter(
+  state: internal.TransformState(List(python.FunctionParameter)),
+  argument: glance.FnParameter,
+) -> internal.TransformState(List(python.FunctionParameter)) {
+  // TODO: Shouldn't be ignoring type here
+  case argument.name {
+    glance.Discarded("") ->
+      internal.TransformState(
+        context: internal.TransformerContext(
+          ..state.context,
+          next_discard_id: state.context.next_discard_id + 1,
+        ),
+        statements: state.statements,
+        item: list.prepend(
+          state.item,
+          python.DiscardParam(state.context.next_discard_id),
+        ),
+      )
+    glance.Discarded(name) ->
+      internal.map_state_prepend(state, python.NameParam("_" <> name))
+    glance.Named(name) ->
+      internal.map_state_prepend(state, python.NameParam(name))
+  }
 }
 
 fn transform_block(

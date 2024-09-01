@@ -139,3 +139,22 @@ def greet(_, _1, _foo):
     return \"hello world\"",
   )
 }
+
+pub fn fn_with_discard_params_test() {
+  "pub fn main() {
+    let greet = fn (_ , _, _foo) {
+      \"hello world\"
+    }
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_def_0(_, _1, _foo):
+        return \"hello world\"
+    greet = _fn_def_0",
+  )
+}

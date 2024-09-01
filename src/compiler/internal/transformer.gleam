@@ -13,6 +13,7 @@ pub type TransformerContext {
     next_function_id: Int,
     next_block_id: Int,
     next_case_id: Int,
+    next_discard_id: Int,
   )
 }
 
@@ -20,6 +21,7 @@ pub const empty_context = TransformerContext(
   next_function_id: 0,
   next_block_id: 0,
   next_case_id: 0,
+  next_discard_id: 0,
 )
 
 pub type ExpressionReturn {

@@ -128,8 +128,8 @@ Some tasks below are marked easy if you want to get started.
 - Destructuring in assignments is not supported yet
   - (EASY) tuple destructuring can map straight to python destructuring
   - other structures will maybe need a match statement?
-- Use statements are not supported yet
 - type aliases aren't supported yet (module.type_aliases)
+- (EASY) internal/errors.format_token needs help
 - glance doesn't have (much of) a typechecker
   - Might be able to extract one from [gig](https://github.com/schurhammer/gig)
 - Code is very not commented
@@ -166,5 +166,3 @@ Some tasks below are marked easy if you want to get started.
     match the input type
     for all the types in a single class.
 - (EASY) maybe call ruff or black on the files after they are output, if they are installed. (shellout is already available)
-
-### Some other things I know are missing
