@@ -60,6 +60,8 @@ pub fn build_dir(project: Project) -> String {
   |> filepath.join("build")
 }
 
+/// The directory that all package sources (including dependencies)
+/// are copied into and loaded from.
 pub fn build_src_dir(project: Project) -> String {
   project
   |> build_dir

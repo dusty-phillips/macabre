@@ -124,7 +124,7 @@ pub fn package_compile_test_with_nested_folders_test() {
   // load
 
   should.equal(gleam_project.base_directory, project_files.base_dir)
-  gleam_package.modules
+  gleam_package.package.modules
   |> dict.size
   |> should.equal(2)
   gleam_package.external_import_files |> set.size |> should.equal(2)

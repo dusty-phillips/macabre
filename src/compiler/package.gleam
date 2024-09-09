@@ -15,11 +15,12 @@ import gleam/list
 import gleam/result
 import gleam/set
 import gleam/string
+import glimpse
 
 pub type GleamPackage {
   GleamPackage(
     project: project.Project,
-    modules: dict.Dict(String, glance.Module),
+    package: glimpse.Package,
     external_import_files: set.Set(String),
   )
 }
@@ -39,72 +40,35 @@ pub fn load(
   gleam_project: project.Project,
 ) -> Result(GleamPackage, errors.Error) {
   use _ <- result.try(filesystem.is_directory(project.src_dir(gleam_project)))
-  use package <- result.try(load_module(
-    GleamPackage(gleam_project, dict.new(), external_import_files: set.new()),
-    project.entry_point(gleam_project),
+  use glimpse_package <- result.try(load_glimpse_package(gleam_project))
+  Ok(GleamPackage(
+    gleam_project,
+    glimpse_package,
+    python_externals(glimpse_package),
   ))
-  Ok(package)
 }
 
-/// Parse the module and add it to the package's modules, if it can be parsed.
-/// Then recursively parse any modules it imports.
-fn load_module(
-  package: GleamPackage,
-  module_path: String,
-) -> Result(GleamPackage, errors.Error) {
-  case dict.get(package.modules, module_path) {
-    Ok(_) -> Ok(package)
-    Error(_) -> {
-      let module_result =
-        project.build_src_dir(package.project)
-        |> filepath.join(module_path)
-        |> filesystem.read
-        |> result.try(parse(_, module_path))
-
-      case module_result {
-        Error(err) -> Error(err)
-        Ok(module_contents) -> {
-          add_module(package, module_path, module_contents)
-          |> Ok
-          |> list.fold(module_contents.imports, _, fold_load_module)
-        }
-      }
+fn load_glimpse_package(
+  project: project.Project,
+) -> Result(glimpse.Package, errors.Error) {
+  glimpse.load_package(project.name, fn(module_name) {
+    let path =
+      filepath.join(project.build_src_dir(project), module_name <> ".gleam")
+    filesystem.read(path)
+  })
+  |> result.map_error(fn(error) {
+    case error {
+      glimpse.LoadError(error) -> error
+      glimpse.ParseError(glance_error, name, content) ->
+        errors.GlanceParseError(glance_error, name, content)
     }
-  }
+  })
 }
 
-fn fold_load_module(
-  package_result: Result(GleamPackage, errors.Error),
-  import_def: glance.Definition(glance.Import),
-) -> Result(GleamPackage, errors.Error) {
-  case package_result {
-    Error(error) -> Error(error)
-    Ok(package) ->
-      load_module(package, import_def.definition.module <> ".gleam")
-  }
-}
-
-fn parse(
-  contents: String,
-  filename: String,
-) -> Result(glance.Module, errors.Error) {
-  glance.module(contents)
-  |> result.map_error(errors.GlanceParseError(_, filename, contents))
-}
-
-fn add_module(
-  package: GleamPackage,
-  module_path: String,
-  module_contents: glance.Module,
-) -> GleamPackage {
-  GleamPackage(
-    ..package,
-    modules: dict.insert(package.modules, module_path, module_contents),
-    external_import_files: set.union(
-      python_external_modules(module_contents.functions),
-      package.external_import_files,
-    ),
-  )
+fn python_externals(package: glimpse.Package) -> set.Set(String) {
+  dict.fold(package.modules, set.new(), fn(externals, _key, module) {
+    set.union(externals, python_external_modules(module.module.functions))
+  })
 }
 
 fn python_external_modules(

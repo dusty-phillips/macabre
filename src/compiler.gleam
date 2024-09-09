@@ -15,11 +15,11 @@ pub fn compile_module(glance_module: glance.Module) -> String {
 pub fn compile_package(package: package.GleamPackage) -> package.CompiledPackage {
   package.CompiledPackage(
     project: package.project,
-    has_main: dict.get(package.modules, package.project.name <> ".gleam")
-      |> result.try(fn(mod) { mod.functions |> has_main_function })
+    has_main: dict.get(package.package.modules, package.project.name)
+      |> result.try(fn(mod) { mod.module.functions |> has_main_function })
       |> result.is_ok,
-    modules: package.modules
-      |> dict.map_values(fn(_key, value) { compile_module(value) }),
+    modules: package.package.modules
+      |> dict.map_values(fn(_key, value) { compile_module(value.module) }),
     external_import_files: package.external_import_files,
   )
 }
