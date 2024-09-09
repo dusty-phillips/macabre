@@ -2,20 +2,23 @@
 
 **macabre** : (adj) _tending to produce horror in a beholder_
 
-Seriously, Just back away slowly. I'm just playing around.
+This is an ultra experimental compiler written in Gleam to compile Gleam source
+code (using the [glance](https://hexdocs.pm/glance/) package) to Python.
 
-Are you still here? Don't you know there's a monster at the end of this book?
+It covers a pretty decent swath of Gleam syntax, and I made a point of
+prioritizing the hardest syntax. There is a big pile of TODOs at the end of
+this file if you want to contribute.
 
-## OMG, What have you done?
+My current vision is to have fun while making this a self-hosted compiler. Once
+it can compile itself to Python (bonus points if it runs on a variation of
+gleam_otp that uses Python's upcoming new experimental multi-threaded support),
+well at that point, I'll have to come up with a new vision. Maybe something to
+do with supporting other compilation targets, such as Gleam's native Erlang
+and Javascript environments.
 
-Nothing, yet. It only "barely" works if we carefully redefine "barely" to "doesn't".
-
-This is an ultra experimental compiler written in Gleam to compile Gleam source code (using
-the [glance](https://hexdocs.pm/glance/) package) to Python.
-
-## Why are you doing this?
-
-I have no idea. It's fun and educational. (I'm on a roll with this redefining words thing.)
+Probability of achieving this vision: pretty low. This is a for-fun free
+time project for me. I'm currently on sabbatical so I have time for odd
+little projects like this.
 
 ## Usage
 
@@ -102,6 +105,11 @@ PRs are welcome.
 The main entry point is `macabre.gleam`, which handles all file loading and
 other side effects.
 
+The package depends on the [glance](https://github.com/lpil/glance) AST parser,
+and [glimpse](https://github.com/dusty-phillips/glimpse),
+a package I wrote to wrap glance to support multiple inter-dependent modules.
+(Eventually I want it to also be a glance typechecker)
+
 The compiler is pure gleam. Most of the work happens in
 `transformer.gleam` and `generator.gleam`. The former converts the Gleam AST to
 a Python AST, the latter generates python code. There are tons of helper
@@ -132,6 +140,8 @@ Some tasks below are marked easy if you want to get started.
 - (EASY) internal/errors.format_token needs help
 - glance doesn't have (much of) a typechecker
   - Might be able to extract one from [gig](https://github.com/schurhammer/gig)
+  - This work is expected to happen in [glimpse](https://github.com/dusty-phillips/glimpse?tab=readme-ov-file)
+    so it can be reused by other compiler projects
 - Code is very not commented
 - (EASY) Should be putting public types, functions, and constants in `__all__`
 
@@ -166,3 +176,4 @@ Some tasks below are marked easy if you want to get started.
     match the input type
     for all the types in a single class.
 - (EASY) maybe call ruff or black on the files after they are output, if they are installed. (shellout is already available)
+- See if there are ways to leverage the [gleam_package_interface](https://github.com/gleam-lang/package-interface)
