@@ -12,6 +12,19 @@ class GleamPanic(BaseException):
 GleamListElem = typing.TypeVar('GleamListElem')
 
 
+@dataclasses.dataclass(frozen=True)
+class Ok:
+    value: typing.Any
+
+
+@dataclasses.dataclass(frozen=True)
+class Error:
+    value: typing.Any
+
+
+Nil = None
+
+
 class GleamList(typing.Generic[GleamListElem]):
     __slots__ = [\"value\", \"tail\"]
     __match_args__ = (\"value\", \"tail\")
