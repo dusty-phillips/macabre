@@ -40,7 +40,9 @@ pub fn compile_result(filename: String, result: Result(Nil, String)) -> Nil {
   }
 }
 
-pub fn write_prelude_file(build_directory: String) -> Result(Nil, errors.Error) {
+pub fn write_prelude_file(
+  build_directory: String,
+) -> Result(Nil, errors.Error) {
   build_directory
   |> filepath.join("gleam_builtins.py")
   |> write(python_prelude.gleam_builtins, _)

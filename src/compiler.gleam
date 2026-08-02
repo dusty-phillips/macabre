@@ -12,7 +12,9 @@ pub fn compile_module(glance_module: glance.Module) -> String {
   |> generator.generate
 }
 
-pub fn compile_package(package: package.GleamPackage) -> package.CompiledPackage {
+pub fn compile_package(
+  package: package.GleamPackage,
+) -> package.CompiledPackage {
   package.CompiledPackage(
     project: package.project,
     has_main: dict.get(package.package.modules, package.project.name)

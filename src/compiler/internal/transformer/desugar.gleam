@@ -53,7 +53,9 @@ fn is_not_use_statement(statement: glance.Statement) -> Bool {
   }
 }
 
-fn patterns_to_args(patterns: List(glance.Pattern)) -> List(glance.FnParameter) {
+fn patterns_to_args(
+  patterns: List(glance.Pattern),
+) -> List(glance.FnParameter) {
   use pattern <- list.map(patterns)
   case pattern {
     glance.PatternVariable(name) -> {

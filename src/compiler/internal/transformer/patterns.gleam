@@ -24,7 +24,9 @@ pub fn transform_alternative_patterns(
 // gleam distinguishes between groups of patterns (e.g: case 1, 2 {x, y -> ...})
 // and glance sends those to us as a list of patterns. The python pattern
 // for a group of patterns will always be a single tuple pattern.
-fn transform_grouped_patterns(patterns: List(glance.Pattern)) -> python.Pattern {
+fn transform_grouped_patterns(
+  patterns: List(glance.Pattern),
+) -> python.Pattern {
   case patterns {
     [] -> panic as "missing pattern"
     [one_item] -> transform_pattern(one_item)

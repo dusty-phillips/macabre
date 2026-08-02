@@ -39,8 +39,7 @@ fn transform_type(type_: glance.Type) -> python.Type {
     glance.TupleType(elements) ->
       python.TupleType(list.map(elements, transform_type))
 
-    glance.FunctionType(..) ->
-      todo as "Not able to transform function types yet"
+    glance.FunctionType(..) -> todo as "Not able to transform function types yet"
 
     glance.VariableType(name) -> {
       python.GenericType(name)
