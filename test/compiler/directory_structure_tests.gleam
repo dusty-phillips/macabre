@@ -4,6 +4,7 @@ import compiler/project
 import filepath
 import gleam/dict
 import gleam/list
+import gleam/option
 import gleam/set
 import gleam/string
 import gleeunit/should
@@ -151,4 +152,43 @@ pub fn package_compile_test_with_nested_folders_test() {
   |> simplifile.read_directory
   |> should.be_ok
   |> should.equal(["bindings.py", "bar.py"])
+}
+
+pub fn git_dependency_parsing_test() {
+  use project_files <- init_folders()
+  simplifile.write(
+    to: filepath.join(project_files.base_dir, "gleam.toml"),
+    contents: "name = \"dependency_parsing\"
+
+[dependencies]
+my_library = { git = \"https://example.com/me/my_library\", ref = \"abc123\" }
+monorepo = { git = \"https://example.com/me/monorepo\", ref = \"def456\", path = \"packages/thing\" }",
+  )
+  |> should.be_ok
+
+  let gleam_project =
+    project.load(project_files.base_dir)
+    |> should.be_ok
+
+  gleam_project.packages
+  |> dict.size
+  |> should.equal(2)
+  gleam_project.packages
+  |> dict.get("my_library")
+  |> should.equal(
+    Ok(project.Package(
+      git_url: "https://example.com/me/my_library",
+      git_ref: "abc123",
+      path: option.None,
+    )),
+  )
+  gleam_project.packages
+  |> dict.get("monorepo")
+  |> should.equal(
+    Ok(project.Package(
+      git_url: "https://example.com/me/monorepo",
+      git_ref: "def456",
+      path: option.Some("packages/thing"),
+    )),
+  )
 }

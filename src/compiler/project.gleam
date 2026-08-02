@@ -12,6 +12,7 @@ import filesystem
 import git
 import gleam/dict
 import gleam/list
+import gleam/option
 import gleam/result
 import simplifile
 import tom
@@ -19,9 +20,14 @@ import tom
 pub type Project {
   Project(
     name: String,
-    packages: dict.Dict(String, String),
+    packages: dict.Dict(String, Package),
     base_directory: String,
   )
+}
+
+/// A git dependency, using the same syntax as the official Gleam build tool.
+pub type Package {
+  Package(git_url: String, git_ref: String, path: option.Option(String))
 }
 
 pub fn load(base_directory: String) -> Result(Project, errors.Error) {
@@ -90,9 +96,17 @@ pub fn package_dir(project: Project, package_name: String) -> String {
   |> filepath.join(package_name)
 }
 
-pub fn package_src_dir(project: Project, package_name: String) -> String {
-  package_dir(project, package_name)
-  |> filepath.join("src")
+pub fn package_src_dir(
+  project: Project,
+  package_name: String,
+  package: Package,
+) -> String {
+  let package_root = case package.path {
+    option.Some(subdir) ->
+      package_dir(project, package_name) |> filepath.join(subdir)
+    option.None -> package_dir(project, package_name)
+  }
+  package_root |> filepath.join("src")
 }
 
 pub fn clone_packages(project: Project) -> Result(Nil, errors.Error) {
@@ -104,8 +118,8 @@ pub fn clone_packages(project: Project) -> Result(Nil, errors.Error) {
   project.packages
   |> dict.to_list
   |> list.map(fn(tuple) {
-    let #(name, repo) = tuple
-    git.clone(name, repo, package_directory)
+    let #(name, package) = tuple
+    git.clone(name, package.git_url, package.git_ref, package_directory)
   })
   |> result.all
   |> result.replace(Nil)
@@ -114,11 +128,14 @@ pub fn clone_packages(project: Project) -> Result(Nil, errors.Error) {
 pub fn copy_package_srcs(project: Project) -> Result(Nil, errors.Error) {
   let project_src_dir = build_src_dir(project)
   use _ <- result.try(filesystem.create_directory(project_src_dir))
-  dict.keys(project.packages)
-  |> list.map(package_src_dir(project, _))
-  |> list.map(filesystem.copy_dir(_, project_src_dir))
-  |> result.all
-  |> result.replace(Nil)
+  dict.fold(project.packages, Ok(Nil), fn(state, name, package) {
+    use _ <- result.try(state)
+    use _ <- result.try(filesystem.copy_dir(
+      package_src_dir(project, name, package),
+      project_src_dir,
+    ))
+    Ok(Nil)
+  })
 }
 
 pub fn copy_project_srcs(project: Project) -> Result(Nil, errors.Error) {
@@ -133,15 +150,29 @@ pub fn clean(project: Project) -> Result(Nil, errors.Error) {
 
 fn load_dependency_list(
   toml: dict.Dict(String, tom.Toml),
-) -> Result(dict.Dict(String, String), tom.GetError) {
+) -> Result(dict.Dict(String, Package), tom.GetError) {
   case tom.get_table(toml, ["dependencies"]) {
     Ok(dependencies) -> {
       use state, key, _value <- dict.fold(dependencies, Ok(dict.new()))
       use state_dict <- result.try(state)
-      use string_value <- result.try(tom.get_string(dependencies, [key]))
-      Ok(dict.insert(state_dict, key, string_value))
+      use package <- result.try(parse_dependency(dependencies, key))
+      Ok(dict.insert(state_dict, key, package))
     }
     Error(tom.NotFound(_)) -> Ok(dict.new())
     Error(tom.WrongType(..) as error) -> Error(error)
   }
+}
+
+fn parse_dependency(
+  dependencies: dict.Dict(String, tom.Toml),
+  key: String,
+) -> Result(Package, tom.GetError) {
+  use table <- result.try(tom.get_table(dependencies, [key]))
+  use git_url <- result.try(tom.get_string(table, ["git"]))
+  use git_ref <- result.try(tom.get_string(table, ["ref"]))
+  let path = case tom.get_string(table, ["path"]) {
+    Ok(path) -> option.Some(path)
+    Error(_) -> option.None
+  }
+  Ok(Package(git_url, git_ref, path))
 }

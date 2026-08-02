@@ -54,15 +54,24 @@ The `gleam.toml` only supports two keys, name and dependencies:
 name = "example"
 
 [dependencies]
-macabre_stdlib = "git@github.com:dusty-phillips/macabre_stdlib.git"
+macabre_stdlib = {
+  git = "git@github.com:dusty-phillips/macabre_stdlib.git",
+  ref = "main"
+}
 ```
 
 Note that dependencies are currently _not_ hex packages like a normal gleam
 project. Rather, they are git repositories. This is mostly because I didn't
 feel comfortable cluttering hex with silly dependencies for my silly project.
 
+Git dependencies use the same syntax as the official Gleam build tool: a table
+with a `git` field for the repository URL and a `ref` field for the commit,
+branch, or tag to check out. Like the official tool, a commit sha is preferred
+for reproducibility. An optional `path` field can point at a subdirectory for
+monorepos that contain several packages.
+
 The compiler expects git to be installed, and will clone any git repos that are
-listed.
+listed and check out the requested ref.
 
 > [!WARNING} It currently downloads everything from scratch every time you
 > invoke it, so don't try this on a metered connection!
