@@ -1,100 +1,99 @@
 import compiler/internal/generator as internal
 import compiler/python
 import gleam/option
-import gleam/string_builder.{type StringBuilder}
+import gleam/string_tree.{type StringTree}
 
-pub fn generate_custom_type(custom_type: python.CustomType) -> StringBuilder {
+pub fn generate_custom_type(custom_type: python.CustomType) -> StringTree {
   case custom_type.variants {
     // empty types get discarded
-    [] -> string_builder.new()
+    [] -> string_tree.new()
 
     variants -> {
-      string_builder.from_string("// pub type " <> custom_type.name)
       internal.generate_plural(
         custom_type.parameters,
         generate_generic_var,
         "\n",
       )
-      |> string_builder.append_builder(
+      |> string_tree.append_tree(
         internal.generate_plural(variants, generate_type_variant, "\n\n")
         |> internal.append_if_not_empty("\n\n"),
       )
-      |> string_builder.append("\n")
+      |> string_tree.append("\n")
     }
   }
 }
 
-fn generate_generic_var(name: String) -> StringBuilder {
-  let upper_name = string_builder.from_string(name) |> string_builder.uppercase
-  string_builder.new()
-  |> string_builder.append_builder(upper_name)
-  |> string_builder.append(" = typing.TypeVar('")
-  |> string_builder.append_builder(upper_name)
-  |> string_builder.append("')\n")
+fn generate_generic_var(name: String) -> StringTree {
+  let upper_name = string_tree.from_string(name) |> string_tree.uppercase
+  string_tree.new()
+  |> string_tree.append_tree(upper_name)
+  |> string_tree.append(" = typing.TypeVar('")
+  |> string_tree.append_tree(upper_name)
+  |> string_tree.append("')\n")
 }
 
-fn generate_type_variant(variant: python.Variant) -> StringBuilder {
-  string_builder.new()
-  |> string_builder.append("@dataclasses.dataclass(frozen=True)\n")
-  |> string_builder.append("class ")
-  |> string_builder.append(variant.name)
-  |> string_builder.append(":\n")
-  |> string_builder.append_builder(
+fn generate_type_variant(variant: python.Variant) -> StringTree {
+  string_tree.new()
+  |> string_tree.append("@dataclasses.dataclass(frozen=True)\n")
+  |> string_tree.append("class ")
+  |> string_tree.append(variant.name)
+  |> string_tree.append(":\n")
+  |> string_tree.append_tree(
     case variant.fields {
-      [] -> string_builder.from_string("pass")
+      [] -> string_tree.from_string("pass")
       fields -> internal.generate_plural(fields, generate_type_field, "\n")
     }
     |> internal.indent(4),
   )
 }
 
-fn generate_type_field(field: python.Field(python.Type)) -> StringBuilder {
+fn generate_type_field(field: python.Field(python.Type)) -> StringTree {
   case field {
     python.UnlabelledField(_) ->
       todo as "not handling unlabeled fields in custom types yet"
     python.LabelledField(label, item) ->
-      string_builder.new()
-      |> string_builder.append(label)
-      |> string_builder.append(": ")
-      |> string_builder.append_builder(generate_type(item))
+      string_tree.new()
+      |> string_tree.append(label)
+      |> string_tree.append(": ")
+      |> string_tree.append_tree(generate_type(item))
   }
 }
 
-fn generate_type(type_: python.Type) -> StringBuilder {
+fn generate_type(type_: python.Type) -> StringTree {
   case type_ {
     python.NamedType(
       name: "String",
       module: option.None,
       generic_parameters: [],
-    ) -> string_builder.from_string("str")
+    ) -> string_tree.from_string("str")
 
     python.NamedType(name: "Int", module: option.None, generic_parameters: []) ->
-      string_builder.from_string("int")
+      string_tree.from_string("int")
 
     python.NamedType(name: name, module:, generic_parameters:) -> {
       let params = case generic_parameters {
-        [] -> string_builder.new()
+        [] -> string_tree.new()
         params_exist ->
           params_exist
           |> internal.generate_plural(generate_type, ",")
-          |> string_builder.prepend("[")
-          |> string_builder.append("]")
+          |> string_tree.prepend("[")
+          |> string_tree.append("]")
       }
       module
-      |> option.map(fn(mod) { string_builder.from_strings([mod, "."]) })
-      |> option.lazy_unwrap(string_builder.new)
-      |> string_builder.append(name)
-      |> string_builder.append_builder(params)
+      |> option.map(fn(mod) { string_tree.from_strings([mod, "."]) })
+      |> option.lazy_unwrap(string_tree.new)
+      |> string_tree.append(name)
+      |> string_tree.append_tree(params)
     }
 
     python.TupleType(elements) ->
       elements
       |> internal.generate_plural(generate_type, ", ")
-      |> string_builder.prepend("typing.Tuple[")
-      |> string_builder.append("]")
+      |> string_tree.prepend("typing.Tuple[")
+      |> string_tree.append("]")
 
     python.GenericType(name) ->
-      string_builder.from_string(name)
-      |> string_builder.uppercase
+      string_tree.from_string(name)
+      |> string_tree.uppercase
   }
 }

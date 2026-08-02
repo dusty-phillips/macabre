@@ -1,11 +1,11 @@
 import glance
 import gleam/bit_array
-import gleam/bytes_builder.{type BytesBuilder}
+import gleam/bytes_tree.{type BytesTree}
 import gleam/int
-import gleam/iterator
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/yielder
 import glexer
 import glexer/token
 import internal/bytes
@@ -26,7 +26,7 @@ pub fn format_glance_error(
 type PositionState {
   PositionState(
     current_line_number: Int,
-    current_line_bytes: BytesBuilder,
+    current_line_bytes: BytesTree,
     current_line_first_byte_position: Int,
     current_position: Int,
     target_position: Int,
@@ -41,7 +41,7 @@ pub fn format_unexpected_token(
   let initial =
     PositionState(
       current_line_number: 1,
-      current_line_bytes: bytes_builder.new(),
+      current_line_bytes: bytes_tree.new(),
       current_line_first_byte_position: 0,
       current_position: 0,
       // glexer positions start at byte 0, which is character 1 on a line based system
@@ -51,7 +51,7 @@ pub fn format_unexpected_token(
   let position_state =
     contents
     |> bytes.iterate
-    |> iterator.fold_until(initial, fold_position_to_lines)
+    |> yielder.fold_until(initial, fold_position_to_lines)
 
   case position_state.current_position {
     pos if pos < position_state.target_position ->
@@ -72,7 +72,7 @@ pub fn format_unexpected_token(
       <> "\n\n"
       <> {
         position_state.current_line_bytes
-        |> bytes_builder.to_bit_array
+        |> bytes_tree.to_bit_array
         |> bit_array.to_string
         |> result.unwrap("Unexpected unicode")
       }
@@ -97,7 +97,7 @@ fn fold_position_to_lines(
           ..state,
           current_line_first_byte_position: state.current_position + 1,
           current_line_number: state.current_line_number + 1,
-          current_line_bytes: bytes_builder.new(),
+          current_line_bytes: bytes_tree.new(),
           current_position: state.current_position + 1,
         ),
       )
@@ -106,7 +106,7 @@ fn fold_position_to_lines(
       list.Continue(
         PositionState(
           ..state,
-          current_line_bytes: bytes_builder.append(state.current_line_bytes, <<
+          current_line_bytes: bytes_tree.append(state.current_line_bytes, <<
             byte,
           >>),
           current_position: state.current_position + 1,

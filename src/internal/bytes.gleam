@@ -1,10 +1,10 @@
-import gleam/iterator
+import gleam/yielder
 
-pub fn iterate(string: String) -> iterator.Iterator(Int) {
-  iterator.unfold(<<string:utf8>>, fn(remaining) {
+pub fn iterate(string: String) -> yielder.Yielder(Int) {
+  yielder.unfold(<<string:utf8>>, fn(remaining) {
     case remaining {
-      <<>> -> iterator.Done
-      <<byte:8, rest:bytes>> -> iterator.Next(byte, rest)
+      <<>> -> yielder.Done
+      <<byte:8, rest:bytes>> -> yielder.Next(byte, rest)
       _ -> panic as "string should always return a byte-aligned bitarray"
     }
   })

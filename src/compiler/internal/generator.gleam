@@ -1,42 +1,39 @@
-import gleam/iterator
 import gleam/list
-import gleam/string_builder
+import gleam/string_tree
 
 pub fn indent(
-  builder: string_builder.StringBuilder,
+  builder: string_tree.StringTree,
   count: Int,
-) -> string_builder.StringBuilder {
+) -> string_tree.StringTree {
   let indent =
-    string_builder.from_string(" ")
-    |> iterator.repeat
-    |> iterator.take(count)
-    |> iterator.to_list
-    |> string_builder.join("")
+    list.repeat(" ", count)
+    |> string_tree.from_strings
 
   let indent_with_newline =
     indent
-    |> string_builder.prepend("\n")
-    |> string_builder.to_string
+    |> string_tree.prepend("\n")
+    |> string_tree.to_string
 
-  string_builder.replace(builder, "\n", indent_with_newline)
-  |> string_builder.prepend_builder(indent)
+  string_tree.replace(builder, "\n", indent_with_newline)
+  |> string_tree.prepend_tree(indent)
 }
 
 pub fn append_if_not_empty(
-  builder: string_builder.StringBuilder,
+  builder: string_tree.StringTree,
   with: String,
-) -> string_builder.StringBuilder {
-  case string_builder.is_empty(builder) {
+) -> string_tree.StringTree {
+  case string_tree.is_empty(builder) {
     True -> builder
-    False -> string_builder.append(builder, with)
+    False -> string_tree.append(builder, with)
   }
 }
+
 pub fn generate_plural(
   elements: List(elem),
-  using: fn(elem) -> string_builder.StringBuilder,
+  using: fn(elem) -> string_tree.StringTree,
   join_with: String,
-) -> string_builder.StringBuilder {
+) -> string_tree.StringTree {
   elements
   |> list.map(using)
-  |> string_builder.join(join_with)
+  |> string_tree.join(join_with)
 }

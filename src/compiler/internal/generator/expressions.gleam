@@ -2,108 +2,108 @@ import compiler/internal/generator as internal
 import compiler/python
 import gleam/int
 import gleam/list
-import gleam/string_builder.{type StringBuilder}
+import gleam/string_tree.{type StringTree}
 
-pub fn generate_expression(expression: python.Expression) -> StringBuilder {
+pub fn generate_expression(expression: python.Expression) -> StringTree {
   case expression {
-    python.String(string) -> string_builder.from_strings(["\"", string, "\""])
+    python.String(string) -> string_tree.from_strings(["\"", string, "\""])
 
-    python.Number(number) -> string_builder.from_string(number)
+    python.Number(number) -> string_tree.from_string(number)
 
-    python.Bool(value) -> string_builder.from_string(value)
+    python.Bool(value) -> string_tree.from_string(value)
 
-    python.Variable(value) -> string_builder.from_string(value)
+    python.Variable(value) -> string_tree.from_string(value)
 
     python.Negate(expression) ->
-      generate_expression(expression) |> string_builder.prepend("-")
+      generate_expression(expression) |> string_tree.prepend("-")
 
     python.Not(expression) ->
-      generate_expression(expression) |> string_builder.prepend("not ")
+      generate_expression(expression) |> string_tree.prepend("not ")
 
     python.Panic(expression) ->
       generate_expression(expression)
-      |> string_builder.prepend("raise GleamPanic(")
-      |> string_builder.append(")")
+      |> string_tree.prepend("raise GleamPanic(")
+      |> string_tree.append(")")
 
     python.Todo(expression) ->
       generate_expression(expression)
-      |> string_builder.prepend("raise NotImplementedError(")
-      |> string_builder.append(")")
+      |> string_tree.prepend("raise NotImplementedError(")
+      |> string_tree.append(")")
 
     python.List(elements) ->
-      string_builder.from_string("to_gleam_list([")
-      |> string_builder.append_builder(internal.generate_plural(
+      string_tree.from_string("to_gleam_list([")
+      |> string_tree.append_tree(internal.generate_plural(
         elements,
         generate_expression,
         ", ",
       ))
-      |> string_builder.append("])")
+      |> string_tree.append("])")
 
     python.ListWithRest(elements, rest) ->
-      string_builder.from_string("to_gleam_list([")
-      |> string_builder.append_builder(internal.generate_plural(
+      string_tree.from_string("to_gleam_list([")
+      |> string_tree.append_tree(internal.generate_plural(
         elements,
         generate_expression,
         ", ",
       ))
-      |> string_builder.append("], ")
-      |> string_builder.append_builder(generate_expression(rest))
-      |> string_builder.append(")")
+      |> string_tree.append("], ")
+      |> string_tree.append_tree(generate_expression(rest))
+      |> string_tree.append(")")
 
     python.Tuple(expressions) ->
-      string_builder.new()
-      |> string_builder.append("(")
-      |> string_builder.append_builder(
+      string_tree.new()
+      |> string_tree.append("(")
+      |> string_tree.append_tree(
         expressions
         |> internal.generate_plural(generate_expression, ", "),
       )
-      |> string_builder.append(",)")
+      |> string_tree.append(",)")
 
     python.TupleIndex(expression, index) ->
       generate_expression(expression)
-      |> string_builder.append("[")
-      |> string_builder.append(index |> int.to_string)
-      |> string_builder.append("]")
+      |> string_tree.append("[")
+      |> string_tree.append(index |> int.to_string)
+      |> string_tree.append("]")
 
     python.FieldAccess(expression, label) ->
       generate_expression(expression)
-      |> string_builder.append(".")
-      |> string_builder.append(label)
+      |> string_tree.append(".")
+      |> string_tree.append(label)
 
     python.RecordUpdate(record, fields) ->
-      string_builder.new()
-      |> string_builder.append("dataclasses.replace(")
-      |> string_builder.append_builder(generate_expression(record))
-      |> string_builder.append(", ")
-      |> string_builder.append_builder(internal.generate_plural(
+      string_tree.new()
+      |> string_tree.append("dataclasses.replace(")
+      |> string_tree.append_tree(generate_expression(record))
+      |> string_tree.append(", ")
+      |> string_tree.append_tree(internal.generate_plural(
         fields,
         generate_record_update_fields,
         ", ",
       ))
-      |> string_builder.append(")")
+      |> string_tree.append(")")
 
     python.Lambda(arguments, body) -> {
-      string_builder.from_string("(lambda ")
-      |> string_builder.append_builder(internal.generate_plural(
+      string_tree.from_string("(lambda ")
+      |> string_tree.append_tree(internal.generate_plural(
         arguments,
         generate_expression,
         ", ",
       ))
-      |> string_builder.append(": ")
-      |> string_builder.append_builder(generate_expression(body))
-      |> string_builder.append(")")
+      |> string_tree.append(": ")
+      |> string_tree.append_tree(generate_expression(body))
+      |> string_tree.append(")")
     }
 
     python.Call(function, arguments) ->
-      string_builder.new()
-      |> string_builder.append_builder(generate_expression(function))
-      |> string_builder.append("(")
-      |> string_builder.append_builder(
+      string_tree.new()
+      |> string_tree.append_tree(generate_expression(function))
+      |> string_tree.append("(")
+      |> string_tree.append_tree(
         arguments
         |> list.map(generate_call_fields)
-        |> string_builder.join(", "),
+        |> string_tree.join(", "),
       )
-      |> string_builder.append(")")
+      |> string_tree.append(")")
 
     python.BinaryOperator(name, left, right) ->
       generate_binop(name, left, right)
@@ -114,25 +114,25 @@ pub fn generate_expression(expression: python.Expression) -> StringBuilder {
 
 fn generate_record_update_fields(
   field: python.Field(python.Expression),
-) -> StringBuilder {
+) -> StringTree {
   case field {
     python.UnlabelledField(_) ->
       panic as "Unlabeled fields are not expected on record updates"
     python.LabelledField(label, expression) ->
-      string_builder.new()
-      |> string_builder.append(label)
-      |> string_builder.append("=")
-      |> string_builder.append_builder(generate_expression(expression))
+      string_tree.new()
+      |> string_tree.append(label)
+      |> string_tree.append("=")
+      |> string_tree.append_tree(generate_expression(expression))
   }
 }
 
-fn generate_call_fields(field: python.Field(python.Expression)) -> StringBuilder {
+fn generate_call_fields(field: python.Field(python.Expression)) -> StringTree {
   case field {
     python.UnlabelledField(expression) -> generate_expression(expression)
     python.LabelledField(label, expression) ->
       generate_expression(expression)
-      |> string_builder.prepend("=")
-      |> string_builder.prepend(label)
+      |> string_tree.prepend("=")
+      |> string_tree.prepend(label)
   }
 }
 
@@ -140,7 +140,7 @@ fn generate_binop(
   name: python.BinaryOperator,
   left: python.Expression,
   right: python.Expression,
-) -> StringBuilder {
+) -> StringTree {
   let op_string = case name {
     python.And -> " and "
     python.Or -> " or "
@@ -158,58 +158,58 @@ fn generate_binop(
     python.GreaterThanEqual -> " >= "
   }
 
-  string_builder.new()
-  |> string_builder.append_builder(generate_expression(left))
-  |> string_builder.append(op_string)
-  |> string_builder.append_builder(generate_expression(right))
+  string_tree.new()
+  |> string_tree.append_tree(generate_expression(left))
+  |> string_tree.append(op_string)
+  |> string_tree.append_tree(generate_expression(right))
 }
 
-fn generate_bitstring(segments: List(python.BitStringSegment)) -> StringBuilder {
-  string_builder.from_string("gleam_bitstring_segments_to_bytes(")
-  |> string_builder.append_builder(internal.generate_plural(
+fn generate_bitstring(segments: List(python.BitStringSegment)) -> StringTree {
+  string_tree.from_string("gleam_bitstring_segments_to_bytes(")
+  |> string_tree.append_tree(internal.generate_plural(
     segments,
     generate_bitstring_segment,
     ", ",
   ))
-  |> string_builder.append(")")
+  |> string_tree.append(")")
 }
 
-fn generate_bitstring_segment(segment: python.BitStringSegment) -> StringBuilder {
+fn generate_bitstring_segment(segment: python.BitStringSegment) -> StringTree {
   generate_expression(segment.value)
-  |> string_builder.prepend("(")
-  |> string_builder.append(", [")
-  |> string_builder.append_builder(internal.generate_plural(
+  |> string_tree.prepend("(")
+  |> string_tree.append(", [")
+  |> string_tree.append_tree(internal.generate_plural(
     segment.options,
     generate_bitstring_segment_option,
     ", ",
   ))
-  |> string_builder.append("])")
+  |> string_tree.append("])")
 }
 
 fn generate_bitstring_segment_option(
   option: python.BitStringSegmentOption,
-) -> StringBuilder {
+) -> StringTree {
   case option {
     python.SizeValueOption(expression) ->
       generate_expression(expression)
-      |> string_builder.prepend("\"SizeValue\", ")
+      |> string_tree.prepend("\"SizeValue\", ")
 
     python.UnitOption(integer) ->
       integer
       |> int.to_string
-      |> string_builder.from_string
-      |> string_builder.prepend("\"Unit\", ")
+      |> string_tree.from_string
+      |> string_tree.prepend("\"Unit\", ")
 
-    python.FloatOption -> string_builder.from_string("\"Float\", None")
-    python.IntOption -> string_builder.from_string("\"Int\", None")
-    python.BigOption -> string_builder.from_string("\"Big\", None")
-    python.LittleOption -> string_builder.from_string("\"Little\", None")
-    python.NativeOption -> string_builder.from_string("\"Native\", None")
-    python.BitStringOption -> string_builder.from_string("\"BitString\", None")
-    python.Utf8Option -> string_builder.from_string("\"Utf8\", None")
-    python.Utf16Option -> string_builder.from_string("\"Utf16\", None")
-    python.Utf32Option -> string_builder.from_string("\"Utf32\", None")
+    python.FloatOption -> string_tree.from_string("\"Float\", None")
+    python.IntOption -> string_tree.from_string("\"Int\", None")
+    python.BigOption -> string_tree.from_string("\"Big\", None")
+    python.LittleOption -> string_tree.from_string("\"Little\", None")
+    python.NativeOption -> string_tree.from_string("\"Native\", None")
+    python.BitStringOption -> string_tree.from_string("\"BitString\", None")
+    python.Utf8Option -> string_tree.from_string("\"Utf8\", None")
+    python.Utf16Option -> string_tree.from_string("\"Utf16\", None")
+    python.Utf32Option -> string_tree.from_string("\"Utf32\", None")
   }
-  |> string_builder.prepend("(")
-  |> string_builder.append(")")
+  |> string_tree.prepend("(")
+  |> string_tree.append(")")
 }

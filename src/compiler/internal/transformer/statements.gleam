@@ -6,7 +6,6 @@ import glance
 import gleam/int
 import gleam/list
 import gleam/option
-import pprint
 
 // a block is a scope, so context can be reset at this level.
 //
@@ -50,19 +49,16 @@ pub fn transform_constant(
   module: python.Module,
   constant: glance.Definition(glance.Constant),
 ) -> python.Module {
-  python.Module(
-    ..module,
-    constants: [
-      python.Constant(
-        name: constant.definition.name,
-        value: transform_expression(
-          internal.empty_context,
-          constant.definition.value,
-        ).expression,
-      ),
-      ..module.constants
-    ],
-  )
+  python.Module(..module, constants: [
+    python.Constant(
+      name: constant.definition.name,
+      value: transform_expression(
+        internal.empty_context,
+        constant.definition.value,
+      ).expression,
+    ),
+    ..module.constants
+  ])
 }
 
 fn transform_statement(
@@ -133,7 +129,7 @@ fn transform_expression(
 
     glance.NegateBool(expression) -> {
       transform_expression(context, expression)
-      |> internal.map_return(python.Not(_))
+      |> internal.map_return(python.Not)
     }
 
     glance.Panic(option.None) ->
@@ -152,7 +148,7 @@ fn transform_expression(
       )
     glance.Todo(option.Some(expression)) ->
       transform_expression(context, expression)
-      |> internal.map_return(python.Todo(_))
+      |> internal.map_return(python.Todo)
 
     glance.Call(function, arguments) ->
       transform_call(context, function, arguments)
@@ -235,7 +231,7 @@ fn transform_list(
 
   case rest {
     option.None -> {
-      internal.reverse_state_to_return(reversed_list_result, python.List(_))
+      internal.reverse_state_to_return(reversed_list_result, python.List)
     }
     option.Some(rest) -> {
       let rest_result = transform_expression(reversed_list_result.context, rest)
@@ -311,7 +307,7 @@ fn transform_fn_capture(
 ) -> internal.ExpressionReturn {
   let function_result = transform_expression(context, function)
   let reversed_arguments_result =
-    list.concat([
+    list.flatten([
       arguments_before,
       [glance.Field(label, glance.Variable("fn_capture"))],
       arguments_after,
