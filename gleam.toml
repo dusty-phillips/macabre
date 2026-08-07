@@ -13,18 +13,18 @@ version = "1.0.0"
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 [dependencies]
-gleam_stdlib = ">= 0.49.0 and < 0.50.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 gleam_yielder = ">= 1.1.0 and < 2.0.0"
-glance = ">= 0.11.0 and < 1.0.0"
+glance = ">= 7.0.0 and < 8.0.0"
 argv = ">= 1.1.0 and < 2.0.0"
-simplifile = ">= 2.6.0 and < 3.0.0"
+simplifile = ">= 2.7.0 and < 3.0.0"
 filepath = ">= 1.1.2 and < 2.0.0"
-glexer = ">= 1.0.1 and < 2.0.0"
-tom = ">= 2.0.0 and < 2.1.0"
+glexer = ">= 2.5.0 and < 3.0.0"
+tom = ">= 2.1.0 and < 3.0.0"
 shellout = ">= 1.8.0 and < 2.0.0"
-glimpse = ">= 0.0.2 and < 1.0.0"
+glimpse = ">= 0.0.3 and < 1.0.0"
 
 [dev-dependencies]
-pprint = ">= 1.0.4 and < 1.0.5"
-gleeunit = ">= 1.3.0 and < 1.4.0"
+pprint = ">= 1.0.6 and < 2.0.0"
+gleeunit = ">= 1.11.0 and < 2.0.0"
 temporary = ">= 1.0.0 and < 2.0.0"

@@ -6,38 +6,37 @@ pub fn desugar_use(block: List(glance.Statement)) -> List(glance.Statement) {
   let #(no_use, starts_with_use) = list.split_while(block, is_not_use_statement)
   case starts_with_use {
     [] -> block
-    [glance.Use(patterns, glance.Call(function, arguments)), ..tail] -> {
+    [
+      glance.Use(location, patterns, glance.Call(_, function, arguments)),
+      ..tail
+    ] -> {
       list.append(no_use, [
         glance.Expression(glance.Call(
+          location,
           function,
           list.append(arguments, [
-            glance.Field(
-              // todo: this won't work if the previous arguments were labelled
-              label: option.None,
-              item: glance.Fn(
-                patterns_to_args(patterns),
-                // todo: figure out return type
-                option.None,
-                desugar_use(tail),
-              ),
-            ),
+            glance.UnlabelledField(glance.Fn(
+              location,
+              patterns_to_args(patterns),
+              // todo: figure out return type
+              option.None,
+              desugar_use(tail),
+            )),
           ]),
         )),
       ])
     }
-    [glance.Use(patterns, function), ..tail] -> {
+    [glance.Use(location, patterns, function), ..tail] -> {
       list.append(no_use, [
         glance.Expression(
-          glance.Call(function, [
-            glance.Field(
-              label: option.None,
-              item: glance.Fn(
-                patterns_to_args(patterns),
-                // todo: figure out return type
-                option.None,
-                desugar_use(tail),
-              ),
-            ),
+          glance.Call(location, function, [
+            glance.UnlabelledField(glance.Fn(
+              location,
+              patterns_to_args(patterns),
+              // todo: figure out return type
+              option.None,
+              desugar_use(tail),
+            )),
           ]),
         ),
       ])
@@ -54,15 +53,15 @@ fn is_not_use_statement(statement: glance.Statement) -> Bool {
 }
 
 fn patterns_to_args(
-  patterns: List(glance.Pattern),
+  patterns: List(glance.UsePattern),
 ) -> List(glance.FnParameter) {
   use pattern <- list.map(patterns)
-  case pattern {
-    glance.PatternVariable(name) -> {
+  case pattern.pattern {
+    glance.PatternVariable(_, name) -> {
       // Todo: can we get types on this?
       glance.FnParameter(glance.Named(name), option.None)
     }
-    glance.PatternDiscard(name) -> {
+    glance.PatternDiscard(_, name) -> {
       // Todo: deduplicate discards
       glance.FnParameter(glance.Discarded(name), option.None)
     }

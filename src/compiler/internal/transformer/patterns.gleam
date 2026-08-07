@@ -30,41 +30,44 @@ fn transform_grouped_patterns(
   case patterns {
     [] -> panic as "missing pattern"
     [one_item] -> transform_pattern(one_item)
-    multiple_items -> transform_pattern(glance.PatternTuple(multiple_items))
+    multiple_items ->
+      transform_pattern(glance.PatternTuple(glance.Span(0, 0), multiple_items))
   }
 }
 
 fn transform_pattern(pattern: glance.Pattern) -> python.Pattern {
   case pattern {
-    glance.PatternInt(str) -> python.PatternInt(str)
-    glance.PatternFloat(str) -> python.PatternFloat(str)
-    glance.PatternString(str) -> python.PatternString(str)
-    glance.PatternVariable(str) -> python.PatternVariable(str)
-    glance.PatternDiscard("") -> python.PatternWildcard
-    glance.PatternDiscard(str) -> python.PatternVariable("_" <> str)
-    glance.PatternTuple(patterns) ->
+    glance.PatternInt(_, str) -> python.PatternInt(str)
+    glance.PatternFloat(_, str) -> python.PatternFloat(str)
+    glance.PatternString(_, str) -> python.PatternString(str)
+    glance.PatternVariable(_, str) -> python.PatternVariable(str)
+    glance.PatternDiscard(_, "") -> python.PatternWildcard
+    glance.PatternDiscard(_, str) -> python.PatternVariable("_" <> str)
+    glance.PatternTuple(_, patterns) ->
       python.PatternTuple(list.map(patterns, transform_pattern))
-    glance.PatternList(elems, rest) ->
+    glance.PatternList(_, elems, rest) ->
       python.PatternList(
         list.map(elems, transform_pattern),
         option.map(rest, transform_pattern),
       )
-    glance.PatternAssignment(pattern, name) ->
+    glance.PatternAssignment(_, pattern, name) ->
       python.PatternAssignment(transform_pattern(pattern), name)
-    glance.PatternConcatenate(_, _) ->
+    glance.PatternConcatenate(_, _, _, _) ->
       todo as "concatenate patterns are not supported yet"
     glance.PatternBitString(..) ->
       todo as "bitstring patterns are not supported yet"
-    glance.PatternConstructor(module, constructor, arguments, _) ->
+    glance.PatternVariant(_, module, constructor, arguments, _) ->
       python.PatternConstructor(
         module,
         constructor,
         list.map(arguments, fn(field) {
           case field {
-            glance.Field(option.Some(label), item) ->
+            glance.LabelledField(label, _, item) ->
               python.LabelledField(label, transform_pattern(item))
-            glance.Field(option.None, item) ->
+            glance.UnlabelledField(item) ->
               python.UnlabelledField(transform_pattern(item))
+            glance.ShorthandField(_, _) ->
+              todo as "shorthand fields not supported yet"
           }
         }),
       )

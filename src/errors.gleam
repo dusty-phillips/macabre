@@ -1,5 +1,6 @@
 import glance
 import gleam/string
+import glimpse/error as glimpse_error
 import internal/errors as internal
 import simplifile
 import tom
@@ -16,6 +17,8 @@ pub type Error {
   MkdirError(path: String, error: simplifile.FileError)
   TomlFieldError(path: String, error: tom.GetError)
   TomlParseError(path: String, error: tom.ParseError)
+  GlimpseImportError(error: glimpse_error.GlimpseImportError)
+  GlimpseTypeCheckError(error: glimpse_error.TypeCheckError)
 }
 
 pub fn format_error(error: Error) -> String {
@@ -46,5 +49,20 @@ pub fn format_error(error: Error) -> String {
     CopyFileError(src, dst, _) -> "Unable to copy " <> src <> " to " <> dst
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
+    GlimpseImportError(error) -> format_glimpse_import_error(error)
+    GlimpseTypeCheckError(error) -> "Type check failed"
+  }
+}
+
+fn format_glimpse_import_error(
+  error: glimpse_error.GlimpseImportError,
+) -> String {
+  case error {
+    glimpse_error.CircularDependencyError(module_name) ->
+      "Circular dependency detected for module " <> module_name
+    glimpse_error.MissingImportError(module_name) ->
+      "Missing import " <> module_name
+    glimpse_error.SrcImportingDevDependency(module_name) ->
+      "Source module imports dev dependency " <> module_name
   }
 }

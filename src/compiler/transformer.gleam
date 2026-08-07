@@ -40,11 +40,14 @@ fn transform_import(
     glance.Definition(attributes: [_head, ..], ..) ->
       todo as "import attributes not supported yet"
 
-    glance.Definition([], glance.Import(_, _, [_head, ..], _)) -> {
+    glance.Definition([], glance.Import(_, _, _, [_head, ..], _)) -> {
       todo as "type alias imports not supported yet"
     }
 
-    glance.Definition([], glance.Import(module, alias, [], unqualified_values)) -> {
+    glance.Definition(
+      [],
+      glance.Import(_, module, alias, [], unqualified_values),
+    ) -> {
       let module_import = transform_module_import(module, alias)
       let module_part =
         module
@@ -119,7 +122,11 @@ fn maybe_extract_external(
   case function_attribute {
     glance.Attribute(
       "external",
-      [glance.Variable("python"), glance.String(module), glance.String(name)],
+      [
+        glance.Variable(_, "python"),
+        glance.String(_, module),
+        glance.String(_, name),
+      ],
     ) -> Ok(python.UnqualifiedImport(module, name))
     _ -> Error(internal.NotExternal)
   }

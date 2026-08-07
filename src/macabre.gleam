@@ -35,7 +35,7 @@ pub fn build(directory: String) -> Nil {
     Ok(Nil)
   }
   |> result.map_error(filesystem.write_error)
-  |> result.unwrap_both
+  |> result.unwrap(Nil)
 }
 
 pub fn write_package(

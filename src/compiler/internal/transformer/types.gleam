@@ -21,27 +21,27 @@ fn transform_type_variant(variant: glance.Variant) -> python.Variant {
 }
 
 fn transform_variant_field(
-  field: glance.Field(glance.Type),
+  field: glance.VariantField,
 ) -> python.Field(python.Type) {
   case field {
-    glance.Field(label: option.None, item: item) ->
+    glance.UnlabelledVariantField(item) ->
       python.UnlabelledField(transform_type(item))
-    glance.Field(label: option.Some(label), item: item) ->
+    glance.LabelledVariantField(item, label) ->
       python.LabelledField(label, transform_type(item))
   }
 }
 
 fn transform_type(type_: glance.Type) -> python.Type {
   case type_ {
-    glance.NamedType(name, module, parameters) ->
+    glance.NamedType(_, name, module, parameters) ->
       python.NamedType(name, module, list.map(parameters, transform_type))
 
-    glance.TupleType(elements) ->
+    glance.TupleType(_, elements) ->
       python.TupleType(list.map(elements, transform_type))
 
     glance.FunctionType(..) -> todo as "Not able to transform function types yet"
 
-    glance.VariableType(name) -> {
+    glance.VariableType(_, name) -> {
       python.GenericType(name)
     }
 

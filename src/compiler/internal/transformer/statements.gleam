@@ -77,7 +77,7 @@ fn transform_statement(
     }
     glance.Assignment(
       kind: glance.Let,
-      pattern: glance.PatternVariable(variable),
+      pattern: glance.PatternVariable(_, variable),
       value: value,
       ..,
     ) -> {
@@ -96,6 +96,16 @@ fn transform_statement(
     glance.Use(..) -> {
       todo as "Use statements are not supported yet"
     }
+
+    glance.Assert(_, expression, _) -> {
+      let result = transform_expression(transform_context, expression)
+      internal.StatementReturn(
+        context: result.context,
+        statements: list.append(result.statements, [
+          python.Expression(result.expression),
+        ]),
+      )
+    }
   }
 }
 
@@ -104,56 +114,56 @@ fn transform_expression(
   expression: glance.Expression,
 ) -> internal.ExpressionReturn {
   case expression {
-    glance.Int(string) | glance.Float(string) ->
+    glance.Int(_, string) | glance.Float(_, string) ->
       internal.empty_return(context, python.Number(string))
 
-    glance.String(string) ->
+    glance.String(_, string) ->
       internal.empty_return(context, python.String(string))
 
-    glance.Variable("True") ->
+    glance.Variable(_, "True") ->
       internal.empty_return(context, python.Bool("True"))
 
-    glance.Variable("False") ->
+    glance.Variable(_, "False") ->
       internal.empty_return(context, python.Bool("False"))
 
-    glance.Variable(string) ->
+    glance.Variable(_, string) ->
       internal.empty_return(context, python.Variable(string))
 
-    glance.Tuple(expressions) -> transform_tuple(context, expressions)
+    glance.Tuple(_, expressions) -> transform_tuple(context, expressions)
 
-    glance.List(head, rest) -> transform_list(context, head, rest)
+    glance.List(_, head, rest) -> transform_list(context, head, rest)
 
-    glance.NegateInt(expression) ->
+    glance.NegateInt(_, expression) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Negate)
 
-    glance.NegateBool(expression) -> {
+    glance.NegateBool(_, expression) -> {
       transform_expression(context, expression)
       |> internal.map_return(python.Not)
     }
 
-    glance.Panic(option.None) ->
+    glance.Panic(_, option.None) ->
       internal.empty_return(
         context,
         python.Panic(python.String("panic expression evaluated")),
       )
-    glance.Panic(option.Some(expression)) ->
+    glance.Panic(_, option.Some(expression)) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Panic)
 
-    glance.Todo(option.None) ->
+    glance.Todo(_, option.None) ->
       internal.empty_return(
         context,
         python.Todo(python.String("This has not yet been implemented")),
       )
-    glance.Todo(option.Some(expression)) ->
+    glance.Todo(_, option.Some(expression)) ->
       transform_expression(context, expression)
       |> internal.map_return(python.Todo)
 
-    glance.Call(function, arguments) ->
+    glance.Call(_, function, arguments) ->
       transform_call(context, function, arguments)
 
-    glance.FnCapture(label, function, arguments_before, arguments_after) ->
+    glance.FnCapture(_, label, function, arguments_before, arguments_after) ->
       transform_fn_capture(
         context,
         label,
@@ -162,39 +172,46 @@ fn transform_expression(
         arguments_after,
       )
 
-    glance.Fn(arguments:, return_annotation: _, body:) ->
-      transform_fn(context, arguments, body)
+    glance.Fn(_, arguments, _, body) -> transform_fn(context, arguments, body)
 
-    glance.Block(statements) -> transform_block(context, statements)
+    glance.Block(_, statements) -> transform_block(context, statements)
 
-    glance.Case(subjects, clauses) -> transform_case(context, subjects, clauses)
+    glance.Case(_, subjects, clauses) ->
+      transform_case(context, subjects, clauses)
 
-    glance.TupleIndex(tuple, index) -> {
+    glance.TupleIndex(_, tuple, index) -> {
       transform_expression(context, tuple)
       |> internal.map_return(python.TupleIndex(_, index))
     }
 
-    glance.FieldAccess(container: expression, label:) ->
+    glance.FieldAccess(_, container: expression, label:) ->
       transform_expression(context, expression)
       |> internal.map_return(python.FieldAccess(_, label))
 
-    glance.BinaryOperator(glance.Pipe, left, right) ->
+    glance.BinaryOperator(_, glance.Pipe, left, right) ->
       transform_pipe(context, left, right)
 
-    glance.BinaryOperator(name, left, right) -> {
+    glance.BinaryOperator(_, name, left, right) -> {
       transform_binop(context, name, left, right)
     }
 
-    glance.RecordUpdate(record:, fields:, ..) ->
+    glance.RecordUpdate(_, record:, fields:, ..) ->
       transform_record_update(context, record, fields)
 
-    glance.BitString(segments) -> {
+    glance.BitString(_, segments) -> {
       segments
       |> list.fold(
         internal.TransformState(context, [], []),
         fold_bitstring_segment,
       )
       |> internal.reverse_state_to_return(python.BitString)
+    }
+
+    glance.Echo(_, expression, _) -> {
+      case expression {
+        option.Some(expression) -> transform_expression(context, expression)
+        option.None -> internal.empty_return(context, python.String(""))
+      }
     }
   }
 }
@@ -281,20 +298,22 @@ fn fold_call_argument(
   internal.ReversedList(python.Field(python.Expression)),
 ) {
   case argument {
-    glance.Field(option.Some(label), expression) -> {
+    glance.LabelledField(label, _, expression) -> {
       internal.merge_state_prepend(
         state,
         transform_expression(state.context, expression),
         python.LabelledField(label, _),
       )
     }
-    glance.Field(label: option.None, item: expression) -> {
+    glance.UnlabelledField(expression) -> {
       internal.merge_state_prepend(
         state,
         transform_expression(state.context, expression),
         python.UnlabelledField,
       )
     }
+    glance.ShorthandField(_, _) ->
+      panic as "Shorthand fields are not supported yet"
   }
 }
 
@@ -306,10 +325,22 @@ fn transform_fn_capture(
   arguments_after: List(glance.Field(glance.Expression)),
 ) -> internal.ExpressionReturn {
   let function_result = transform_expression(context, function)
+  let placeholder_for_capture = case label {
+    option.None -> [
+      glance.UnlabelledField(glance.Variable(glance.Span(0, 0), "fn_capture")),
+    ]
+    option.Some(label) -> [
+      glance.LabelledField(
+        label,
+        glance.Span(0, 0),
+        glance.Variable(glance.Span(0, 0), "fn_capture"),
+      ),
+    ]
+  }
   let reversed_arguments_result =
     list.flatten([
       arguments_before,
-      [glance.Field(label, glance.Variable("fn_capture"))],
+      placeholder_for_capture,
       arguments_after,
     ])
     |> list.fold(
@@ -449,7 +480,7 @@ fn fold_case_clause(
   clause: glance.Clause,
 ) -> internal.TransformState(internal.ReversedList(python.MatchCase)) {
   case clause {
-    glance.Clause(pattern_list, guard, glance.Block(statements)) -> {
+    glance.Clause(pattern_list, guard, glance.Block(_, statements)) -> {
       let python_pattern = patterns.transform_alternative_patterns(pattern_list)
       let guard_return = transform_optional_expression(state.context, guard)
       let statements_result =
@@ -542,18 +573,29 @@ fn transform_binop(
 fn transform_record_update(
   context: internal.TransformerContext,
   record: glance.Expression,
-  fields: List(#(String, glance.Expression)),
+  fields: List(glance.RecordUpdateField(glance.Expression)),
 ) -> internal.ExpressionReturn {
   let record_result = transform_expression(context, record)
   fields
   |> list.fold(
     internal.TransformState(record_result.context, record_result.statements, []),
-    fn(state, tuple) {
-      internal.merge_state_prepend(
-        state,
-        transform_expression(state.context, tuple.1),
-        python.LabelledField(tuple.0, _),
-      )
+    fn(state, field) {
+      case field.item {
+        option.Some(item) -> {
+          internal.merge_state_prepend(
+            state,
+            transform_expression(state.context, item),
+            python.LabelledField(field.label, _),
+          )
+        }
+        option.None -> {
+          internal.merge_state_prepend(
+            state,
+            internal.empty_return(state.context, python.Variable(field.label)),
+            python.LabelledField(field.label, _),
+          )
+        }
+      }
     },
   )
   |> internal.reverse_state_to_return(python.RecordUpdate(
@@ -611,7 +653,9 @@ fn fold_bitsting_segment_option(
     glance.BigOption -> internal.map_state_prepend(state, python.BigOption)
     glance.NativeOption ->
       internal.map_state_prepend(state, python.NativeOption)
-    glance.BitStringOption ->
+    glance.BytesOption ->
+      internal.map_state_prepend(state, python.BitStringOption)
+    glance.BitsOption ->
       internal.map_state_prepend(state, python.BitStringOption)
     glance.Utf8Option -> internal.map_state_prepend(state, python.Utf8Option)
     glance.Utf16Option -> internal.map_state_prepend(state, python.Utf16Option)
@@ -622,7 +666,7 @@ fn fold_bitsting_segment_option(
     glance.SizeOption(size) ->
       internal.map_state_prepend(
         state,
-        python.SizeValueOption(python.Number(size |> int.to_string)),
+        python.SizeValueOption(python.Number(int.to_string(size))),
       )
     glance.SizeValueOption(expression) -> {
       let expression_result = transform_expression(state.context, expression)
@@ -638,7 +682,7 @@ fn fold_bitsting_segment_option(
     | glance.Utf32CodepointOption ->
       todo as "codepoints not supported in bitstrings yet"
 
-    glance.SignedOption | glance.UnsignedOption | glance.BinaryOption ->
+    glance.SignedOption | glance.UnsignedOption ->
       panic as "Signed, unsigned, and binary are not valid when constructing bitstrings"
   }
 }

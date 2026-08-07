@@ -16,6 +16,7 @@ import gleam/result
 import gleam/set
 import gleam/string
 import glimpse
+import glimpse/error as glimpse_error
 
 pub type GleamPackage {
   GleamPackage(
@@ -58,9 +59,13 @@ fn load_glimpse_package(
   })
   |> result.map_error(fn(error) {
     case error {
-      glimpse.LoadError(error) -> error
-      glimpse.ParseError(glance_error, name, content) ->
+      glimpse_error.LoadError(error) -> error
+      glimpse_error.ParseError(glance_error, name, content) ->
         errors.GlanceParseError(glance_error, name, content)
+      glimpse_error.ImportError(import_error) ->
+        errors.GlimpseImportError(import_error)
+      glimpse_error.TypeCheckError(type_check_error) ->
+        errors.GlimpseTypeCheckError(type_check_error)
     }
   })
 }
@@ -86,7 +91,7 @@ fn identify_python_external_attribute(
   case attribute {
     glance.Attribute(
       "external",
-      [glance.Variable("python"), glance.String(module), ..],
+      [glance.Variable(_, "python"), glance.String(_, module), ..],
     ) -> Ok(string.replace(module, ".", "/") <> ".py")
     _ -> Error(Nil)
   }
