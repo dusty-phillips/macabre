@@ -279,7 +279,6 @@ fn escape_codepoint(codepoint) -> String {
             value
             |> int.to_base16
             |> string.lowercase
-            |> string.replace("0x", "")
             |> zero_pad_hex
           "\\x" <> hex
         }
