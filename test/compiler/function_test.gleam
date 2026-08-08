@@ -181,11 +181,8 @@ pub fn external_called_with_labels_emits_positional_test() {
     ])
     == "from gleam_builtins import *
 
-def replace(in_, each, with_):
-    builder = in_
-    pattern = each
-    substitute = with_
-    return bindings_do_replace(in_, each, with_)
+def replace(builder, pattern, substitute):
+    return bindings_do_replace(builder, pattern, substitute)
 
 
 def main():
