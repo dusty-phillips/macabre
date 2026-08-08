@@ -18,10 +18,6 @@ from mylib import println\n\n\n",
 }
 
 pub fn skip_external_javascript_test() {
-  // TODO: I'm not sure if we're supposed to generate an empty function
-  // if an external exists for one language but not a body and there is no
-  // default body.
-  //
   "@external(javascript, \"mylib\", \"println\")
 fn println() -> nil"
   |> glance.module
@@ -36,10 +32,6 @@ def println():
 }
 
 pub fn skip_external_erlang_test() {
-  // TODO: I'm not sure if we're supposed to generate an empty function
-  // if an external exists for one language but not python there is no
-  // default body.
-  //
   "@external(erlang, \"mylib\", \"println\")
 fn println() -> nil"
   |> glance.module

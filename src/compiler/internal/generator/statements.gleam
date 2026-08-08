@@ -82,7 +82,6 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
       |> string_tree.append_tree(expressions.generate_expression(condition))
       |> string_tree.append(":\n")
       |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
-    // TODO: Deal with cases
     python.FunctionDef(function) -> generate_function(function)
   }
 }

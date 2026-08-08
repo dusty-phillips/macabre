@@ -165,7 +165,6 @@ class Baz:
   )
 }
 
-// TODO: The extra whitespace after the class Foo has me puzzled
 pub fn generic_field_type_test() {
   "pub type Foo(elem) {
     Foo(item: elem)
@@ -184,9 +183,6 @@ ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
 class Foo:
     item: ELEM
-
-
-
 
 
 @dataclasses.dataclass(frozen=True)

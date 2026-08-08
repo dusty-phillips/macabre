@@ -4,8 +4,6 @@ pub type Context(a) {
   Context(imports: List(Import), item: a)
 }
 
-// TODO: for my sanity, I didn't group imports as in "from x import (a, b)" 
-// We can either fix this or rely on a import formatter on the exported code
 pub type Import {
   UnqualifiedImport(module: String, name: String)
   AliasedUnqualifiedImport(module: String, name: String, alias: String)

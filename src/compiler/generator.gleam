@@ -12,7 +12,9 @@ pub fn generate(module: python.Module) -> String {
   |> string_tree.append_tree(internal.generate_plural(
     module.custom_types,
     types.generate_custom_type,
-    "\n\n\n",
+    // Each custom type ends with its own trailing newlines (two blank
+    // lines), so consecutive types need no extra separator.
+    "",
   ))
   |> string_tree.append_tree(internal.generate_plural(
     module.functions,

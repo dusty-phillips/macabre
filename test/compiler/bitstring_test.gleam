@@ -213,11 +213,8 @@ def main():
 }
 
 pub fn bitstring_test() {
-  // TODO: Pretty sure this should be :bits, not :bit_string,
-  // but glance has a bug:
-  // https://github.com/lpil/glance/issues/22
   "pub fn main() {
-      <<<<3>>:bit_string>>
+      <<<<3>>:bits>>
   }
   "
   |> glance.module
