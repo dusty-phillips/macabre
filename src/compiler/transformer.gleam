@@ -1,3 +1,4 @@
+import compiler/internal/comments
 import compiler/internal/transformer as internal
 import compiler/internal/transformer/functions
 import compiler/internal/transformer/module_renames
@@ -6,6 +7,7 @@ import compiler/internal/transformer/types
 import compiler/python
 import glance
 import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/result
@@ -22,6 +24,24 @@ pub fn transform_with_signatures(
   external_functions: List(String),
   external_qualified: List(String),
 ) -> python.Module {
+  transform_with_comments(
+    input,
+    function_signatures,
+    constructor_arities,
+    external_functions,
+    external_qualified,
+    [],
+  )
+}
+
+pub fn transform_with_comments(
+  input: glance.Module,
+  function_signatures: option.Option(internal.FunctionSignatures),
+  constructor_arities: option.Option(dict.Dict(String, List(String))),
+  external_functions: List(String),
+  external_qualified: List(String),
+  module_comments: List(comments.Comment),
+) -> python.Module {
   // Private top-level values colliding with submodule import bindings are
   // renamed first, so the emitted `def` does not clobber the parent package
   // attribute that other modules import the submodule from.
@@ -35,33 +55,96 @@ pub fn transform_with_signatures(
       }
     })
   let module_bindings = compute_module_bindings(input)
-  python.empty_module()
-  |> list.fold(input.imports, _, fn(module, import_) {
-    transform_import(module, import_, module_bindings)
+  let #(leading_comments, comments_by_start, trailing_comments) =
+    comments.assign_leading_comments(top_level_spans(input), module_comments)
+  let module =
+    python.empty_module()
+    |> list.fold(input.imports, _, fn(module, import_) {
+      transform_import(module, import_, module_bindings)
+    })
+    |> list.fold(input.constants, _, fn(module, constant) {
+      let definition_comments =
+        comments_for(comments_by_start, constant.definition.location.start)
+      statements.transform_constant(
+        internal.TransformerContext(
+          ..internal.empty_context(),
+          constructor_arities:,
+        ),
+        module,
+        constant,
+        comments.docstring(definition_comments),
+        comments.comment_texts(definition_comments),
+      )
+    })
+    |> list.fold(input.functions, _, fn(module, function) {
+      transform_function_or_external(
+        module,
+        function,
+        function_signatures,
+        module_aliases,
+        constructor_arities,
+        option.Some(module_bindings),
+        option.Some(external_functions),
+        option.Some(external_qualified),
+        comments_by_start,
+      )
+    })
+    |> list.fold(input.custom_types, _, fn(module, custom_type) {
+      transform_custom_type_in_module(module, custom_type, comments_by_start)
+    })
+  python.Module(
+    ..module,
+    docstring: comments.docstring(leading_comments),
+    comments: list.append(
+      comments.comment_lines(leading_comments),
+      comments.comment_lines(trailing_comments),
+    ),
+  )
+}
+
+fn comments_for(
+  comments_by_start: dict.Dict(Int, List(comments.Comment)),
+  start: Int,
+) -> List(comments.Comment) {
+  dict.get(comments_by_start, start) |> result.unwrap([])
+}
+
+// Every top-level definition span in source order, used to attribute leading
+// comments to the definition that follows them.
+fn top_level_spans(input: glance.Module) -> List(comments.Spanned) {
+  let import_spans =
+    definition_spans(input.imports, fn(import_) { import_.location })
+  let custom_type_spans =
+    definition_spans(input.custom_types, fn(custom_type) {
+      custom_type.location
+    })
+  let type_alias_spans =
+    definition_spans(input.type_aliases, fn(type_alias) { type_alias.location })
+  let constant_spans =
+    definition_spans(input.constants, fn(constant) { constant.location })
+  let function_spans =
+    definition_spans(input.functions, fn(function) { function.location })
+  import_spans
+  |> list.append(custom_type_spans)
+  |> list.append(type_alias_spans)
+  |> list.append(constant_spans)
+  |> list.append(function_spans)
+  |> list.sort(fn(a, b) { int.compare(a.start, b.start) })
+}
+
+fn definition_spans(
+  definitions: List(glance.Definition(definition)),
+  location: fn(definition) -> glance.Span,
+) -> List(comments.Spanned) {
+  list.map(definitions, fn(definition) {
+    case definition {
+      glance.Definition(_, definition) ->
+        comments.Spanned(
+          start: location(definition).start,
+          end: location(definition).end,
+        )
+    }
   })
-  |> list.fold(input.constants, _, fn(module, constant) {
-    statements.transform_constant(
-      internal.TransformerContext(
-        ..internal.empty_context(),
-        constructor_arities:,
-      ),
-      module,
-      constant,
-    )
-  })
-  |> list.fold(input.functions, _, fn(module, function) {
-    transform_function_or_external(
-      module,
-      function,
-      function_signatures,
-      module_aliases,
-      constructor_arities,
-      option.Some(module_bindings),
-      option.Some(external_functions),
-      option.Some(external_qualified),
-    )
-  })
-  |> list.fold(input.custom_types, _, transform_custom_type_in_module)
 }
 
 // Names bound at module level by imports (the module binding, e.g. `token`
@@ -121,10 +204,13 @@ fn transform_function_or_external(
   module_bindings: option.Option(dict.Dict(String, String)),
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
+  comments_by_start: dict.Dict(Int, List(comments.Comment)),
 ) -> python.Module {
   case list.filter_map(function.attributes, maybe_extract_external) {
-    [] ->
-      python.Module(..module, functions: [
+    [] -> {
+      let definition_comments =
+        comments_for(comments_by_start, function.definition.location.start)
+      let python_function =
         functions.transform_top_level_function(
           function.definition,
           function_signatures,
@@ -133,9 +219,16 @@ fn transform_function_or_external(
           module_bindings,
           external_functions,
           external_qualified,
+        )
+      python.Module(..module, functions: [
+        python.Function(
+          ..python_function,
+          docstring: comments.docstring(definition_comments),
+          comments: comments.comment_lines(definition_comments),
         ),
         ..module.functions
       ])
+    }
     [python_import] ->
       transform_python_external(module, function, python_import)
     _ -> panic as "Did not expect more than one external for one function"
@@ -318,9 +411,16 @@ fn transform_unqualified_description(
 fn transform_custom_type_in_module(
   module: python.Module,
   custom_type: glance.Definition(glance.CustomType),
+  comments_by_start: dict.Dict(Int, List(comments.Comment)),
 ) -> python.Module {
+  let definition_comments =
+    comments_for(comments_by_start, custom_type.definition.location.start)
   python.Module(..module, custom_types: [
-    types.transform_custom_type(custom_type.definition),
+    python.CustomType(
+      ..types.transform_custom_type(custom_type.definition),
+      docstring: comments.docstring(definition_comments),
+      comments: comments.comment_lines(definition_comments),
+    ),
     ..module.custom_types
   ])
 }

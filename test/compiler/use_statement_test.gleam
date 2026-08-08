@@ -2,10 +2,10 @@ import compiler
 import glance
 import gleam/dict
 import gleam/option
-import gleeunit/should
 
 pub fn use_call_no_params_test() {
-  "fn use_thing(func: fn () -> String) -> Nil {
+  let assert Ok(module) =
+    "fn use_thing(func: fn () -> String) -> Nil {
     func(\"thing\")
 
   }
@@ -14,11 +14,8 @@ pub fn use_call_no_params_test() {
     \"hi\"
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def use_thing(func):
     return func(\"thing\")
@@ -27,12 +24,12 @@ def use_thing(func):
 def main():
     def _fn_def_0(_):
         return \"hi\"
-    return use_thing(_fn_def_0)",
-  )
+    return use_thing(_fn_def_0)"
 }
 
 pub fn use_call_with_params_test() {
-  "fn use_thing(x: String, y: String, func: fn () -> String) -> Nil {
+  let assert Ok(module) =
+    "fn use_thing(x: String, y: String, func: fn () -> String) -> Nil {
     x <> y <> func(\"thing\")
 
   }
@@ -41,11 +38,8 @@ pub fn use_call_with_params_test() {
     \"hi\"
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def use_thing(x, y, func):
     return x + y + func(\"thing\")
@@ -54,12 +48,12 @@ def use_thing(x, y, func):
 def main():
     def _fn_def_0(x):
         return \"hi\"
-    return use_thing(\"one\", \"two\", _fn_def_0)",
-  )
+    return use_thing(\"one\", \"two\", _fn_def_0)"
 }
 
 pub fn use_variable_no_params_test() {
-  "fn use_thing(func: fn () -> String) -> Nil {
+  let assert Ok(module) =
+    "fn use_thing(func: fn () -> String) -> Nil {
      func(\"thing\")
 
   }
@@ -69,11 +63,8 @@ pub fn use_variable_no_params_test() {
     \"hi\"
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def use_thing(func):
     return func(\"thing\")
@@ -83,12 +74,12 @@ def main():
     f = use_thing
     def _fn_def_0(_):
         return \"hi\"
-    return f(_fn_def_0)",
-  )
+    return f(_fn_def_0)"
 }
 
 pub fn use_tuple_pattern_test() {
-  "fn use_thing(func: fn (#(Int, Int)) -> String) -> Nil {
+  let assert Ok(module) =
+    "fn use_thing(func: fn (#(Int, Int)) -> String) -> Nil {
     func(#(1, 2))
 
   }
@@ -97,11 +88,8 @@ pub fn use_tuple_pattern_test() {
     \"hi\"
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def use_thing(func):
     return func((1, 2,))
@@ -115,8 +103,7 @@ def main():
                     return (a, b,)
         a, b = _fn_match_0(use_capture_0)
         return \"hi\"
-    return use_thing(_fn_def_0)",
-  )
+    return use_thing(_fn_def_0)"
 }
 
 // An assignment inside a case arm of a use callback that shadows an enclosing
@@ -124,7 +111,8 @@ def main():
 // e.g. glance's `expression_loop` where `values = to_gleam_list([e], values)`
 // shadows the `values` parameter.
 pub fn case_arm_assignment_shadowing_enclosing_scope_test() {
-  "fn expression_unit() -> Result(Int, Nil) {
+  let assert Ok(module) =
+    "fn expression_unit() -> Result(Int, Nil) {
     Ok(1)
 
   }
@@ -139,11 +127,8 @@ pub fn case_arm_assignment_shadowing_enclosing_scope_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def expression_unit():
     return Ok(1)
@@ -154,20 +139,20 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_0 = to_gleam_list([expression], values)
-                    return values_0
+                    values_1 = to_gleam_list([expression], values)
+                    return values_1
                 case _:
                     return values
         return _fn_case_0(expression)
-    return result.try_(expression_unit(), _fn_def_0)",
-  )
+    return result.try_(expression_unit(), _fn_def_0)"
 }
 
 // Post-binding references nested inside a further match (inside the case arm)
 // must also be renamed, like glance's `expression_loop` where the operator
 // handling nested inside the arm references the updated `values`.
 pub fn case_arm_assignment_shadowing_nested_match_test() {
-  "fn expression_unit() -> Result(Int, Nil) {
+  let assert Ok(module) =
+    "fn expression_unit() -> Result(Int, Nil) {
     Ok(1)
 
   }
@@ -185,11 +170,8 @@ pub fn case_arm_assignment_shadowing_nested_match_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def expression_unit():
     return Ok(1)
@@ -200,19 +182,18 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_0 = to_gleam_list([expression], values)
+                    values_1 = to_gleam_list([expression], values)
                     def _fn_case_0(_case_subject):
                         match _case_subject:
                             case (Some(updated), _, _):
                                 return updated
                             case _:
-                                return values_0
-                    return _fn_case_0(handle_operator(Some(1), to_gleam_list([]), values_0))
+                                return values_1
+                    return _fn_case_0(handle_operator(Some(1), to_gleam_list([]), values_1))
                 case _:
                     return values
         return _fn_case_0(expression)
-    return result.try_(expression_unit(), _fn_def_0)",
-  )
+    return result.try_(expression_unit(), _fn_def_0)"
 }
 
 pub fn use_callback_relabelled_to_last_parameter_test() {
@@ -224,22 +205,20 @@ pub fn use_callback_relabelled_to_last_parameter_test() {
         #(option.Some("otherwise"), "otherwise"),
       ]),
     ])
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
   use <- guard(when: True, return: \"\")
     \"done\"
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_signatures(signatures)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_signatures(module, signatures)
+    == "from gleam_builtins import *
 
 def main():
     def _fn_def_0():
         return \"done\"
-    return guard(when=True, return_=\"\", otherwise=_fn_def_0)",
-  )
+    return guard(when=True, return_=\"\", otherwise=_fn_def_0)"
 }
 
 pub fn use_callback_relabelled_cross_module_test() {
@@ -251,17 +230,16 @@ pub fn use_callback_relabelled_cross_module_test() {
         #(option.Some("otherwise"), "otherwise"),
       ]),
     ])
-  "import gleam/bool
+  let assert Ok(module) =
+    "import gleam/bool
 pub fn main() {
   use <- bool.guard(when: True, return: \"\")
   \"done\"
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_signatures(signatures)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_signatures(module, signatures)
+    == "from gleam_builtins import *
 
 def main():
     def _fn_def_0():
@@ -273,8 +251,7 @@ import gleam.bool
 from gleam import bool
 
 
-",
-  )
+"
 }
 
 pub fn use_callback_with_unlabelled_arguments_test() {
@@ -286,22 +263,20 @@ pub fn use_callback_with_unlabelled_arguments_test() {
         #(option.Some("with"), "with"),
       ]),
     ])
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
   use <- list.try_fold(contents, [])
   \"done\"
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_signatures(signatures)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_signatures(module, signatures)
+    == "from gleam_builtins import *
 
 def main():
     def _fn_def_0():
         return \"done\"
-    return list.try_fold(contents, to_gleam_list([]), _fn_def_0)",
-  )
+    return list.try_fold(contents, to_gleam_list([]), _fn_def_0)"
 }
 
 // A use callback destructuring a name that the enclosing case's pattern bound
@@ -311,7 +286,8 @@ def main():
 // self-hosting bug in glance's `optional_return_annotation`, where the final
 // reference was renamed to the pattern bind's name instead of the callback's.
 pub fn use_callback_rebinding_case_pattern_bind_test() {
-  "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+  let assert Ok(module) =
+    "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
     case x {
       [] -> Ok(#(0, x))
       _ -> Ok(#(1, x))
@@ -327,11 +303,8 @@ pub fn use_callback_rebinding_case_pattern_bind_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def do_thing(x):
     def _fn_case_0(_case_subject):
@@ -357,8 +330,7 @@ def parse(tokens):
                 return do_thing(tokens_0, _fn_def_0)
             case _:
                 return Ok((None, tokens,))
-    return _fn_case_0(tokens)",
-  )
+    return _fn_case_0(tokens)"
 }
 
 // Same scenario when the use callback sits inside a nested case within the
@@ -367,7 +339,8 @@ def parse(tokens):
 // the self-hosting bug in glance's `field`, where the labelled field value's
 // reference was renamed to the outer pattern bind instead of the callback's.
 pub fn use_callback_rebinding_nested_case_pattern_bind_test() {
-  "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+  let assert Ok(module) =
+    "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
     case x {
       [] -> Ok(#(0, x))
       _ -> Ok(#(1, x))
@@ -389,11 +362,8 @@ pub fn use_callback_rebinding_nested_case_pattern_bind_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def do_thing(x):
     def _fn_case_0(_case_subject):
@@ -432,8 +402,7 @@ def fields(tokens):
                                 return Ok((t, tokens,))
                             return do_thing(tokens, _fn_def_1)
                 return _fn_case_0(tokens)
-    return _fn_case_0(tokens)",
-  )
+    return _fn_case_0(tokens)"
 }
 
 // A use callback rebinding a name that its own right hand side references
@@ -442,7 +411,8 @@ def fields(tokens):
 // `define_method_property`, where `let prop = case dict.get(...) {...}` inside
 // the `heap.update` callback referenced the outer `prop` in the case arms.
 pub fn use_callback_rebinding_enclosing_bind_test() {
-  "fn update(x: Int) -> Result(Int, Nil) {
+  let assert Ok(module) =
+    "fn update(x: Int) -> Result(Int, Nil) {
     Ok(x)
   }
   fn with_seq(a: Int, b: Int) -> Int {
@@ -461,11 +431,8 @@ pub fn use_callback_rebinding_enclosing_bind_test() {
     with_seq(prop, slot)
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def update(x):
     return Ok(x)
@@ -492,6 +459,5 @@ def rebind(key, val):
                     return prop
         prop_0 = _fn_case_0(slot)
         return with_seq(prop_0, slot)
-    return update(slot, _fn_def_0)",
-  )
+    return update(slot, _fn_def_0)"
 }

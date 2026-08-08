@@ -41,6 +41,8 @@ pub fn transform_external_forwarder(
     body: list.append(fold_result.reversed_binds |> list.reverse, [
       python.Return(python.Call(python.Variable(binding_name), args)),
     ]),
+    docstring: option.None,
+    comments: [],
   )
 }
 
@@ -118,6 +120,8 @@ pub fn transform_top_level_function(
     name: function.name,
     parameters: parameters,
     body: body |> shadowing.resolve_tail_calls(function.name, parameters),
+    docstring: option.None,
+    comments: [],
   )
 }
 

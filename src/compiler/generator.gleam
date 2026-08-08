@@ -9,6 +9,10 @@ import python_prelude
 pub fn generate(module: python.Module) -> String {
   string_tree.new()
   |> string_tree.append(python_prelude.prelude)
+  |> string_tree.append_tree(statements.generate_module_header(
+    module.docstring,
+    module.comments,
+  ))
   |> string_tree.append_tree(internal.generate_plural(
     module.custom_types,
     types.generate_custom_type,

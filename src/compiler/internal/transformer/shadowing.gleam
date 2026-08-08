@@ -59,7 +59,10 @@ pub fn resolve_block_shadowing(
   let #(_, outer_refs, all_binds) =
     list.fold(statements, #(initial_scope, [], []), fn(acc, statement) {
       let #(scope, refs, binds) = acc
-      let more_refs = statement_refs(statement, scope)
+      // Deep refs: a reference to an enclosing scope's name inside a match
+      // case body or nested function still resolves to the (unbound) local
+      // in Python, so it must count as a collision.
+      let more_refs = deep_statement_refs(statement, scope)
       let more_binds = all_nested_binds(statement)
       #(
         set.union(scope, set.from_list(top_level_binds(statement))),
@@ -903,9 +906,10 @@ fn deep_statement_refs(
     python.SimpleAssignment(_, value) -> expression_refs(value, in_scope)
     python.MultipleAssignment(_, value) -> expression_refs(value, in_scope)
     python.FunctionDef(function) ->
-      function.body
-      |> list.map(deep_statement_refs(_, function_scope(function, in_scope)))
-      |> list.flatten
+      // Track binds in program order so a reference to a name the nested
+      // function binds itself is not mistaken for a reference to the
+      // enclosing scope.
+      body_refs_in_order(function.body, function_scope(function, in_scope))
     python.Match(subject, cases) ->
       list.append(
         expression_refs(subject, in_scope),
@@ -915,9 +919,7 @@ fn deep_statement_refs(
       )
     python.While(condition, body) ->
       expression_refs(condition, in_scope)
-      |> list.append(
-        list.flatten(list.map(body, deep_statement_refs(_, in_scope))),
-      )
+      |> list.append(body_refs_in_order(body, in_scope))
   }
 }
 

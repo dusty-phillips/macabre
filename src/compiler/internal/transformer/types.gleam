@@ -1,6 +1,7 @@
 import compiler/python
 import glance
 import gleam/list
+import gleam/option
 
 pub fn transform_custom_type(
   custom_type: glance.CustomType,
@@ -9,6 +10,8 @@ pub fn transform_custom_type(
     name: custom_type.name,
     parameters: custom_type.parameters,
     variants: list.map(custom_type.variants, transform_type_variant),
+    docstring: option.None,
+    comments: [],
   )
 }
 

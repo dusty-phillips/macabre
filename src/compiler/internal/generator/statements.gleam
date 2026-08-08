@@ -9,8 +9,8 @@ import gleam/string_tree.{type StringTree}
 import glexer
 
 pub fn generate_function(function: python.Function) -> StringTree {
-  // TODO: The parameters and return types can have Python type hints
   string_tree.new()
+  |> string_tree.append_tree(internal.generate_comments(function.comments))
   |> string_tree.append("def ")
   |> string_tree.append(function.name |> internal.python_name)
   |> string_tree.append("(")
@@ -21,8 +21,40 @@ pub fn generate_function(function: python.Function) -> StringTree {
   ))
   |> string_tree.append("):\n")
   |> string_tree.append_tree(
-    generate_block(function.body) |> internal.indent(4),
+    generate_function_body(function) |> internal.indent(4),
   )
+}
+
+// A docstring is emitted as the first statement of the body. A function whose
+// body is otherwise empty emits just the docstring, not `pass`.
+fn generate_function_body(function: python.Function) -> StringTree {
+  case function.docstring, function.body {
+    option.None, [] -> string_tree.from_string("pass")
+    option.Some(_), [] -> internal.generate_docstring(function.docstring)
+    option.None, _ -> generate_block(function.body)
+    option.Some(_), _ ->
+      internal.generate_docstring(function.docstring)
+      |> string_tree.append("\n")
+      |> string_tree.append_tree(generate_block(function.body))
+  }
+}
+
+pub fn generate_module_header(
+  docstring: option.Option(String),
+  comments: List(String),
+) -> StringTree {
+  let header =
+    internal.generate_comments(comments)
+    |> string_tree.append_tree(internal.generate_docstring(docstring))
+  case string_tree.is_empty(header) {
+    True -> string_tree.new()
+    False ->
+      header
+      |> string_tree.append(case docstring {
+        option.None -> "\n"
+        option.Some(_) -> "\n\n"
+      })
+  }
 }
 
 fn generate_parameter(param: python.FunctionParameter) -> StringTree {
@@ -87,9 +119,13 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
 }
 
 pub fn generate_constant(constant: python.Constant) -> StringTree {
-  string_tree.from_string(constant.name |> internal.python_name)
-  |> string_tree.append(" = ")
-  |> string_tree.append_tree(expressions.generate_expression(constant.value))
+  string_tree.new()
+  |> string_tree.append_tree(internal.generate_comments(constant.comments))
+  |> string_tree.append_tree(
+    string_tree.from_string(constant.name |> internal.python_name)
+    |> string_tree.append(" = ")
+    |> string_tree.append_tree(expressions.generate_expression(constant.value)),
+  )
 }
 
 fn generate_cases(cases: List(python.MatchCase)) -> StringTree {

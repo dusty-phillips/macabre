@@ -16,17 +16,40 @@ pub fn generate_custom_type(custom_type: python.CustomType) -> StringTree {
     [] -> string_tree.new()
 
     variants -> {
+      let type_comments = internal.generate_comments(custom_type.comments)
       internal.generate_plural(
         custom_type.parameters,
         generate_generic_var,
         "\n",
       )
       |> string_tree.append_tree(
-        internal.generate_plural(variants, generate_type_variant, "\n\n")
+        generate_variants(variants, custom_type.docstring)
         |> internal.append_if_not_empty("\n\n"),
       )
       |> string_tree.append("\n")
+      |> string_tree.prepend_tree(type_comments)
     }
+  }
+}
+
+// The docstring documents the whole type, so it becomes the docstring of the
+// first generated variant class.
+fn generate_variants(
+  variants: List(python.Variant),
+  docstring: option.Option(String),
+) -> StringTree {
+  case variants {
+    [] -> string_tree.new()
+    [first, ..rest] ->
+      generate_type_variant(first, docstring)
+      |> string_tree.append_tree(
+        rest
+        |> internal.generate_plural(
+          generate_type_variant(_, option.None),
+          "\n\n",
+        )
+        |> internal.prepend_if_not_empty("\n\n"),
+      )
   }
 }
 
@@ -39,19 +62,42 @@ fn generate_generic_var(name: String) -> StringTree {
   |> string_tree.append("')\n")
 }
 
-fn generate_type_variant(variant: python.Variant) -> StringTree {
+fn generate_type_variant(
+  variant: python.Variant,
+  docstring: option.Option(String),
+) -> StringTree {
   string_tree.new()
   |> string_tree.append("@dataclasses.dataclass(frozen=True)\n")
   |> string_tree.append("class ")
   |> string_tree.append(variant.name)
   |> string_tree.append(":\n")
   |> string_tree.append_tree(
-    case variant.fields {
-      [] -> string_tree.from_string("pass")
-      fields -> generate_type_fields(fields)
-    }
-    |> internal.indent(4),
+    generate_type_variant_body(variant, docstring) |> internal.indent(4),
   )
+}
+
+fn generate_type_variant_body(
+  variant: python.Variant,
+  docstring: option.Option(String),
+) -> StringTree {
+  let docstring = internal.generate_docstring(docstring)
+  case variant.fields, docstring {
+    [], _ ->
+      case string_tree.is_empty(docstring) {
+        True -> string_tree.from_string("pass")
+        False -> docstring
+      }
+    fields, _ -> {
+      let fields = generate_type_fields(fields)
+      case string_tree.is_empty(docstring) {
+        True -> fields
+        False ->
+          docstring
+          |> string_tree.append("\n")
+          |> string_tree.append_tree(fields)
+      }
+    }
+  }
 }
 
 fn generate_type_fields(fields: List(python.Field(python.Type))) -> StringTree {

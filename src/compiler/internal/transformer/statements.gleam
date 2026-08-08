@@ -53,11 +53,15 @@ pub fn transform_constant(
   context: internal.TransformerContext,
   module: python.Module,
   constant: glance.Definition(glance.Constant),
+  docstring: option.Option(String),
+  comments: List(String),
 ) -> python.Module {
   python.Module(..module, constants: [
     python.Constant(
       name: constant.definition.name,
       value: transform_expression(context, constant.definition.value).expression,
+      docstring: docstring,
+      comments: comments,
     ),
     ..module.constants
   ])
@@ -192,9 +196,18 @@ fn transform_destructuring_assignment(
       }
       let function_name = "_fn_match_" <> int.to_string(context.next_case_id)
       let function =
-        python.Function(function_name, [python.NameParam("_case_subject")], [
-          python.Match(subject: python.Variable("_case_subject"), cases: cases),
-        ])
+        python.Function(
+          function_name,
+          [python.NameParam("_case_subject")],
+          [
+            python.Match(
+              subject: python.Variable("_case_subject"),
+              cases: cases,
+            ),
+          ],
+          option.None,
+          [],
+        )
       let call =
         python.Call(python.Variable(function_name), [
           python.UnlabelledField(value_result.expression),
@@ -1050,7 +1063,8 @@ fn transform_fn(
       context.module_aliases,
       fresh_pool,
     )
-  let function = python.Function(function_name, parameters, body_statements)
+  let function =
+    python.Function(function_name, parameters, body_statements, option.None, [])
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(
@@ -1117,7 +1131,8 @@ fn transform_block(
       context.module_reserved,
       context.fresh_pool,
     )
-  let function = python.Function(function_name, [], body_statements)
+  let function =
+    python.Function(function_name, [], body_statements, option.None, [])
   internal.ExpressionReturn(
     context: internal.TransformerContext(
       ..context,
@@ -1153,9 +1168,15 @@ fn transform_case(
   let function_name = "_fn_case_" <> int.to_string(context.next_case_id)
   let cases = clause_result.item |> list.reverse
   let function =
-    python.Function(function_name, [python.NameParam("_case_subject")], [
-      python.Match(subject: python.Variable("_case_subject"), cases: cases),
-    ])
+    python.Function(
+      function_name,
+      [python.NameParam("_case_subject")],
+      [
+        python.Match(subject: python.Variable("_case_subject"), cases: cases),
+      ],
+      option.None,
+      [],
+    )
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(

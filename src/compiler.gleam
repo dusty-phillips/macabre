@@ -1,4 +1,5 @@
 import compiler/generator
+import compiler/internal/comments
 import compiler/internal/transformer as internal
 import compiler/package
 import compiler/transformer
@@ -61,12 +62,31 @@ pub fn compile_module_with_external_qualified(
   external_functions: List(String),
   external_qualified: List(String),
 ) -> String {
+  compile_module_with_comments(
+    glance_module,
+    function_signatures,
+    constructor_arities,
+    external_functions,
+    external_qualified,
+    [],
+  )
+}
+
+pub fn compile_module_with_comments(
+  glance_module: glance.Module,
+  function_signatures: internal.FunctionSignatures,
+  constructor_arities: dict.Dict(String, List(String)),
+  external_functions: List(String),
+  external_qualified: List(String),
+  comments: List(comments.Comment),
+) -> String {
   glance_module
-  |> transformer.transform_with_signatures(
+  |> transformer.transform_with_comments(
     option.Some(function_signatures),
     option.Some(constructor_arities),
     external_functions,
     external_qualified,
+    comments,
   )
   |> generator.generate
 }
@@ -87,24 +107,26 @@ pub fn compile_package(
         // the bare keys for the module being compiled come from its own
         // definitions, merged on top to win deterministically.
         let constructor_arities =
-          dict.new()
-          |> dict.fold(
-            package_arities(package.package.modules),
+          dict.fold(
+            module_arities(value.module),
+            package_arities(package.package.modules)
+              |> dict.fold(
+                package_bare_arities(package.package.modules),
+                fn(acc, name, field_names) {
+                  dict.insert(acc, name, field_names)
+                },
+              ),
             fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
           )
-          |> dict.fold(
-            package_bare_arities(package.package.modules),
-            fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
-          )
-          |> dict.fold(module_arities(value.module), fn(acc, name, field_names) {
-            dict.insert(acc, name, field_names)
-          })
-        compile_module_with_external_qualified(
+        compile_module_with_comments(
           value.module,
           function_signatures(package.package.modules, module_name),
           constructor_arities,
           module_external_names(value.module),
           package_externals(package.package.modules),
+          package.comments
+            |> dict.get(module_name)
+            |> result.unwrap([]),
         )
       }),
     external_import_files: package.external_import_files,

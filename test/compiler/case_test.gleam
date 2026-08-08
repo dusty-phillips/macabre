@@ -1,217 +1,187 @@
 import compiler
 import glance
-import gleeunit/should
 
 pub fn single_int_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1 {
       1 -> \"one\"
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1:
                 return \"one\"
-    return _fn_case_0(1)",
-  )
+    return _fn_case_0(1)"
 }
 
 pub fn single_float_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1.0 {
       1.0 -> \"one\"
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1.0:
                 return \"one\"
-    return _fn_case_0(1.0)",
-  )
+    return _fn_case_0(1.0)"
 }
 
 pub fn single_string_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case \"hello\" {
       \"hello\" -> \"one\"
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case \"hello\":
                 return \"one\"
-    return _fn_case_0(\"hello\")",
-  )
+    return _fn_case_0(\"hello\")"
 }
 
 pub fn variable_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case \"hello\" {
       greet -> greet <> \" world\"
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case greet:
                 return greet + \" world\"
-    return _fn_case_0(\"hello\")",
-  )
+    return _fn_case_0(\"hello\")"
 }
 
 pub fn tuple_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case #(1, 2) {
       #(1, 2) -> \"one\"
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case (1, 2):
                 return \"one\"
-    return _fn_case_0((1, 2,))",
-  )
+    return _fn_case_0((1, 2,))"
 }
 
 pub fn pattern_assignment_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1 {
       1 as x -> 2 + x
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1 as x:
                 return 2 + x
-    return _fn_case_0(1)",
-  )
+    return _fn_case_0(1)"
 }
 
 pub fn grouped_pattern_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1, 2 {
       1, x -> x + 50
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case (1, x):
                 return x + 50
-    return _fn_case_0((1, 2,))",
-  )
+    return _fn_case_0((1, 2,))"
 }
 
 pub fn alternate_pattern_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1 {
       1 | 2 -> 5
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1 | 2:
                 return 5
-    return _fn_case_0(1)",
-  )
+    return _fn_case_0(1)"
 }
 
 pub fn alternate_grouped_pattern_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1, 2 {
       1, 2 | 2, 3 -> 5
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case (1, 2) | (2, 3):
                 return 5
-    return _fn_case_0((1, 2,))",
-  )
+    return _fn_case_0((1, 2,))"
 }
 
 pub fn alternate_bitstring_pattern_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case <<1>> {
       <<1>> | <<2>> -> 5
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -220,12 +190,12 @@ def main():
                 return 5
             case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"2\",))) is not None:
                 return 5
-    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))",
-  )
+    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))"
 }
 
 pub fn case_block_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case 1 {
       1 -> {
         let x = 1
@@ -235,11 +205,8 @@ pub fn case_block_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -248,168 +215,147 @@ def main():
                 x = 1
                 y = 2
                 return x + y
-    return _fn_case_0(1)",
-  )
+    return _fn_case_0(1)"
 }
 
 pub fn case_empty_list_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [] {
       [] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case None:
                 return 1
-    return _fn_case_0(to_gleam_list([]))",
-  )
+    return _fn_case_0(to_gleam_list([]))"
 }
 
 pub fn case_single_element_list_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1] {
       [1] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case GleamList(1, None):
                 return 1
-    return _fn_case_0(to_gleam_list([1]))",
-  )
+    return _fn_case_0(to_gleam_list([1]))"
 }
 
 pub fn case_multi_element_list_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1, 2, 3] {
       [1, 2, 3] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case GleamList(1, GleamList(2, GleamList(3, None))):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))",
-  )
+    return _fn_case_0(to_gleam_list([1, 2, 3]))"
 }
 
 // The gleam formatter doesn't permit this scenario, but it is encountered
 // during recursion
 pub fn case_empty_rest_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1, 2, 3] {
       rest -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case rest:
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))",
-  )
+    return _fn_case_0(to_gleam_list([1, 2, 3]))"
 }
 
 pub fn single_element_with_rest_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1, 2, 3] {
       [1, ..rest] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case GleamList(1, rest):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))",
-  )
+    return _fn_case_0(to_gleam_list([1, 2, 3]))"
 }
 
 pub fn multi_element_with_rest_case_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1, 2, 3] {
       [1, 2, ..rest] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case GleamList(1, GleamList(2, rest)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))",
-  )
+    return _fn_case_0(to_gleam_list([1, 2, 3]))"
 }
 
 pub fn unnamed_rest_test() {
-  "pub fn main() {
+  let assert Ok(module) =
+    "pub fn main() {
     case [1, 2, 3] {
       [1, 2, ..] -> 1
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case GleamList(1, GleamList(2, _)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))",
-  )
+    return _fn_case_0(to_gleam_list([1, 2, 3]))"
 }
 
 pub fn case_guard_test() {
-  "pub fn main() -> Nil {
+  let assert Ok(module) =
+    "pub fn main() -> Nil {
     case num {
       0 -> \"Just zero\"
       x if x < 0 -> \"So negative\"
@@ -417,11 +363,8 @@ pub fn case_guard_test() {
       _ -> \"Somewhat odd\"
     }
   }"
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -434,15 +377,15 @@ def main():
                 return \"Positively even\"
             case _:
                 return \"Somewhat odd\"
-    return _fn_case_0(num)",
-  )
+    return _fn_case_0(num)"
 }
 
 // Nullary constructors are represented at runtime by the constructor class
 // object itself, so a pattern matching one must be an equality match
 // (`case Idle:`) rather than a class pattern (`case Idle():`).
 pub fn nullary_constructor_pattern_test() {
-  "pub type State { Idle Active }
+  let assert Ok(module) =
+    "pub type State { Idle Active }
 
   fn check(state: State) -> Bool {
     case state {
@@ -450,11 +393,8 @@ pub fn nullary_constructor_pattern_test() {
       Active -> False
     }
   }"
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
@@ -472,12 +412,12 @@ def check(state):
                 return True
             case Active():
                 return False
-    return _fn_case_0(state)",
-  )
+    return _fn_case_0(state)"
 }
 
 pub fn arm_binding_shadowing_reference_before_binding_test() {
-  "fn next(lexer: Int) -> Int {
+  let assert Ok(module) =
+    "fn next(lexer: Int) -> Int {
   case lexer {
     _ if lexer > 0 -> {
       let before = lexer
@@ -488,11 +428,8 @@ pub fn arm_binding_shadowing_reference_before_binding_test() {
   }
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def next(lexer):
     def _fn_case_0(_case_subject):
@@ -507,8 +444,7 @@ def next(lexer):
                 return before + lexer_0
             case _:
                 return lexer
-    return _fn_case_0(lexer)",
-  )
+    return _fn_case_0(lexer)"
 }
 
 // A pattern capture colliding with a module-qualified constructor pattern in
@@ -517,7 +453,8 @@ def next(lexer):
 // the other arm's pattern (e.g. glexer's `do_lex` matching
 // `Some((token.EndOfFile(), _))` while another arm captures `token`).
 pub fn pattern_capture_colliding_with_module_pattern_test() {
-  "import glexer/token
+  let assert Ok(module) =
+    "import glexer/token
 
   fn do_lex() {
     case #(1, Some(2)) {
@@ -527,11 +464,8 @@ pub fn pattern_capture_colliding_with_module_pattern_test() {
     }
   }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def do_lex():
     def _fn_case_0(_case_subject):
@@ -549,6 +483,43 @@ import glexer.token
 from glexer import token
 
 
-",
-  )
+"
+}
+
+// A local binding whose name collides with a module binding is renamed, while
+// references to the module binding in the local's own right hand side (e.g. a
+// case initializer) keep pointing at the module, like glexer's `comment`.
+// Without this the generated Python binds the module name as an unbound local
+// of the enclosing function.
+pub fn local_colliding_with_module_binding_in_case_test() {
+  let assert Ok(module) =
+    "import glexer/token
+
+fn comment(kind: Int) -> #(String, Int) {
+  let token = case kind {
+    0 -> token.CommentModule(\"x\")
+    _ -> token.CommentNormal(\"y\")
+  }
+  #(token, kind)
+}
+"
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
+
+def comment(kind):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 0:
+                return token.CommentModule(\"x\")
+            case _:
+                return token.CommentNormal(\"y\")
+    token_1 = _fn_case_0(kind)
+    return (token_1, kind,)
+
+
+import glexer.token
+from glexer import token
+
+
+"
 }

@@ -172,14 +172,15 @@ Some tasks below are marked easy if you want to get started.
 ### High Pri
 
 - non-byte-aligned bitstrings are not supported yet
-- (EASY) internal/errors.format_token needs help
+- test/ and dev/ directories need to be compiled too (currently only src/ is)
 - (EASY) Should be putting pubic types, functions, and constants in `__all__`
 
 ### Low Pri
 
 - (EASY) Turn this list into github issues
-- glance itself doesn't support comments, so these are stripped out of the
-  compiled code
+- Comments are preserved in the compiled output (`//` becomes `#`, `///` and
+  `////` become docstrings), but only at module and top-level definition
+  level; comments inside function bodies are dropped
 - (EASY) maybe call ruff or black on the files after they are output, if they
   are installed. (shellout is already available)
 - See if there are ways to leverage the

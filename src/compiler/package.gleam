@@ -5,6 +5,7 @@
 //// filesystem. 
 //// It does not write to the filesystem.
 
+import compiler/internal/comments
 import compiler/project
 import errors
 import filepath
@@ -23,6 +24,7 @@ pub type GleamPackage {
     project: project.Project,
     package: glimpse.Package,
     external_import_files: set.Set(String),
+    comments: dict.Dict(String, List(comments.Comment)),
   )
 }
 
@@ -46,7 +48,29 @@ pub fn load(
     gleam_project,
     glimpse_package,
     python_externals(glimpse_package),
+    extract_comments(gleam_project, glimpse_package),
   ))
+}
+
+// The comments for each loaded module, lexed from its source file with
+// comments preserved. The source is re-read here because the parser (glance)
+// discards comments before returning the module AST.
+fn extract_comments(
+  gleam_project: project.Project,
+  package: glimpse.Package,
+) -> dict.Dict(String, List(comments.Comment)) {
+  dict.fold(package.modules, dict.new(), fn(acc, module_name, _module) {
+    let path =
+      filepath.join(
+        project.build_src_dir(gleam_project),
+        module_name <> ".gleam",
+      )
+    let module_comments =
+      filesystem.read(path)
+      |> result.map(comments.extract)
+      |> result.unwrap([])
+    dict.insert(acc, module_name, module_comments)
+  })
 }
 
 fn load_glimpse_package(

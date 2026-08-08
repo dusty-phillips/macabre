@@ -29,7 +29,12 @@ pub type BinaryOperator {
 }
 
 pub type Constant {
-  Constant(name: String, value: Expression)
+  Constant(
+    name: String,
+    value: Expression,
+    docstring: option.Option(String),
+    comments: List(String),
+  )
 }
 
 pub type Expression {
@@ -119,7 +124,13 @@ pub type Variant {
 }
 
 pub type CustomType {
-  CustomType(name: String, parameters: List(String), variants: List(Variant))
+  CustomType(
+    name: String,
+    parameters: List(String),
+    variants: List(Variant),
+    docstring: option.Option(String),
+    comments: List(String),
+  )
 }
 
 pub type MatchCase {
@@ -154,6 +165,8 @@ pub type Function {
     name: String,
     parameters: List(FunctionParameter),
     body: List(Statement),
+    docstring: option.Option(String),
+    comments: List(String),
   )
 }
 
@@ -163,9 +176,18 @@ pub type Module {
     functions: List(Function),
     custom_types: List(CustomType),
     constants: List(Constant),
+    docstring: option.Option(String),
+    comments: List(String),
   )
 }
 
 pub fn empty_module() -> Module {
-  Module(imports: [], functions: [], custom_types: [], constants: [])
+  Module(
+    imports: [],
+    functions: [],
+    custom_types: [],
+    constants: [],
+    docstring: option.None,
+    comments: [],
+  )
 }

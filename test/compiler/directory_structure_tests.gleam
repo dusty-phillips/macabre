@@ -7,7 +7,6 @@ import gleam/list
 import gleam/option
 import gleam/set
 import gleam/string
-import gleeunit/should
 import macabre
 import simplifile
 import temporary
@@ -39,10 +38,8 @@ fn init_folders(
   let package_src_dir = filepath.join(dir, "build/src")
   let build = filepath.join(dir, "build/dev/python")
 
-  simplifile.create_directory_all(src)
-  |> should.be_ok
-  simplifile.create_directory_all(build)
-  |> should.be_ok
+  let assert Ok(_) = simplifile.create_directory_all(src)
+  let assert Ok(_) = simplifile.create_directory_all(build)
   let project_files =
     ProjectFiles(
       base_dir: dir,
@@ -59,308 +56,268 @@ pub fn package_compile_test_with_nested_folders_test() {
   // src/foo/bar.gleam
   // src/foo/bindings.py
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.src_dir, "nested_sample.gleam"),
-    contents: "import foo/bar
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "nested_sample.gleam"),
+      contents: "import foo/bar
 
   @external(python, \"baz\", \"baz\")
   fn baz() -> Nil
 
 
   pub fn main() {}",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(project_files.src_dir, "baz.py"),
-    contents: "
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "baz.py"),
+      contents: "
   fn baz():
       print('baz')",
-  )
-  |> should.be_ok
+    )
 
   let foo_dir = filepath.join(project_files.src_dir, "foo")
-  simplifile.create_directory_all(foo_dir)
-  |> should.be_ok
-  simplifile.write(
-    to: filepath.join(foo_dir, "bar.gleam"),
-    contents: "@external(python, \"foo.bindings\", \"bar\")
+  let assert Ok(_) = simplifile.create_directory_all(foo_dir)
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(foo_dir, "bar.gleam"),
+      contents: "@external(python, \"foo.bindings\", \"bar\")
   fn bar() -> Nil",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(foo_dir, "bindings.py"),
-    contents: "def bar():
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(foo_dir, "bindings.py"),
+      contents: "def bar():
       pass",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"nested_sample\"",
-  )
-  |> should.be_ok
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"nested_sample\"",
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  project.copy_project_srcs(gleam_project)
-  |> should.be_ok
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
 
-  simplifile.read_directory(project_files.package_src_dir)
-  |> should.be_ok
-  |> list.sort(string.compare)
-  |> should.equal(["baz.py", "foo", "nested_sample.gleam"])
-  simplifile.read_directory(filepath.join(project_files.package_src_dir, "foo"))
-  |> should.be_ok
-  |> list.sort(string.compare)
-  |> should.equal(["bar.gleam", "bindings.py"])
+  let assert Ok(dir_listing) =
+    simplifile.read_directory(project_files.package_src_dir)
+  assert dir_listing |> list.sort(string.compare)
+    == ["baz.py", "foo", "nested_sample.gleam"]
+  let assert Ok(foo_listing) =
+    simplifile.read_directory(filepath.join(
+      project_files.package_src_dir,
+      "foo",
+    ))
+  assert foo_listing |> list.sort(string.compare)
+    == ["bar.gleam", "bindings.py"]
 
-  let gleam_package =
-    package.load(gleam_project)
-    |> should.be_ok
+  let assert Ok(gleam_package) = package.load(gleam_project)
 
   // load
 
-  should.equal(gleam_project.base_directory, project_files.base_dir)
-  gleam_package.package.modules
-  |> dict.size
-  |> should.equal(2)
-  gleam_package.external_import_files |> set.size |> should.equal(2)
+  assert gleam_project.base_directory == project_files.base_dir
+  assert gleam_package.package.modules |> dict.size == 2
+  assert gleam_package.external_import_files |> set.size == 2
 
   // ---  compile
   let compiled_package = compiler.compile_package(gleam_package)
-  compiled_package.modules
-  |> dict.size
-  |> should.equal(2)
-  compiled_package.external_import_files |> set.size |> should.equal(2)
+  assert compiled_package.modules |> dict.size == 2
+  assert compiled_package.external_import_files |> set.size == 2
 
   // --- write output
-  macabre.write_package(compiled_package) |> should.be_ok
+  let assert Ok(_) = macabre.write_package(compiled_package)
 
-  simplifile.read_directory(project_files.build_dir)
-  |> should.be_ok
-  |> list.sort(string.compare)
-  |> should.equal([
-    "__main__.py", "baz.py", "foo", "gleam_builtins.py", "nested_sample.py",
-  ])
+  let assert Ok(output_listing) =
+    simplifile.read_directory(project_files.build_dir)
+  assert output_listing |> list.sort(string.compare)
+    == ["__main__.py", "baz.py", "foo", "gleam_builtins.py", "nested_sample.py"]
 
-  project_files.build_dir
-  |> filepath.join("foo")
-  |> simplifile.read_directory
-  |> should.be_ok
-  |> should.equal(["bindings.py", "bar.py"])
+  let assert Ok(build_foo_listing) =
+    project_files.build_dir
+    |> filepath.join("foo")
+    |> simplifile.read_directory
+  assert build_foo_listing == ["bindings.py", "bar.py"]
 }
 
 pub fn git_dependency_parsing_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"dependency_parsing\"
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"dependency_parsing\"
 
 [dependencies]
 my_library = { git = \"https://example.com/me/my_library\", ref = \"abc123\" }
 monorepo = { git = \"https://example.com/me/monorepo\", ref = \"def456\", path = \"packages/thing\" }",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  gleam_project.packages
-  |> dict.size
-  |> should.equal(2)
-  gleam_project.packages
-  |> dict.get("my_library")
-  |> should.equal(
-    Ok(project.GitPackage(
+  assert gleam_project.packages |> dict.size == 2
+  assert gleam_project.packages
+    |> dict.get("my_library")
+    == Ok(project.GitPackage(
       git_url: "https://example.com/me/my_library",
       git_ref: "abc123",
       path: option.None,
-    )),
-  )
-  gleam_project.packages
-  |> dict.get("monorepo")
-  |> should.equal(
-    Ok(project.GitPackage(
+    ))
+  assert gleam_project.packages
+    |> dict.get("monorepo")
+    == Ok(project.GitPackage(
       git_url: "https://example.com/me/monorepo",
       git_ref: "def456",
       path: option.Some("packages/thing"),
-    )),
-  )
+    ))
 }
 
 pub fn hex_dependency_parsing_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"dependency_parsing\"
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"dependency_parsing\"
 
 [dependencies]
 glance = \"7.0.0\"
 filepath = \">= 1.0.0 and < 2.0.0\"",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  gleam_project.packages
-  |> dict.get("glance")
-  |> should.equal(Ok(project.HexPackage(version: "7.0.0")))
-  gleam_project.packages
-  |> dict.get("filepath")
-  |> should.equal(Ok(project.HexPackage(version: ">= 1.0.0 and < 2.0.0")))
+  assert gleam_project.packages
+    |> dict.get("glance")
+    == Ok(project.HexPackage(version: "7.0.0"))
+  assert gleam_project.packages
+    |> dict.get("filepath")
+    == Ok(project.HexPackage(version: ">= 1.0.0 and < 2.0.0"))
 }
 
 pub fn macabre_toml_preferred_over_gleam_toml_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"wrong_name\"
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"wrong_name\"
 
 [dependencies]
 gleam_dep = \"1.0.0\"",
-  )
-  |> should.be_ok
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "macabre.toml"),
-    contents: "name = \"right_name\"
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "macabre.toml"),
+      contents: "name = \"right_name\"
 
 [dependencies]
 macabre_dep = { git = \"https://example.com/me/macabre_dep\", ref = \"abc123\" }",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  should.equal(gleam_project.name, "right_name")
-  gleam_project.packages
-  |> dict.size
-  |> should.equal(1)
-  gleam_project.packages
-  |> dict.get("macabre_dep")
-  |> should.equal(
-    Ok(project.GitPackage(
+  assert gleam_project.name == "right_name"
+  assert gleam_project.packages |> dict.size == 1
+  assert gleam_project.packages
+    |> dict.get("macabre_dep")
+    == Ok(project.GitPackage(
       git_url: "https://example.com/me/macabre_dep",
       git_ref: "abc123",
       path: option.None,
-    )),
-  )
+    ))
 }
 
 pub fn macabre_toml_without_gleam_toml_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "macabre.toml"),
-    contents: "name = \"macabre_only\"
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "macabre.toml"),
+      contents: "name = \"macabre_only\"
 
 [dependencies]
 macabre_dep = \"1.0.0\"",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  should.equal(gleam_project.name, "macabre_only")
-  gleam_project.packages
-  |> dict.get("macabre_dep")
-  |> should.equal(Ok(project.HexPackage(version: "1.0.0")))
+  assert gleam_project.name == "macabre_only"
+  assert gleam_project.packages
+    |> dict.get("macabre_dep")
+    == Ok(project.HexPackage(version: "1.0.0"))
 }
 
 pub fn macabre_toml_ignores_manifest_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "macabre.toml"),
-    contents: "name = \"macabre_manifest\"
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "macabre.toml"),
+      contents: "name = \"macabre_manifest\"
 
 [dependencies]
 macabre_dep = \"1.0.0\"",
-  )
-  |> should.be_ok
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "manifest.toml"),
-    contents: "packages = [
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "manifest.toml"),
+      contents: "packages = [
   { name = \"manifest_dep\", version = \"7.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"hex\", outer_checksum = \"ABC\" },
 ]",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  gleam_project.packages
-  |> dict.size
-  |> should.equal(1)
-  gleam_project.packages
-  |> dict.get("macabre_dep")
-  |> should.equal(Ok(project.HexPackage(version: "1.0.0")))
+  assert gleam_project.packages |> dict.size == 1
+  assert gleam_project.packages
+    |> dict.get("macabre_dep")
+    == Ok(project.HexPackage(version: "1.0.0"))
 }
 
 pub fn no_config_file_fails_test() {
   use project_files <- init_folders()
-  project.load(project_files.base_dir)
-  |> should.be_error
+  let assert Error(_) = project.load(project_files.base_dir)
 }
 
 pub fn manifest_dependency_parsing_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"dependency_parsing\"",
-  )
-  |> should.be_ok
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "manifest.toml"),
-    contents: "packages = [
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"dependency_parsing\"",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "manifest.toml"),
+      contents: "packages = [
   { name = \"glance\", version = \"7.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"hex\", outer_checksum = \"ABC\" },
   { name = \"my_library\", version = \"1.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"git\", repo = \"https://example.com/me/my_library\", commit = \"abc123\" },
   { name = \"monorepo\", version = \"1.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"git\", repo = \"https://example.com/me/monorepo\", commit = \"def456\", path = \"packages/thing\" },
   { name = \"local_thing\", version = \"1.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"local\", path = \"../local_thing\" },
 ]",
-  )
-  |> should.be_ok
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  gleam_project.packages
-  |> dict.size
-  |> should.equal(4)
-  gleam_project.packages
-  |> dict.get("glance")
-  |> should.equal(Ok(project.HexPackage(version: "7.0.0")))
-  gleam_project.packages
-  |> dict.get("my_library")
-  |> should.equal(
-    Ok(project.GitPackage(
+  assert gleam_project.packages |> dict.size == 4
+  assert gleam_project.packages
+    |> dict.get("glance")
+    == Ok(project.HexPackage(version: "7.0.0"))
+  assert gleam_project.packages
+    |> dict.get("my_library")
+    == Ok(project.GitPackage(
       git_url: "https://example.com/me/my_library",
       git_ref: "abc123",
       path: option.None,
-    )),
-  )
-  gleam_project.packages
-  |> dict.get("monorepo")
-  |> should.equal(
-    Ok(project.GitPackage(
+    ))
+  assert gleam_project.packages
+    |> dict.get("monorepo")
+    == Ok(project.GitPackage(
       git_url: "https://example.com/me/monorepo",
       git_ref: "def456",
       path: option.Some("packages/thing"),
-    )),
-  )
-  gleam_project.packages
-  |> dict.get("local_thing")
-  |> should.equal(Ok(project.LocalPackage(path: "../local_thing")))
+    ))
+  assert gleam_project.packages
+    |> dict.get("local_thing")
+    == Ok(project.LocalPackage(path: "../local_thing"))
 }
 
 pub fn module_with_submodules_written_as_init_test() {
@@ -368,51 +325,45 @@ pub fn module_with_submodules_written_as_init_test() {
   // foo.gleam must be written as foo/__init__.py so that
   // "from foo import bar" resolves the package, not the module.
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.src_dir, "foo.gleam"),
-    contents: "import foo/bar
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "foo.gleam"),
+      contents: "import foo/bar
 pub fn foo() -> Int {
   bar.bar()
 }",
-  )
-  |> should.be_ok
+    )
 
   let foo_dir = filepath.join(project_files.src_dir, "foo")
-  simplifile.create_directory_all(foo_dir)
-  |> should.be_ok
-  simplifile.write(
-    to: filepath.join(foo_dir, "bar.gleam"),
-    contents: "pub fn bar() -> Int {
+  let assert Ok(_) = simplifile.create_directory_all(foo_dir)
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(foo_dir, "bar.gleam"),
+      contents: "pub fn bar() -> Int {
   2
 }",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"foo\"",
-  )
-  |> should.be_ok
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"foo\"",
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  project.copy_project_srcs(gleam_project)
-  |> should.be_ok
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
 
-  let gleam_package =
-    package.load(gleam_project)
-    |> should.be_ok
+  let assert Ok(gleam_package) = package.load(gleam_project)
 
   let compiled_package = compiler.compile_package(gleam_package)
-  macabre.write_package(compiled_package) |> should.be_ok
+  let assert Ok(_) = macabre.write_package(compiled_package)
 
-  project_files.build_dir
-  |> filepath.join("foo")
-  |> simplifile.read_directory
-  |> should.be_ok
-  |> should.equal(["__init__.py", "bar.py"])
+  let assert Ok(dir_listing) =
+    project_files.build_dir
+    |> filepath.join("foo")
+    |> simplifile.read_directory
+  assert dir_listing == ["__init__.py", "bar.py"]
 }
 
 // Two modules define a variant with the same name but different fields. The
@@ -421,9 +372,10 @@ pub fn foo() -> Int {
 // LabelledField has two — the wrong pick breaks the reordered call).
 pub fn bare_constructor_arity_not_shadowed_by_other_module_test() {
   use project_files <- init_folders()
-  simplifile.write(
-    to: filepath.join(project_files.src_dir, "collision_sample.gleam"),
-    contents: "import collision_other
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "collision_sample.gleam"),
+      contents: "import collision_other
 
 pub type Thing {
   Thing(label: String, location: Int, item: String)
@@ -434,47 +386,40 @@ pub fn make(name: String, t: String) -> Thing {
 }
 
 pub fn main() {}",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(project_files.src_dir, "collision_other.gleam"),
-    contents: "pub type Thing {
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "collision_other.gleam"),
+      contents: "pub type Thing {
   Thing(label: String, item: String)
 }
 
 pub fn other() -> Thing {
   Thing(label: \"a\", item: \"b\")
 }",
-  )
-  |> should.be_ok
+    )
 
-  simplifile.write(
-    to: filepath.join(project_files.base_dir, "gleam.toml"),
-    contents: "name = \"collision_sample\"",
-  )
-  |> should.be_ok
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"collision_sample\"",
+    )
 
-  let gleam_project =
-    project.load(project_files.base_dir)
-    |> should.be_ok
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
 
-  project.copy_project_srcs(gleam_project)
-  |> should.be_ok
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
 
-  let gleam_package =
-    package.load(gleam_project)
-    |> should.be_ok
+  let assert Ok(gleam_package) = package.load(gleam_project)
 
   let compiled_package = compiler.compile_package(gleam_package)
-  macabre.write_package(compiled_package) |> should.be_ok
+  let assert Ok(_) = macabre.write_package(compiled_package)
 
-  project_files.build_dir
-  |> filepath.join("collision_sample.py")
-  |> simplifile.read
-  |> should.be_ok
-  |> should.equal(
-    "from gleam_builtins import *
+  let assert Ok(output_listing) =
+    project_files.build_dir
+    |> filepath.join("collision_sample.py")
+    |> simplifile.read
+  assert output_listing == "from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Thing:
@@ -494,6 +439,86 @@ def main():
 import collision_other
 
 
-",
-  )
+"
+}
+
+// A module's own nullary constructor must not be resolved against another
+// module's same-named non-nullary type. The `Kind.Module` variant would lose
+// its `()` and be emitted as the bare `Module` class if the package-wide bare
+// arity map overrode the defining module's own entry.
+pub fn nullary_constructor_arity_not_shadowed_by_other_module_test() {
+  use project_files <- init_folders()
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "arity_collision.gleam"),
+      contents: "import arity_other
+
+pub type Kind {
+  Normal
+  Doc
+  Module
+}
+
+pub fn make() -> Kind {
+  Module
+}
+
+pub fn main() {}",
+    )
+
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "arity_other.gleam"),
+      contents: "pub type Module {
+  Module(imports: Int, functions: Int)
+}",
+    )
+
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"arity_collision\"",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
+
+  let assert Ok(gleam_package) = package.load(gleam_project)
+
+  let compiled_package = compiler.compile_package(gleam_package)
+  let assert Ok(_) = macabre.write_package(compiled_package)
+
+  let assert Ok(output_listing) =
+    project_files.build_dir
+    |> filepath.join("arity_collision.py")
+    |> simplifile.read
+
+  assert output_listing == "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Normal:
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class Doc:
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class Module:
+    pass
+
+
+def make():
+    return Module()
+
+
+def main():
+    pass
+
+
+import arity_other
+
+
+"
 }
