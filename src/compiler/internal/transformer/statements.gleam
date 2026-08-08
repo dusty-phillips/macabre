@@ -983,10 +983,8 @@ fn transform_fn(
 
   let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
   let parameters = list.reverse(parameters_result.item)
-  let function =
-    python.Function(
-      function_name,
-      parameters,
+  let #(parameters, body_statements) =
+    shadowing.resolve_module_shadowing(
       transform_statement_block_with_context(
         internal.TransformerContext(
           ..internal.empty_context,
@@ -1002,7 +1000,10 @@ fn transform_fn(
         |> shadowing.resolve_block_shadowing(shadowing.function_parameter_names(
           parameters,
         )),
+      parameters,
+      context.module_aliases,
     )
+  let function = python.Function(function_name, parameters, body_statements)
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(

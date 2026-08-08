@@ -819,6 +819,18 @@ fn rename_pattern_field(
   }
 }
 
+// Renames a function parameter that collides with a renamed name.
+fn rename_function_parameter(
+  parameter: python.FunctionParameter,
+  renames: dict.Dict(String, String),
+) -> python.FunctionParameter {
+  case parameter {
+    python.NameParam(name) ->
+      python.NameParam(result.unwrap(dict.get(renames, name), name))
+    python.DiscardParam(_) -> parameter
+  }
+}
+
 fn rename_statement(
   statement: python.Statement,
   renames: dict.Dict(String, String),
@@ -842,18 +854,31 @@ fn rename_statement(
         }),
         rename_expression(value, renames, in_scope),
       )
-    python.FunctionDef(function) ->
-      python.FunctionDef(
+    python.FunctionDef(function) -> {
+      // A nested function's parameter that collides with a renamed name
+      // (e.g. a lambda argument that shadows an imported module binding) is
+      // renamed along with the references to it, since Python function
+      // parameters shadow module-level bindings.
+      let renamed_function =
         python.Function(
           ..function,
-          body: list.map(function.body, rename_statement(
+          parameters: list.map(function.parameters, rename_function_parameter(
             _,
             renames,
-            function_scope(function, in_scope),
+          )),
+        )
+      python.FunctionDef(
+        python.Function(
+          ..renamed_function,
+          body: list.map(renamed_function.body, rename_statement(
+            _,
+            renames,
+            function_scope(renamed_function, in_scope),
             block_mode,
           )),
         ),
       )
+    }
     python.Match(subject, cases) ->
       python.Match(
         subject: rename_expression(subject, renames, in_scope),
@@ -890,15 +915,24 @@ fn rename_expression(
       python.Panic(rename_expression(inner, renames, in_scope))
     python.Todo(inner) ->
       python.Todo(rename_expression(inner, renames, in_scope))
-    python.Lambda(args, body) ->
+    python.Lambda(args, body) -> {
+      let renamed_args =
+        list.map(args, fn(arg) {
+          case arg {
+            python.Variable(name) ->
+              python.Variable(result.unwrap(dict.get(renames, name), name))
+            _ -> arg
+          }
+        })
       python.Lambda(
-        args,
+        renamed_args,
         rename_expression(
           body,
           renames,
-          set.union(in_scope, set.from_list(lambda_param_names(args))),
+          set.union(in_scope, set.from_list(lambda_param_names(renamed_args))),
         ),
       )
+    }
     python.List(elements) ->
       python.List(list.map(elements, rename_expression(_, renames, in_scope)))
     python.ListWithRest(elements, rest) ->
