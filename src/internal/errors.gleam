@@ -117,10 +117,5 @@ fn fold_position_to_lines(
 }
 
 fn format_token(token: token.Token) -> String {
-  case token {
-    token.Int(num_str) -> num_str
-    _ -> {
-      "<TODO Unknown Token>"
-    }
-  }
+  token.to_source(token)
 }
