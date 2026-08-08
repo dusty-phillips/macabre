@@ -1,61 +1,217 @@
 import compiler/internal/transformer as internal
 import compiler/internal/transformer/functions
+import compiler/internal/transformer/module_renames
 import compiler/internal/transformer/statements
 import compiler/internal/transformer/types
 import compiler/python
 import glance
+import gleam/dict
 import gleam/list
 import gleam/option
+import gleam/result
 import gleam/string
 
 pub fn transform(input: glance.Module) -> python.Module {
+  transform_with_signatures(input, option.None, option.None, [], [])
+}
+
+pub fn transform_with_signatures(
+  input: glance.Module,
+  function_signatures: option.Option(internal.FunctionSignatures),
+  constructor_arities: option.Option(dict.Dict(String, List(String))),
+  external_functions: List(String),
+  external_qualified: List(String),
+) -> python.Module {
+  // Private top-level values colliding with submodule import bindings are
+  // renamed first, so the emitted `def` does not clobber the parent package
+  // attribute that other modules import the submodule from.
+  let input = module_renames.rename_private_value_collisions(input)
+  let module_aliases =
+    list.flat_map(input.imports, fn(import_) {
+      case import_ {
+        glance.Definition(_, glance.Import(_, module, alias, _, _)) -> [
+          module_binding_name(module, alias),
+        ]
+      }
+    })
+  let module_bindings = compute_module_bindings(input)
   python.empty_module()
-  |> list.fold(input.imports, _, transform_import)
+  |> list.fold(input.imports, _, fn(module, import_) {
+    transform_import(module, import_, module_bindings)
+  })
   |> list.fold(input.constants, _, statements.transform_constant)
-  |> list.fold(input.functions, _, transform_function_or_external)
+  |> list.fold(input.functions, _, fn(module, function) {
+    transform_function_or_external(
+      module,
+      function,
+      function_signatures,
+      module_aliases,
+      constructor_arities,
+      option.Some(module_bindings),
+      option.Some(external_functions),
+      option.Some(external_qualified),
+    )
+  })
   |> list.fold(input.custom_types, _, transform_custom_type_in_module)
+}
+
+// Names bound at module level by imports (the module binding, e.g. `token`
+// for `import glexer/token`). If a top-level function or constant in this
+// module has the same name, the import binding is renamed so the emitted
+// `def` does not override the import.
+fn compute_module_bindings(input: glance.Module) -> dict.Dict(String, String) {
+  let defined =
+    list.append(
+      list.map(input.functions, fn(function) {
+        case function {
+          glance.Definition(_, definition) -> definition.name
+        }
+      }),
+      list.map(input.constants, fn(constant) {
+        case constant {
+          glance.Definition(_, definition) -> definition.name
+        }
+      }),
+    )
+  list.fold(input.imports, dict.new(), fn(bindings, import_) {
+    case import_ {
+      glance.Definition(_, glance.Import(_, module, alias, _, _)) -> {
+        let binding = module_binding_name(module, alias)
+        case list.contains(defined, binding) {
+          True -> dict.insert(bindings, binding, binding <> "_module")
+          False -> dict.insert(bindings, binding, binding)
+        }
+      }
+    }
+  })
+}
+
+// The name a module import binds in the generated Python. For an aliased
+// import it is the alias; otherwise it is the last segment of the module
+// path (e.g. "project" for `import compiler/project`).
+fn module_binding_name(
+  module: String,
+  alias: option.Option(glance.AssignmentName),
+) -> String {
+  case alias {
+    option.Some(assignment) -> transform_import_alias(assignment)
+    option.None ->
+      case module |> string.split("/") |> list.reverse {
+        [last, ..] -> last
+        [] -> panic as "Expected at least one module import"
+      }
+  }
 }
 
 fn transform_function_or_external(
   module: python.Module,
   function: glance.Definition(glance.Function),
+  function_signatures: option.Option(internal.FunctionSignatures),
+  module_aliases: List(String),
+  constructor_arities: option.Option(dict.Dict(String, List(String))),
+  module_bindings: option.Option(dict.Dict(String, String)),
+  external_functions: option.Option(List(String)),
+  external_qualified: option.Option(List(String)),
 ) -> python.Module {
   case list.filter_map(function.attributes, maybe_extract_external) {
     [] ->
       python.Module(..module, functions: [
-        functions.transform_top_level_function(function.definition),
+        functions.transform_top_level_function(
+          function.definition,
+          function_signatures,
+          module_aliases,
+          constructor_arities,
+          module_bindings,
+          external_functions,
+          external_qualified,
+        ),
         ..module.functions
       ])
     [python_import] ->
-      python.Module(..module, imports: [python_import, ..module.imports])
+      transform_python_external(module, function, python_import)
     _ -> panic as "Did not expect more than one external for one function"
+  }
+}
+
+fn transform_python_external(
+  module: python.Module,
+  function: glance.Definition(glance.Function),
+  python_import: python.Import,
+) -> python.Module {
+  case python_import {
+    python.UnqualifiedImport(binding_module, binding_name) ->
+      case binding_name == function.definition.name {
+        True ->
+          python.Module(..module, imports: [python_import, ..module.imports])
+        False -> {
+          let alias =
+            binding_module
+            |> string.replace(".", "_")
+            |> string.replace("/", "_")
+            |> string.append("_" <> binding_name)
+          python.Module(
+            ..module,
+            imports: [
+              python.AliasedUnqualifiedImport(
+                binding_module,
+                binding_name,
+                alias,
+              ),
+              ..module.imports
+            ],
+            functions: list.prepend(
+              module.functions,
+              functions.transform_external_forwarder(function.definition, alias),
+            ),
+          )
+        }
+      }
+    _ -> python.Module(..module, imports: [python_import, ..module.imports])
   }
 }
 
 fn transform_import(
   module: python.Module,
   import_: glance.Definition(glance.Import),
+  module_bindings: dict.Dict(String, String),
 ) -> python.Module {
   let python_imports = case import_ {
-    glance.Definition(attributes: [_head, ..], ..) ->
-      todo as "import attributes not supported yet"
-
-    glance.Definition([], glance.Import(_, _, _, [_head, ..], _)) -> {
-      todo as "type alias imports not supported yet"
-    }
-
     glance.Definition(
-      [],
-      glance.Import(_, module, alias, [], unqualified_values),
+      _attributes,
+      glance.Import(_, module, alias, _unqualified_types, unqualified_values),
     ) -> {
-      let module_import = transform_module_import(module, alias)
+      let binding = module_binding_name(module, alias)
+      let module_imports = transform_module_import(module, alias)
+      let module_imports = case dict.get(module_bindings, binding) {
+        Ok(binding_name) if binding_name != binding -> {
+          case module |> string.contains("/") {
+            True ->
+              // The plain `import a.b.c` statement must not gain an `as`
+              // alias (its attribute-walk binding form is unreliable), so
+              // only the `from a.b import c` binding entry is renamed.
+              list.map(module_imports, fn(import_) {
+                case import_ {
+                  python.QualifiedImport(_) -> import_
+                  other -> rename_module_import(other, binding_name)
+                }
+              })
+            False ->
+              list.map(module_imports, rename_module_import(_, binding_name))
+          }
+        }
+        _ -> module_imports
+      }
       let module_part =
         module
         |> string.replace("/", ".")
 
-      unqualified_values
-      |> list.map(transform_unqualified_description(_, module_part))
-      |> list.prepend(module_import)
+      // `None` is represented by the Python keyword `None` rather than a
+      // class defined in the option module, so importing it would fail.
+      let unqualified =
+        unqualified_values
+        |> list.filter(fn(unqual) { unqual.name != "None" })
+        |> list.map(transform_unqualified_description(_, module_part))
+      list.append(module_imports, unqualified)
     }
   }
   python.Module(..module, imports: list.append(module.imports, python_imports))
@@ -64,26 +220,70 @@ fn transform_import(
 fn transform_module_import(
   module: String,
   alias: option.Option(glance.AssignmentName),
-) -> python.Import {
-  let #(build_qual, build_unqual) = case alias {
-    option.None -> #(python.QualifiedImport, python.UnqualifiedImport)
-    option.Some(assignment_name) -> #(
-      python.AliasedQualifiedImport(_, transform_import_alias(assignment_name)),
-      fn(mod, name) {
-        python.AliasedUnqualifiedImport(
-          mod,
-          name,
-          transform_import_alias(assignment_name),
-        )
-      },
-    )
+) -> List(python.Import) {
+  // A module path like `glexer/token` is emitted as a plain `import
+  // glexer.token` followed by `from glexer import token as ...`. The plain
+  // import loads the submodule and sets its attribute on the parent package
+  // (overwriting any shadowing value like a function `token` in glexer.gleam)
+  // without walking attributes itself, so it is immune to both parent
+  // shadowing and circular parent imports. The `from` statement then binds
+  // the last path segment directly by name.
+  let full_module = module |> string.replace("/", ".")
+  let parent_module =
+    module
+    |> string.split("/")
+    |> list.reverse
+    |> list.drop(1)
+    |> list.reverse
+    |> string.join(with: ".")
+  let last_segment =
+    module |> string.split("/") |> list.last |> result.unwrap("")
+  case alias {
+    option.None ->
+      // A plain `import a.b.c` only binds `a` in Python, so a nested module
+      // path needs a `from` binding for the last segment.
+      case module |> string.contains("/") {
+        True -> [
+          python.QualifiedImport(full_module),
+          python.UnqualifiedImport(parent_module, last_segment),
+        ]
+        False -> [python.QualifiedImport(full_module)]
+      }
+    option.Some(assignment_name) ->
+      case module |> string.contains("/") {
+        True -> [
+          python.QualifiedImport(full_module),
+          python.AliasedUnqualifiedImport(
+            parent_module,
+            last_segment,
+            transform_import_alias(assignment_name),
+          ),
+        ]
+        False -> [
+          python.AliasedQualifiedImport(
+            full_module,
+            transform_import_alias(assignment_name),
+          ),
+        ]
+      }
   }
+}
 
-  case module |> string.split("/") |> list.reverse {
-    [] -> panic as "Expected at least one module import"
-    [module] -> build_qual(module)
-    [last_module, ..modules] ->
-      build_unqual(modules |> list.reverse |> string.join("."), last_module)
+// The import binding is renamed (with an `as` alias) when it would otherwise
+// collide with a top-level function or constant of the same name.
+fn rename_module_import(
+  import_: python.Import,
+  binding: String,
+) -> python.Import {
+  case import_ {
+    python.QualifiedImport(module) ->
+      python.AliasedQualifiedImport(module, binding)
+    python.UnqualifiedImport(module, name) ->
+      python.AliasedUnqualifiedImport(module, name, binding)
+    python.AliasedQualifiedImport(module, _) ->
+      python.AliasedQualifiedImport(module, binding)
+    python.AliasedUnqualifiedImport(module, name, _) ->
+      python.AliasedUnqualifiedImport(module, name, binding)
   }
 }
 

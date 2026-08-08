@@ -1,11 +1,15 @@
 import compiler/internal/transformer as internal
 import compiler/internal/transformer/desugar
 import compiler/internal/transformer/patterns
+import compiler/internal/transformer/shadowing
 import compiler/python
 import glance
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/result
+import gleam/string
 
 // a block is a scope, so context can be reset at this level.
 //
@@ -89,13 +93,15 @@ fn transform_statement(
         ]),
       )
     }
-    glance.Assignment(..) -> {
-      todo as "Non-trivial assignments are not supported yet"
-    }
+    glance.Assignment(kind: kind, pattern: pattern, value: value, ..) ->
+      transform_destructuring_assignment(
+        transform_context,
+        kind,
+        pattern,
+        value,
+      )
 
-    glance.Use(..) -> {
-      todo as "Use statements are not supported yet"
-    }
+    glance.Use(..) -> panic as "Use statements should have been desugared by now"
 
     glance.Assert(_, expression, _) -> {
       let result = transform_expression(transform_context, expression)
@@ -107,6 +113,115 @@ fn transform_statement(
       )
     }
   }
+}
+
+// A destructuring or `let assert` assignment. These can't be turned into a
+// simple Python assignment, so we generate a helper function that matches on
+// the value, returning the bound variables as a tuple (or raising on failure
+// for `let assert`), and assign the result.
+fn transform_destructuring_assignment(
+  context: internal.TransformerContext,
+  kind: glance.AssignmentKind,
+  pattern: glance.Pattern,
+  value: glance.Expression,
+) -> internal.StatementReturn {
+  let binds = patterns.collect_binds(pattern)
+  let message_result = case kind {
+    glance.Let -> internal.OptionalExpressionReturn(context, [], option.None)
+    glance.LetAssert(message) ->
+      message
+      |> option.map(fn(expression) {
+        let result = transform_expression(context, expression)
+        internal.OptionalExpressionReturn(
+          result.context,
+          result.statements,
+          option.Some(result.expression),
+        )
+      })
+      |> option.unwrap(internal.OptionalExpressionReturn(
+        context,
+        [],
+        option.Some(python.String("assertion failed")),
+      ))
+  }
+  let value_result = transform_expression(message_result.context, value)
+
+  let statements = case binds {
+    [] ->
+      // A pattern that binds nothing, e.g. `let _ = foo`. Just evaluate the
+      // expression.
+      list.append(
+        list.append(message_result.statements, value_result.statements),
+        [python.Expression(value_result.expression)],
+      )
+    _ -> {
+      let pattern_result = case
+        patterns.transform_alternative_patterns(
+          [[pattern]],
+          False,
+          context.module_bindings,
+        )
+      {
+        [pattern_result] -> pattern_result
+        _ -> panic as "Expected a single pattern in destructuring assignment"
+      }
+      let return_value = case binds {
+        [single] -> python.Variable(single)
+        multiple -> python.Tuple(list.map(multiple, python.Variable))
+      }
+      let matched_case =
+        python.MatchCase(
+          pattern_result.pattern,
+          pattern_result.guard,
+          list.append(pattern_result.body_prepend, [python.Return(return_value)]),
+        )
+      let cases = case kind {
+        glance.Let -> [matched_case]
+        glance.LetAssert(_) -> [
+          matched_case,
+          python.MatchCase(python.PatternWildcard, option.None, [
+            python.Expression(
+              python.Panic(option.unwrap(
+                message_result.expression,
+                python.String("assertion failed"),
+              )),
+            ),
+          ]),
+        ]
+      }
+      let function_name = "_fn_match_" <> int.to_string(context.next_case_id)
+      let function =
+        python.Function(function_name, [python.NameParam("_case_subject")], [
+          python.Match(
+            subject: python.Variable("_case_subject"),
+            cases: cases |> shadowing.resolve_shadowing,
+          ),
+        ])
+      let call =
+        python.Call(python.Variable(function_name), [
+          python.UnlabelledField(value_result.expression),
+        ])
+      let assignment = case binds {
+        [single] -> [python.SimpleAssignment(single, call)]
+        multiple -> [python.MultipleAssignment(multiple, call)]
+      }
+      list.append(
+        list.append(
+          list.append(message_result.statements, value_result.statements),
+          [python.FunctionDef(function)],
+        ),
+        assignment,
+      )
+    }
+  }
+
+  internal.StatementReturn(
+    context: internal.TransformerContext(
+      ..value_result.context,
+      next_case_id: value_result.context.next_case_id + 1,
+    ),
+    statements: statements,
+  )
 }
 
 fn transform_expression(
@@ -126,8 +241,28 @@ fn transform_expression(
     glance.Variable(_, "False") ->
       internal.empty_return(context, python.Bool("False"))
 
+    glance.Variable(_, "None") -> internal.empty_return(context, python.Nil)
+
+    glance.Variable(_, "Nil") -> internal.empty_return(context, python.Nil)
+
     glance.Variable(_, string) ->
-      internal.empty_return(context, python.Variable(string))
+      case is_capitalized(string) {
+        True ->
+          // A capitalized bare name is either a nullary variant value (e.g.
+          // `File`, emitted as an instance `File()`) or a non-nullary
+          // constructor used as a function value (e.g. `Some` passed to
+          // `list.map`, emitted bare). The constructor arities map
+          // disambiguates.
+          case constructor_arity(context, string) {
+            option.Some(True) ->
+              internal.empty_return(
+                context,
+                python.Call(python.Variable(string), []),
+              )
+            _ -> internal.empty_return(context, python.Variable(string))
+          }
+        False -> internal.empty_return(context, python.Variable(string))
+      }
 
     glance.Tuple(_, expressions) -> transform_tuple(context, expressions)
 
@@ -185,8 +320,88 @@ fn transform_expression(
     }
 
     glance.FieldAccess(_, container: expression, label:) ->
-      transform_expression(context, expression)
-      |> internal.map_return(python.FieldAccess(_, label))
+      case label {
+        "None" -> internal.empty_return(context, python.Nil)
+        _ ->
+          case expression {
+            // A module-qualified variant reference, e.g. `order.Ascending`
+            // (a nullary value, emitted as an instance `order.Ascending()`)
+            // or `error.LoadError` (a non-nullary constructor used as a
+            // function value, emitted bare). The constructor arities map
+            // disambiguates.
+            glance.Variable(_, alias) ->
+              case list.contains(context.module_aliases, alias) {
+                True ->
+                  case is_capitalized(label) {
+                    // A module-qualified variant reference, e.g.
+                    // `order.Ascending` (a nullary value, emitted as an
+                    // instance `order.Ascending()`) or `error.LoadError` (a
+                    // non-nullary constructor used as a function value,
+                    // emitted bare). The constructor arities map
+                    // disambiguates.
+                    True ->
+                      case constructor_arity(context, alias <> "." <> label) {
+                        option.Some(True) ->
+                          internal.empty_return(
+                            context,
+                            python.Call(
+                              python.FieldAccess(
+                                python.ModuleRef(internal.module_binding(
+                                  context,
+                                  alias,
+                                )),
+                                label,
+                              ),
+                              [],
+                            ),
+                          )
+                        _ ->
+                          internal.empty_return(
+                            context,
+                            python.FieldAccess(
+                              python.ModuleRef(internal.module_binding(
+                                context,
+                                alias,
+                              )),
+                              label,
+                            ),
+                          )
+                      }
+                    // A module-qualified function used as a value, e.g.
+                    // `patterns.collect_binds` passed to `list.map`. The
+                    // module reference must not be treated as a variable,
+                    // otherwise it collides with any parameter of the same
+                    // name. Only emit a module reference when the module
+                    // actually has this member (checked against the function
+                    // signatures); otherwise this is a record field access on
+                    // a local value, which must be renamed with it.
+                    False ->
+                      case is_module_function(context, alias, label) {
+                        True ->
+                          internal.empty_return(
+                            context,
+                            python.FieldAccess(
+                              python.ModuleRef(internal.module_binding(
+                                context,
+                                alias,
+                              )),
+                              label,
+                            ),
+                          )
+                        False ->
+                          transform_expression(context, expression)
+                          |> internal.map_return(python.FieldAccess(_, label))
+                      }
+                  }
+                False ->
+                  transform_expression(context, expression)
+                  |> internal.map_return(python.FieldAccess(_, label))
+              }
+            _ ->
+              transform_expression(context, expression)
+              |> internal.map_return(python.FieldAccess(_, label))
+          }
+      }
 
     glance.BinaryOperator(_, glance.Pipe, left, right) ->
       transform_pipe(context, left, right)
@@ -207,12 +422,10 @@ fn transform_expression(
       |> internal.reverse_state_to_return(python.BitString)
     }
 
-    glance.Echo(_, expression, _) -> {
-      case expression {
-        option.Some(expression) -> transform_expression(context, expression)
-        option.None -> internal.empty_return(context, python.String(""))
-      }
-    }
+    glance.Echo(_, expression, _) ->
+      expression
+      |> option.map(fn(expression) { transform_expression(context, expression) })
+      |> option.unwrap(internal.empty_return(context, python.String("")))
   }
 }
 
@@ -269,24 +482,409 @@ fn transform_call(
   function: glance.Expression,
   arguments: List(glance.Field(glance.Expression)),
 ) -> internal.ExpressionReturn {
-  let function_result = transform_expression(context, function)
+  let function_result = case function {
+    // A module-qualified call, e.g. `project.build_src_dir(project)`. The
+    // module binding is marked with `python.Module` so it is never confused
+    // with a variable or parameter of the same name (which may shadow the
+    // module binding inside a function).
+    glance.FieldAccess(_, glance.Variable(_, alias), name) ->
+      case list.contains(context.module_aliases, alias) {
+        True ->
+          internal.empty_return(
+            context,
+            python.FieldAccess(
+              python.ModuleRef(internal.module_binding(context, alias)),
+              name,
+            ),
+          )
+        False -> transform_expression(context, function)
+      }
+    // A plain variable or constructor used as a call target, e.g. `Some(x)`
+    // or `count_down(n)`. This is a reference to the callee, not a nullary
+    // variant *value*, so it must stay a bare variable even when capitalized.
+    glance.Variable(_, name) ->
+      internal.empty_return(context, python.Variable(name))
+    _ -> transform_expression(context, function)
+  }
   let reversed_arguments_result =
-    list.fold(
-      arguments,
+    arguments
+    |> relabel_use_callback(context, function)
+    |> list.fold(
       internal.TransformState(function_result.context, [], []),
       fold_call_argument,
     )
+  let arguments = list.reverse(reversed_arguments_result.item)
+  let arguments = case is_external_callee(context, function) {
+    True ->
+      // Externals' hand-written python bindings use the parameter names, not
+      // the gleam labels, so labelled arguments are emitted as keyword
+      // arguments keyed by the binding's parameter name (order independent,
+      // which handles piped calls whose argument order differs from the
+      // parameter order). When the callee's signature is unknown the labels
+      // are simply stripped, emitting the arguments positionally.
+      case external_parameter_names(context, function) {
+        option.Some(param_names) ->
+          // Calls without labelled arguments are already in parameter order
+          // (positional arguments in source order always fill the parameters
+          // in order), so only calls with labelled arguments need the keyword
+          // reassignment. This also keeps non-external functions whose name
+          // collides with an external (e.g. `string.append`) positional.
+          case list.any(arguments, is_labelled_field) {
+            True ->
+              case external_keyword_arguments(arguments, param_names) {
+                Ok(keyworded) -> keyworded
+                Error(_) -> strip_external_labels(arguments)
+              }
+            False -> strip_external_labels(arguments)
+          }
+        option.None -> strip_external_labels(arguments)
+      }
+    False -> arguments
+  }
+  // A constructor call mixing positional and labelled arguments (e.g.
+  // `LabelledField(name, t, label_location: span)`) must be reordered to the
+  // dataclass field order, with every argument labelled, so that the
+  // positionals land in the right fields.
+  let arguments = case constructor_field_names_of(context, function) {
+    option.Some(field_names) ->
+      case list.any(arguments, is_labelled_field) {
+        True ->
+          case reorder_constructor_arguments(arguments, field_names) {
+            Ok(reordered) -> reordered
+            Error(_) -> arguments
+          }
+        False -> arguments
+      }
+    option.None -> arguments
+  }
   internal.ExpressionReturn(
     reversed_arguments_result.context,
     list.append(
       function_result.statements,
       reversed_arguments_result.statements,
     ),
-    python.Call(
-      function: function_result.expression,
-      arguments: list.reverse(reversed_arguments_result.item),
+    python.Call(function: function_result.expression, arguments: arguments),
+  )
+}
+
+fn constructor_field_names_of(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> option.Option(List(String)) {
+  case function {
+    glance.Variable(_, name) -> constructor_field_names(context, name)
+    glance.FieldAccess(_, glance.Variable(_, alias), name) ->
+      case list.contains(context.module_aliases, alias) {
+        True -> constructor_field_names(context, alias <> "." <> name)
+        False -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+fn is_external_callee(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> Bool {
+  case context.external_functions {
+    option.None -> False
+    option.Some(external_functions) ->
+      case function {
+        glance.Variable(_, name) -> list.contains(external_functions, name)
+        glance.FieldAccess(_, glance.Variable(_, alias), name) ->
+          list.contains(context.module_aliases, alias)
+          && is_external_qualified(context, alias, name)
+        _ -> False
+      }
+  }
+}
+
+fn is_external_qualified(
+  context: internal.TransformerContext,
+  alias: String,
+  name: String,
+) -> Bool {
+  case context.external_qualified {
+    option.None -> False
+    option.Some(qualified) -> list.contains(qualified, alias <> "." <> name)
+  }
+}
+
+fn strip_external_labels(
+  arguments: List(python.Field(python.Expression)),
+) -> List(python.Field(python.Expression)) {
+  list.map(arguments, fn(field) {
+    case field {
+      python.LabelledField(_, item) -> python.UnlabelledField(item)
+      python.UnlabelledField(_) -> field
+    }
+  })
+}
+
+fn external_parameter_names(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> option.Option(List(#(option.Option(String), String))) {
+  case context.function_signatures {
+    option.None -> option.None
+    option.Some(signatures) -> {
+      let callee_key = case function {
+        glance.Variable(_, name) -> name
+        glance.FieldAccess(_, glance.Variable(_, alias), name) ->
+          alias <> "." <> name
+        _ -> ""
+      }
+      case dict.get(signatures, callee_key) {
+        Ok(params) -> option.Some(params)
+        Error(_) -> option.None
+      }
+    }
+  }
+}
+
+// Emits every argument of an external call as a keyword argument keyed by
+// the binding's parameter name. Labelled arguments match their parameter by
+// label; unlabelled arguments fill the remaining parameters in order. This
+// makes piped calls like `contents |> bit_array.from_string |>
+// write_bits(to: filepath)` (where the positional value is the *second*
+// parameter) come out correctly ordered.
+fn external_keyword_arguments(
+  arguments: List(python.Field(python.Expression)),
+  params: List(#(option.Option(String), String)),
+) -> Result(List(python.Field(python.Expression)), Nil) {
+  let names = list.map(params, fn(pair) { pair.1 })
+  let labels = list.map(params, fn(pair) { pair.0 })
+  let total = list.length(params)
+  // Labelled arguments claim their parameter first, then the unlabelled
+  // arguments fill the remaining parameters in order. The argument order in
+  // the call is irrelevant since every argument is emitted as a keyword.
+  use #(used, labelled_keywords) <- result.try(
+    list.try_fold(
+      arguments,
+      #(list.repeat(False, total), []),
+      fn(state, argument) {
+        let #(used, out) = state
+        case argument {
+          python.LabelledField(label, item) ->
+            case find_label_index(labels, label) {
+              option.Some(index) ->
+                Ok(#(
+                  mark_used(used, index),
+                  list.prepend(
+                    out,
+                    python.LabelledField(name_at(names, index), item),
+                  ),
+                ))
+              option.None -> Error(Nil)
+            }
+          python.UnlabelledField(_) -> Ok(state)
+        }
+      },
     ),
   )
+  use #(_, positional_keywords) <- result.try(
+    list.try_fold(arguments, #(used, []), fn(state, argument) {
+      let #(used, out) = state
+      case argument {
+        python.UnlabelledField(item) ->
+          case find_unused_index(used) {
+            option.Some(index) ->
+              Ok(#(
+                mark_used(used, index),
+                list.prepend(
+                  out,
+                  python.LabelledField(name_at(names, index), item),
+                ),
+              ))
+            option.None -> Error(Nil)
+          }
+        python.LabelledField(_, _) -> Ok(state)
+      }
+    }),
+  )
+  Ok(list.append(
+    list.reverse(positional_keywords),
+    list.reverse(labelled_keywords),
+  ))
+}
+
+fn mark_used(used: List(Bool), index: Int) -> List(Bool) {
+  list.index_map(used, fn(is_used, i) {
+    case i == index {
+      True -> True
+      False -> is_used
+    }
+  })
+}
+
+fn name_at(names: List(String), index: Int) -> String {
+  list.index_fold(names, "", fn(found, name, i) {
+    case i == index {
+      True -> name
+      False -> found
+    }
+  })
+}
+
+fn find_label_index(
+  labels: List(option.Option(String)),
+  label: String,
+) -> option.Option(Int) {
+  list.index_fold(labels, option.None, fn(found, item, index) {
+    case found {
+      option.Some(_) -> found
+      option.None ->
+        case item {
+          option.Some(candidate) if candidate == label -> option.Some(index)
+          _ -> option.None
+        }
+    }
+  })
+}
+
+fn find_unused_index(used: List(Bool)) -> option.Option(Int) {
+  list.index_fold(used, option.None, fn(found, is_used, index) {
+    case found {
+      option.Some(_) -> found
+      option.None ->
+        case is_used {
+          True -> option.None
+          False -> option.Some(index)
+        }
+    }
+  })
+}
+
+fn constructor_field_names(
+  context: internal.TransformerContext,
+  name: String,
+) -> option.Option(List(String)) {
+  case context.constructor_arities {
+    option.None -> option.None
+    option.Some(arities) ->
+      case dict.get(arities, name) {
+        Ok(field_names) -> option.Some(field_names)
+        Error(_) -> option.None
+      }
+  }
+}
+
+fn is_labelled_field(field: python.Field(python.Expression)) -> Bool {
+  case field {
+    python.LabelledField(_, _) -> True
+    python.UnlabelledField(_) -> False
+  }
+}
+
+// Reorders constructor arguments to the dataclass field order: labelled
+// arguments are matched by name, and positional arguments fill the remaining
+// fields in order. Every argument is relabelled, so the emitted call is
+// entirely keyword-based and the positionals land on the correct fields.
+fn reorder_constructor_arguments(
+  arguments: List(python.Field(python.Expression)),
+  field_names: List(String),
+) -> Result(List(python.Field(python.Expression)), Nil) {
+  let #(_, reordered) =
+    list.fold(field_names, #(arguments, []), fn(state, field_name) {
+      let #(remaining, acc) = state
+      case
+        list.find(remaining, fn(field) {
+          case field {
+            python.LabelledField(label, _) -> label == field_name
+            python.UnlabelledField(_) -> False
+          }
+        })
+      {
+        Ok(found) -> #(
+          list.filter(remaining, fn(field) {
+            case field {
+              python.LabelledField(label, _) -> label != field_name
+              python.UnlabelledField(_) -> True
+            }
+          }),
+          list.append(acc, [found]),
+        )
+        Error(_) ->
+          case remaining {
+            [python.UnlabelledField(item), ..rest] -> #(
+              rest,
+              list.append(acc, [
+                python.LabelledField(field_name, item),
+              ]),
+            )
+            _ -> state
+          }
+      }
+    })
+  case list.length(reordered) == list.length(arguments) {
+    True -> Ok(reordered)
+    False -> Error(Nil)
+  }
+}
+
+// A `use` statement desugars to a call with the callback as the final
+// argument. If the call also has labelled arguments the callback would be
+// emitted as a positional argument after keyword arguments, which is invalid
+// Python. Python requires keyword arguments to come after positional ones, so
+// the callback is relabelled with the callee's final parameter name.
+fn relabel_use_callback(
+  arguments: List(glance.Field(glance.Expression)),
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> List(glance.Field(glance.Expression)) {
+  case context.function_signatures {
+    option.None -> arguments
+    option.Some(signatures) -> {
+      let callee_key = case function {
+        glance.FieldAccess(_, glance.Variable(_, module_alias), name) ->
+          module_alias <> "." <> name
+        glance.Variable(_, name) -> name
+        _ -> ""
+      }
+      let last_param_label =
+        dict.get(signatures, callee_key)
+        |> result.map(fn(params) {
+          case list.last(params) {
+            Ok(pair) -> pair.0
+            Error(_) -> option.None
+          }
+        })
+        |> result.unwrap(option.None)
+      case last_param_label {
+        option.None -> arguments
+        option.Some(label) -> relabel_trailing_unlabelled(label, arguments)
+      }
+    }
+  }
+}
+
+fn relabel_trailing_unlabelled(
+  label: String,
+  arguments: List(glance.Field(glance.Expression)),
+) -> List(glance.Field(glance.Expression)) {
+  let #(_, out) =
+    list.fold(arguments, #(False, []), fn(state, argument) {
+      let #(seen_labelled, out) = state
+      case argument {
+        glance.UnlabelledField(expression) ->
+          case seen_labelled {
+            True -> #(
+              True,
+              list.prepend(
+                out,
+                glance.LabelledField(label, glance.Span(0, 0), expression),
+              ),
+            )
+            False -> #(False, list.prepend(out, argument))
+          }
+        glance.LabelledField(..) -> #(True, list.prepend(out, argument))
+        glance.ShorthandField(..) -> #(
+          seen_labelled,
+          list.prepend(out, argument),
+        )
+      }
+    })
+  out |> list.reverse
 }
 
 fn fold_call_argument(
@@ -312,8 +910,13 @@ fn fold_call_argument(
         python.UnlabelledField,
       )
     }
-    glance.ShorthandField(_, _) ->
-      panic as "Shorthand fields are not supported yet"
+    glance.ShorthandField(label, _) -> {
+      internal.merge_state_prepend(
+        state,
+        internal.empty_return(state.context, python.Variable(label)),
+        python.LabelledField(label, _),
+      )
+    }
   }
 }
 
@@ -325,18 +928,20 @@ fn transform_fn_capture(
   arguments_after: List(glance.Field(glance.Expression)),
 ) -> internal.ExpressionReturn {
   let function_result = transform_expression(context, function)
-  let placeholder_for_capture = case label {
-    option.None -> [
+  let placeholder_for_capture =
+    label
+    |> option.map(fn(label) {
+      [
+        glance.LabelledField(
+          label,
+          glance.Span(0, 0),
+          glance.Variable(glance.Span(0, 0), "fn_capture"),
+        ),
+      ]
+    })
+    |> option.unwrap([
       glance.UnlabelledField(glance.Variable(glance.Span(0, 0), "fn_capture")),
-    ]
-    option.Some(label) -> [
-      glance.LabelledField(
-        label,
-        glance.Span(0, 0),
-        glance.Variable(glance.Span(0, 0), "fn_capture"),
-      ),
-    ]
-  }
+    ])
   let reversed_arguments_result =
     list.flatten([
       arguments_before,
@@ -377,11 +982,26 @@ fn transform_fn(
     )
 
   let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
+  let parameters = list.reverse(parameters_result.item)
   let function =
     python.Function(
       function_name,
-      list.reverse(parameters_result.item),
-      transform_statement_block(body),
+      parameters,
+      transform_statement_block_with_context(
+        internal.TransformerContext(
+          ..internal.empty_context,
+          function_signatures: context.function_signatures,
+          module_aliases: context.module_aliases,
+          constructor_arities: context.constructor_arities,
+          module_bindings: context.module_bindings,
+          external_functions: context.external_functions,
+          external_qualified: context.external_qualified,
+        ),
+        body,
+      ).statements
+        |> shadowing.resolve_block_shadowing(shadowing.function_parameter_names(
+          parameters,
+        )),
     )
 
   internal.ExpressionReturn(
@@ -427,7 +1047,23 @@ fn transform_block(
 ) -> internal.ExpressionReturn {
   let function_name = "_fn_block_" <> int.to_string(context.next_block_id)
   let function =
-    python.Function(function_name, [], transform_statement_block(body))
+    python.Function(
+      function_name,
+      [],
+      transform_statement_block_with_context(
+        internal.TransformerContext(
+          ..internal.empty_context,
+          function_signatures: context.function_signatures,
+          module_aliases: context.module_aliases,
+          constructor_arities: context.constructor_arities,
+          module_bindings: context.module_bindings,
+          external_functions: context.external_functions,
+          external_qualified: context.external_qualified,
+        ),
+        body,
+      ).statements
+        |> shadowing.resolve_block_shadowing([]),
+    )
   internal.ExpressionReturn(
     context: internal.TransformerContext(
       ..context,
@@ -448,17 +1084,26 @@ fn transform_case(
     [subject] -> transform_expression(context, subject)
     multiple -> transform_tuple(context, multiple)
   }
+  let is_multi_subject = case subjects {
+    [_, _, ..] -> True
+    _ -> False
+  }
   let clause_result =
     list.fold(
       clauses,
       internal.TransformState(subjects_result.context, [], []),
-      fold_case_clause,
+      fn(state, clause) { fold_case_clause(state, clause, is_multi_subject) },
     )
 
   let function_name = "_fn_case_" <> int.to_string(context.next_case_id)
   let function =
     python.Function(function_name, [python.NameParam("_case_subject")], [
-      python.Match(clause_result.item |> list.reverse),
+      python.Match(
+        subject: python.Variable("_case_subject"),
+        cases: clause_result.item
+          |> list.reverse
+          |> shadowing.resolve_shadowing,
+      ),
     ])
 
   internal.ExpressionReturn(
@@ -478,36 +1123,93 @@ fn transform_case(
 fn fold_case_clause(
   state: internal.TransformState(internal.ReversedList(python.MatchCase)),
   clause: glance.Clause,
+  is_multi_subject: Bool,
 ) -> internal.TransformState(internal.ReversedList(python.MatchCase)) {
   case clause {
     glance.Clause(pattern_list, guard, glance.Block(_, statements)) -> {
-      let python_pattern = patterns.transform_alternative_patterns(pattern_list)
+      let pattern_results =
+        patterns.transform_alternative_patterns(
+          pattern_list,
+          is_multi_subject,
+          state.context.module_bindings,
+        )
       let guard_return = transform_optional_expression(state.context, guard)
       let statements_result =
         transform_statement_block_with_context(guard_return.context, statements)
+      let match_cases =
+        list.map(pattern_results, fn(pattern_result) {
+          let combined_guard =
+            combine_guards(pattern_result.guard, guard_return.expression)
+          python.MatchCase(
+            pattern_result.pattern,
+            combined_guard,
+            list.append(
+              pattern_result.body_prepend,
+              statements_result.statements,
+            ),
+          )
+        })
       internal.TransformState(
         statements_result.context,
         state.statements,
-        state.item
-          |> list.prepend(python.MatchCase(
-            python_pattern,
-            guard_return.expression,
-            statements_result.statements,
-          )),
+        list.fold(match_cases, state.item, fn(item, match_case) {
+          list.prepend(item, match_case)
+        }),
       )
     }
 
     glance.Clause(pattern_list, guard, body) -> {
-      let python_pattern = patterns.transform_alternative_patterns(pattern_list)
+      let pattern_results =
+        patterns.transform_alternative_patterns(
+          pattern_list,
+          is_multi_subject,
+          state.context.module_bindings,
+        )
       let guard_return = transform_optional_expression(state.context, guard)
       let body_result = transform_expression(guard_return.context, body)
 
-      internal.merge_state_prepend(state, body_result, fn(expr) {
-        python.MatchCase(python_pattern, guard_return.expression, [
-          python.Return(expr),
-        ])
-      })
+      let match_cases =
+        list.map(pattern_results, fn(pattern_result) {
+          let combined_guard =
+            combine_guards(pattern_result.guard, guard_return.expression)
+          python.MatchCase(
+            pattern_result.pattern,
+            combined_guard,
+            list.append(
+              pattern_result.body_prepend,
+              list.append(body_result.statements, [
+                body_result.expression
+                |> python.Expression
+                |> internal.add_return_if_returnable_expression,
+              ]),
+            ),
+          )
+        })
+
+      internal.TransformState(
+        body_result.context,
+        state.statements,
+        list.fold(match_cases, state.item, fn(item, match_case) {
+          list.prepend(item, match_case)
+        }),
+      )
     }
+  }
+}
+
+// Combines a guard generated from a pattern (e.g. a concatenation pattern)
+// with a guard written in the source. When both exist they are joined with
+// `and`, the pattern guard first so its bindings are available.
+fn combine_guards(
+  pattern_guard: option.Option(python.Expression),
+  clause_guard: option.Option(python.Expression),
+) -> option.Option(python.Expression) {
+  case pattern_guard, clause_guard {
+    option.None, option.None -> option.None
+    option.None, option.Some(guard) -> option.Some(guard)
+    option.Some(guard), option.None -> option.Some(guard)
+    option.Some(pattern_guard), option.Some(clause_guard) ->
+      option.Some(python.BinaryOperator(python.And, pattern_guard, clause_guard))
   }
 }
 
@@ -515,17 +1217,16 @@ fn transform_optional_expression(
   context: internal.TransformerContext,
   expression: option.Option(glance.Expression),
 ) -> internal.OptionalExpressionReturn {
-  case expression {
-    option.None -> internal.OptionalExpressionReturn(context, [], option.None)
-    option.Some(expression) -> {
-      let expression_return = transform_expression(context, expression)
-      internal.OptionalExpressionReturn(
-        expression_return.context,
-        expression_return.statements,
-        option.Some(expression_return.expression),
-      )
-    }
-  }
+  expression
+  |> option.map(fn(expression) {
+    let expression_return = transform_expression(context, expression)
+    internal.OptionalExpressionReturn(
+      expression_return.context,
+      expression_return.statements,
+      option.Some(expression_return.expression),
+    )
+  })
+  |> option.unwrap(internal.OptionalExpressionReturn(context, [], option.None))
 }
 
 fn transform_pipe(
@@ -534,9 +1235,40 @@ fn transform_pipe(
   right: glance.Expression,
 ) -> internal.ExpressionReturn {
   let left_result = transform_expression(context, left)
-  let right_result = transform_expression(left_result.context, right)
+  let piped_into_call = case right {
+    glance.Call(location, function, arguments) ->
+      case is_external_callee(context, function) {
+        True -> option.Some(#(location, function, arguments))
+        False -> option.None
+      }
+    _ -> option.None
+  }
+  let right_result = case piped_into_call {
+    option.Some(#(location, function, arguments)) ->
+      // The piped value is the first positional argument, so it is prepended
+      // here, before the external argument keywords are assigned. Prepending
+      // after the keywords were assigned would leave the piped value
+      // positional, landing it on the wrong parameter.
+      transform_expression(
+        left_result.context,
+        glance.Call(
+          location,
+          function,
+          list.prepend(arguments, glance.UnlabelledField(left)),
+        ),
+      )
+    option.None -> transform_expression(left_result.context, right)
+  }
   internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
-    python.Call(right_ex, [python.UnlabelledField(left_ex)])
+    case right_ex, piped_into_call {
+      python.Call(function, arguments), option.None ->
+        python.Call(
+          function,
+          list.prepend(arguments, python.UnlabelledField(left_ex)),
+        )
+      python.Call(_, _), option.Some(_) -> right_ex
+      _, _ -> python.Call(right_ex, [python.UnlabelledField(left_ex)])
+    }
   })
 }
 
@@ -580,22 +1312,17 @@ fn transform_record_update(
   |> list.fold(
     internal.TransformState(record_result.context, record_result.statements, []),
     fn(state, field) {
-      case field.item {
-        option.Some(item) -> {
-          internal.merge_state_prepend(
-            state,
-            transform_expression(state.context, item),
-            python.LabelledField(field.label, _),
-          )
-        }
-        option.None -> {
-          internal.merge_state_prepend(
-            state,
-            internal.empty_return(state.context, python.Variable(field.label)),
-            python.LabelledField(field.label, _),
-          )
-        }
-      }
+      let item_result =
+        field.item
+        |> option.map(fn(item) { transform_expression(state.context, item) })
+        |> option.unwrap(internal.empty_return(
+          state.context,
+          python.Variable(field.label),
+        ))
+      internal.merge_state_prepend(state, item_result, python.LabelledField(
+        field.label,
+        _,
+      ))
     },
   )
   |> internal.reverse_state_to_return(python.RecordUpdate(
@@ -677,12 +1404,58 @@ fn fold_bitsting_segment_option(
       )
     }
 
-    glance.Utf8CodepointOption
-    | glance.Utf16CodepointOption
-    | glance.Utf32CodepointOption ->
-      todo as "codepoints not supported in bitstrings yet"
+    glance.Utf8CodepointOption ->
+      internal.map_state_prepend(state, python.Utf8CodepointOption)
+    glance.Utf16CodepointOption ->
+      internal.map_state_prepend(state, python.Utf16CodepointOption)
+    glance.Utf32CodepointOption ->
+      internal.map_state_prepend(state, python.Utf32CodepointOption)
 
     glance.SignedOption | glance.UnsignedOption ->
       panic as "Signed, unsigned, and binary are not valid when constructing bitstrings"
+  }
+}
+
+fn is_capitalized(value: String) -> Bool {
+  case string.first(value) {
+    Ok(first) -> string.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ", first)
+    Error(_) -> False
+  }
+}
+
+// Looks up whether `name` is a nullary constructor. Returns option.Some(True)
+// for nullary variants (values are emitted as instances), option.Some(False)
+// for constructors with fields (used as function values they are emitted
+// bare), and option.None when the name is not a known constructor.
+fn constructor_arity(
+  context: internal.TransformerContext,
+  name: String,
+) -> option.Option(Bool) {
+  case context.constructor_arities {
+    option.None -> option.None
+    option.Some(arities) ->
+      case dict.get(arities, name) {
+        Ok(field_names) -> option.Some(list.is_empty(field_names))
+        Error(_) -> option.None
+      }
+  }
+}
+
+// Whether `alias.label` is a reference to a function of an imported module
+// (as opposed to a record field access on a local value). The function
+// signatures map keys cross-module functions as `alias.function`, matching
+// the import binding name.
+fn is_module_function(
+  context: internal.TransformerContext,
+  alias: String,
+  label: String,
+) -> Bool {
+  case context.function_signatures {
+    option.None -> False
+    option.Some(signatures) ->
+      case dict.get(signatures, alias <> "." <> label) {
+        Ok(_) -> True
+        Error(_) -> False
+      }
   }
 }

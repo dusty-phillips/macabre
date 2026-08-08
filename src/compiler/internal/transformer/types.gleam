@@ -1,7 +1,6 @@
 import compiler/python
 import glance
 import gleam/list
-import gleam/option
 
 pub fn transform_custom_type(
   custom_type: glance.CustomType,
@@ -39,12 +38,18 @@ fn transform_type(type_: glance.Type) -> python.Type {
     glance.TupleType(_, elements) ->
       python.TupleType(list.map(elements, transform_type))
 
-    glance.FunctionType(..) -> todo as "Not able to transform function types yet"
+    glance.FunctionType(_, parameters, return_type) ->
+      python.FunctionType(
+        list.map(parameters, transform_type),
+        transform_type(return_type),
+      )
 
     glance.VariableType(_, name) -> {
       python.GenericType(name)
     }
 
-    glance.HoleType(..) -> todo as "I don't even know what a hole type is"
+    glance.HoleType(_, name) -> {
+      python.GenericType(name)
+    }
   }
 }

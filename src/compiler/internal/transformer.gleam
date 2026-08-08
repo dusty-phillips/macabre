@@ -1,6 +1,10 @@
 import compiler/python
+import gleam/dict
 import gleam/list
 import gleam/option
+
+pub type FunctionSignatures =
+  dict.Dict(String, List(#(option.Option(String), String)))
 
 pub type ReversedList(a) =
   List(a)
@@ -15,6 +19,12 @@ pub type TransformerContext {
     next_block_id: Int,
     next_case_id: Int,
     next_discard_id: Int,
+    function_signatures: option.Option(FunctionSignatures),
+    module_aliases: List(String),
+    constructor_arities: option.Option(dict.Dict(String, List(String))),
+    module_bindings: option.Option(dict.Dict(String, String)),
+    external_functions: option.Option(List(String)),
+    external_qualified: option.Option(List(String)),
   )
 }
 
@@ -23,7 +33,28 @@ pub const empty_context = TransformerContext(
   next_block_id: 0,
   next_case_id: 0,
   next_discard_id: 0,
+  function_signatures: option.None,
+  module_aliases: [],
+  constructor_arities: option.None,
+  module_bindings: option.None,
+  external_functions: option.None,
+  external_qualified: option.None,
 )
+
+// The name a module binding is emitted under. If a top-level function or
+// constant in the module has the same name as an import binding, the import
+// binding is renamed (e.g. `token` -> `token_module`) so the Python `def`
+// does not override it.
+pub fn module_binding(context: TransformerContext, alias: String) -> String {
+  case context.module_bindings {
+    option.None -> alias
+    option.Some(bindings) ->
+      case dict.get(bindings, alias) {
+        Ok(binding) -> binding
+        Error(_) -> alias
+      }
+  }
+}
 
 pub type ExpressionReturn {
   ExpressionReturn(
