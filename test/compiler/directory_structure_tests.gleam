@@ -522,3 +522,123 @@ import arity_other
 
 "
 }
+
+// The project's own test/ and dev/ directories are compiled, while a
+// dependency's are never copied: only its src/ is used.
+pub fn project_test_and_dev_modules_compiled_test() {
+  use project_files <- init_folders()
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "tester.gleam"),
+      contents: "pub fn main() -> Int {
+  1
+}",
+    )
+
+  let test_dir = filepath.join(project_files.base_dir, "test")
+  let assert Ok(_) = simplifile.create_directory_all(test_dir)
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(test_dir, "tester_test.gleam"),
+      contents: "import tester
+
+pub fn test_main() -> Int {
+  tester.main()
+}",
+    )
+
+  let dev_dir = filepath.join(project_files.base_dir, "dev")
+  let assert Ok(_) = simplifile.create_directory_all(dev_dir)
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(dev_dir, "dev_helper.gleam"),
+      contents: "pub fn dev_value() -> Int {
+  7
+}",
+    )
+
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"tester\"",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
+  let assert Ok(_) = project.copy_project_test_srcs(gleam_project)
+  let assert Ok(_) = project.copy_project_dev_srcs(gleam_project)
+  let assert Ok(gleam_package) = package.load(gleam_project)
+  let compiled_package = compiler.compile_package(gleam_package)
+  let assert Ok(_) = macabre.write_package(compiled_package)
+
+  let assert Ok(files) = simplifile.read_directory(project_files.build_dir)
+  assert list.contains(files, "tester.py")
+  assert list.contains(files, "tester_test.py")
+  assert list.contains(files, "dev_helper.py")
+}
+
+pub fn dependency_test_and_dev_dirs_not_copied_test() {
+  use project_files <- init_folders()
+  let dep_dir = filepath.join(project_files.base_dir, "dep_pkg")
+  let assert Ok(_) =
+    simplifile.create_directory_all(filepath.join(dep_dir, "src"))
+  let assert Ok(_) =
+    simplifile.create_directory_all(filepath.join(dep_dir, "test"))
+  let assert Ok(_) =
+    simplifile.create_directory_all(filepath.join(dep_dir, "dev"))
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(filepath.join(dep_dir, "src"), "dep_pkg.gleam"),
+      contents: "pub fn dep_value() -> Int {
+  9
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(filepath.join(dep_dir, "test"), "dep_pkg_test.gleam"),
+      contents: "pub fn dep_test() -> Int {
+  1
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(filepath.join(dep_dir, "dev"), "dep_dev.gleam"),
+      contents: "pub fn dep_dev() -> Int {
+  2
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "consumer.gleam"),
+      contents: "import dep_pkg
+
+pub fn main() -> Int {
+  dep_pkg.dep_value()
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"consumer\"",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "manifest.toml"),
+      contents: "packages = [
+  { name = \"dep_pkg\", version = \"1.0.0\", build_tools = [\"gleam\"], requirements = [], source = \"local\", path = \"" <> dep_dir <> "\" },
+]",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+  let assert Ok(_) = project.copy_package_srcs(gleam_project)
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
+  let assert Ok(_) = project.copy_project_test_srcs(gleam_project)
+  let assert Ok(_) = project.copy_project_dev_srcs(gleam_project)
+
+  let assert Ok(copied) =
+    simplifile.read_directory(project_files.package_src_dir)
+  assert list.contains(copied, "dep_pkg.gleam")
+  assert list.contains(copied, "consumer.gleam")
+  assert !list.contains(copied, "dep_pkg_test.gleam")
+  assert !list.contains(copied, "dep_dev.gleam")
+}

@@ -7,7 +7,7 @@ code (using the [glance](https://hexdocs.pm/glance/) package) to Python.
 
 It covers all Gleam syntax and is now self-hosted: macabre can compile its own
 source code to Python, and the Python-compiled compiler produces byte-identical
-output to the Erlang-compiled one. It also passes its own test suite (201
+output to the Erlang-compiled one. It also passes its own test suite (217
 tests) and is idempotent — running the generated compiler on itself produces
 the same output every time.
 
@@ -100,6 +100,12 @@ Your files are compiled to `build/dev/python`. If your `<repo_name>.gleam` has
 a `main` function in it, then the compiler will generate a
 `build/dev/python/__main__.py` to call that function.
 
+The project's own `test/` and `dev/` directories are compiled too (a
+dependency's are not — only its `src/` is used). A test or dev module whose
+dependencies aren't available in the build is skipped rather than failing the
+whole build, so e.g. macabre's own test suite, which needs a Python `gleeunit`
+port that doesn't exist yet, is not compiled when macabre builds itself.
+
 Use this command to invoke it:
 
 ```shell
@@ -172,16 +178,11 @@ Some tasks below are marked easy if you want to get started.
 ### High Pri
 
 - non-byte-aligned bitstrings are not supported yet
-- test/ and dev/ directories need to be compiled too (currently only src/ is)
 - (EASY) Should be putting pubic types, functions, and constants in `__all__`
 
 ### Low Pri
 
-- (EASY) Turn this list into github issues
-- Comments are preserved in the compiled output (`//` becomes `#`, `///` and
-  `////` become docstrings), but only at module and top-level definition
-  level; comments inside function bodies are dropped
-- (EASY) maybe call ruff or black on the files after they are output, if they
+- (EASY) maybe call ruff on the files after they are output, if they
   are installed. (shellout is already available)
 - See if there are ways to leverage the
   [gleam_package_interface](https://github.com/gleam-lang/package-interface)

@@ -14,6 +14,7 @@ import gleam/dict
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/string
 import hex
 import simplifile
 import tom
@@ -85,6 +86,14 @@ pub fn entry_point(project: Project) -> String {
 
 pub fn src_dir(project: Project) -> String {
   project.base_directory |> filepath.join("src")
+}
+
+pub fn test_dir(project: Project) -> String {
+  project.base_directory |> filepath.join("test")
+}
+
+pub fn dev_dir(project: Project) -> String {
+  project.base_directory |> filepath.join("dev")
 }
 
 pub fn build_dir(project: Project) -> String {
@@ -172,6 +181,54 @@ pub fn copy_package_srcs(project: Project) -> Result(Nil, errors.Error) {
 
 pub fn copy_project_srcs(project: Project) -> Result(Nil, errors.Error) {
   filesystem.copy_dir(src_dir(project), build_src_dir(project))
+}
+
+// The project's own test/ and dev/ directories are copied into the shared
+// build src so their modules can be compiled. A dependency's test/ and dev/
+// directories are never copied: only its src/ is used (see copy_package_srcs).
+pub fn copy_project_test_srcs(project: Project) -> Result(Nil, errors.Error) {
+  copy_project_extra_srcs(project, test_dir(project))
+}
+
+pub fn copy_project_dev_srcs(project: Project) -> Result(Nil, errors.Error) {
+  copy_project_extra_srcs(project, dev_dir(project))
+}
+
+fn copy_project_extra_srcs(
+  project: Project,
+  dir: String,
+) -> Result(Nil, errors.Error) {
+  case simplifile.is_directory(dir) {
+    Ok(True) -> filesystem.copy_dir(dir, build_src_dir(project))
+    _ -> Ok(Nil)
+  }
+}
+
+/// The module names defined by the project's test/ directory, e.g.
+/// `foo/bar_test` for `test/foo/bar_test.gleam`.
+pub fn test_module_names(project: Project) -> List(String) {
+  module_names_in(test_dir(project))
+}
+
+/// The module names defined by the project's dev/ directory.
+pub fn dev_module_names(project: Project) -> List(String) {
+  module_names_in(dev_dir(project))
+}
+
+fn module_names_in(dir: String) -> List(String) {
+  case simplifile.get_files(dir) {
+    Error(_) -> []
+    Ok(files) ->
+      files
+      |> list.filter(fn(file) { string.ends_with(file, ".gleam") })
+      |> list.map(fn(file) {
+        file
+        |> string.remove_prefix(dir)
+        |> string.remove_prefix("/")
+        |> filepath.strip_extension
+      })
+      |> list.sort(string.compare)
+  }
 }
 
 pub fn clean(project: Project) -> Result(Nil, errors.Error) {

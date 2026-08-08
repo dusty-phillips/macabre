@@ -35,6 +35,8 @@ pub fn build(directory: String) -> Nil {
     use _ <- try(project.clone_packages(gleam_project))
     use _ <- try(project.copy_package_srcs(gleam_project))
     use _ <- try(project.copy_project_srcs(gleam_project))
+    use _ <- try(project.copy_project_test_srcs(gleam_project))
+    use _ <- try(project.copy_project_dev_srcs(gleam_project))
     use gleam_package <- try(package.load(gleam_project))
     let compiled_package = compiler.compile_package(gleam_package)
     use _ <- result.try(write_package(compiled_package))
