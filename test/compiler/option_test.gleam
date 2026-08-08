@@ -18,11 +18,6 @@ pub fn option_none_value_and_pattern_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import gleam.option
-from gleam import option
-from gleam.option import Some
-
-
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
@@ -30,7 +25,15 @@ def main():
                 return x
             case None:
                 return 0
-    return _fn_case_0(Some(1))",
+    return _fn_case_0(Some(1))
+
+
+import gleam.option
+from gleam import option
+from gleam.option import Some
+
+
+",
   )
 }
 
@@ -51,11 +54,6 @@ pub fn option_none_variant_no_class_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import gleam.option
-from gleam import option
-from gleam.option import Some
-
-
 def main():
     value = None
     def _fn_case_0(_case_subject):
@@ -64,7 +62,15 @@ def main():
                 return True
             case Some(_):
                 return False
-    return _fn_case_0(value)",
+    return _fn_case_0(value)
+
+
+import gleam.option
+from gleam import option
+from gleam.option import Some
+
+
+",
   )
 }
 
@@ -85,10 +91,6 @@ pub fn option_none_module_qualified_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import gleam.option
-from gleam import option
-
-
 def main():
     value = None
     def _fn_case_0(_case_subject):
@@ -97,6 +99,13 @@ def main():
                 return True
             case Some(_):
                 return False
-    return _fn_case_0(value)",
+    return _fn_case_0(value)
+
+
+import gleam.option
+from gleam import option
+
+
+",
   )
 }

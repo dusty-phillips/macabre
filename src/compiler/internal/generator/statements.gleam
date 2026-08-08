@@ -4,6 +4,7 @@ import compiler/python
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 import gleam/string_tree.{type StringTree}
 import glexer
 
@@ -134,8 +135,16 @@ fn generate_pattern(pattern: python.Pattern) -> StringTree {
       |> string_tree.append(")")
     python.PatternList(elements, rest) -> generate_pattern_list(elements, rest)
     python.PatternAlternate(patterns) ->
+      // Python requires every alternative to bind the same names. Named
+      // discards (e.g. `_arg`) are rendered as `_`-prefixed variables by the
+      // transformer, which would make Python reject the alternatives as
+      // binding different names. Discards never bind a usable value, so they
+      // are scrubbed to wildcards. Guard-carrying temps like
+      // `_nested_subject_0` cannot appear inside an alternate (they force the
+      // alternative into its own case), so any `_`-prefixed variable found
+      // here is a discard.
       patterns
-      |> list.map(generate_pattern)
+      |> list.map(fn(pattern) { pattern |> scrub_discards |> generate_pattern })
       |> string_tree.join(" | ")
     python.PatternConstructor(module, constructor, arguments) ->
       case constructor, arguments, module {
@@ -178,6 +187,42 @@ fn generate_pattern_constructor_field(
       string_tree.from_strings([label |> internal.python_name, "="])
       |> string_tree.append_tree(generate_pattern(pattern))
     python.UnlabelledField(pattern) -> generate_pattern(pattern)
+  }
+}
+
+// Replaces discarded variables (rendered as `_`-prefixed names by the
+// transformer) with wildcards. Only safe inside a PatternAlternate, where
+// guard-carrying temp variables can never appear.
+fn scrub_discards(pattern: python.Pattern) -> python.Pattern {
+  case pattern {
+    python.PatternVariable(name) ->
+      case name |> string.starts_with("_") {
+        True -> python.PatternWildcard
+        False -> python.PatternVariable(name)
+      }
+    python.PatternAssignment(inner, name) ->
+      python.PatternAssignment(scrub_discards(inner), name)
+    python.PatternTuple(patterns) ->
+      patterns |> list.map(scrub_discards) |> python.PatternTuple
+    python.PatternList(elements, rest) ->
+      python.PatternList(
+        list.map(elements, scrub_discards),
+        rest |> option.map(scrub_discards),
+      )
+    python.PatternConstructor(module, constructor, arguments) ->
+      python.PatternConstructor(
+        module,
+        constructor,
+        list.map(arguments, fn(field) {
+          case field {
+            python.LabelledField(label, inner) ->
+              python.LabelledField(label, scrub_discards(inner))
+            python.UnlabelledField(inner) ->
+              python.UnlabelledField(scrub_discards(inner))
+          }
+        }),
+      )
+    other -> other
   }
 }
 

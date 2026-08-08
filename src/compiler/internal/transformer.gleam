@@ -21,25 +21,35 @@ pub type TransformerContext {
     next_discard_id: Int,
     function_signatures: option.Option(FunctionSignatures),
     module_aliases: List(String),
+    module_reserved: List(String),
     constructor_arities: option.Option(dict.Dict(String, List(String))),
     module_bindings: option.Option(dict.Dict(String, String)),
     external_functions: option.Option(List(String)),
     external_qualified: option.Option(List(String)),
+    // A shared per-base-name counter used to mint fresh names across all
+    // shadowing passes. Keeping one pool means a name like `state` is
+    // renamed `state_0`, `state_1`, `state_2`... and no two passes can
+    // independently choose the same fresh name.
+    fresh_pool: dict.Dict(String, Int),
   )
 }
 
-pub const empty_context = TransformerContext(
-  next_function_id: 0,
-  next_block_id: 0,
-  next_case_id: 0,
-  next_discard_id: 0,
-  function_signatures: option.None,
-  module_aliases: [],
-  constructor_arities: option.None,
-  module_bindings: option.None,
-  external_functions: option.None,
-  external_qualified: option.None,
-)
+pub fn empty_context() -> TransformerContext {
+  TransformerContext(
+    next_function_id: 0,
+    next_block_id: 0,
+    next_case_id: 0,
+    next_discard_id: 0,
+    function_signatures: option.None,
+    module_aliases: [],
+    module_reserved: [],
+    constructor_arities: option.None,
+    module_bindings: option.None,
+    external_functions: option.None,
+    external_qualified: option.None,
+    fresh_pool: dict.new(),
+  )
+}
 
 // The name a module binding is emitted under. If a top-level function or
 // constant in the module has the same name as an import binding, the import

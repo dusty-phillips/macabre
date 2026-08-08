@@ -233,9 +233,6 @@ pub fn external_called_with_labels_emits_positional_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-from bindings import do_replace as bindings_do_replace
-
-
 def replace(in_, each, with_):
     builder = in_
     pattern = each
@@ -244,7 +241,13 @@ def replace(in_, each, with_):
 
 
 def main():
-    return replace(\"a\", \"b\", \"c\")",
+    return replace(\"a\", \"b\", \"c\")
+
+
+from bindings import do_replace as bindings_do_replace
+
+
+",
   )
 }
 
@@ -273,15 +276,18 @@ pub fn external_reordered_arguments_emits_keywords_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-from simplifile_bindings import write_bits
-
-
 def to_bits(input):
     return input
 
 
 def main():
-    return write_bits(bits=to_bits(\"contents\"), filepath=\"path\")",
+    return write_bits(bits=to_bits(\"contents\"), filepath=\"path\")
+
+
+from simplifile_bindings import write_bits
+
+
+",
   )
 }
 
@@ -311,18 +317,21 @@ pub fn non_external_call_with_colliding_external_name_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-from bindings import do_append as bindings_do_append
-import gleam.string
-from gleam import string
-
-
 def append(first, second):
     return bindings_do_append(first, second)
 
 
 def main():
     string.append(\"a\", \"/\")
-    return string.append(\"b\", to=\"/\", suffix=\"c\")",
+    return string.append(\"b\", to=\"/\", suffix=\"c\")
+
+
+from bindings import do_append as bindings_do_append
+import gleam.string
+from gleam import string
+
+
+",
   )
 }
 

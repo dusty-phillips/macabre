@@ -21,7 +21,7 @@ import gleam/string
 pub fn transform_statement_block(
   statements: List(glance.Statement),
 ) -> List(python.Statement) {
-  transform_statement_block_with_context(internal.empty_context, statements).statements
+  transform_statement_block_with_context(internal.empty_context(), statements).statements
 }
 
 pub fn transform_statement_block_with_context(
@@ -50,16 +50,14 @@ pub fn transform_statement_block_with_context(
 }
 
 pub fn transform_constant(
+  context: internal.TransformerContext,
   module: python.Module,
   constant: glance.Definition(glance.Constant),
 ) -> python.Module {
   python.Module(..module, constants: [
     python.Constant(
       name: constant.definition.name,
-      value: transform_expression(
-        internal.empty_context,
-        constant.definition.value,
-      ).expression,
+      value: transform_expression(context, constant.definition.value).expression,
     ),
     ..module.constants
   ])
@@ -146,13 +144,16 @@ fn transform_destructuring_assignment(
   }
   let value_result = transform_expression(message_result.context, value)
 
-  let statements = case binds {
+  let #(statements, fresh_pool) = case binds {
     [] ->
       // A pattern that binds nothing, e.g. `let _ = foo`. Just evaluate the
       // expression.
-      list.append(
-        list.append(message_result.statements, value_result.statements),
-        [python.Expression(value_result.expression)],
+      #(
+        list.append(
+          list.append(message_result.statements, value_result.statements),
+          [python.Expression(value_result.expression)],
+        ),
+        value_result.context.fresh_pool,
       )
     _ -> {
       let pattern_result = case
@@ -192,10 +193,7 @@ fn transform_destructuring_assignment(
       let function_name = "_fn_match_" <> int.to_string(context.next_case_id)
       let function =
         python.Function(function_name, [python.NameParam("_case_subject")], [
-          python.Match(
-            subject: python.Variable("_case_subject"),
-            cases: cases |> shadowing.resolve_shadowing,
-          ),
+          python.Match(subject: python.Variable("_case_subject"), cases: cases),
         ])
       let call =
         python.Call(python.Variable(function_name), [
@@ -205,12 +203,15 @@ fn transform_destructuring_assignment(
         [single] -> [python.SimpleAssignment(single, call)]
         multiple -> [python.MultipleAssignment(multiple, call)]
       }
-      list.append(
+      #(
         list.append(
-          list.append(message_result.statements, value_result.statements),
-          [python.FunctionDef(function)],
+          list.append(
+            list.append(message_result.statements, value_result.statements),
+            [python.FunctionDef(function)],
+          ),
+          assignment,
         ),
-        assignment,
+        value_result.context.fresh_pool,
       )
     }
   }
@@ -219,6 +220,7 @@ fn transform_destructuring_assignment(
     context: internal.TransformerContext(
       ..value_result.context,
       next_case_id: value_result.context.next_case_id + 1,
+      fresh_pool: fresh_pool,
     ),
     statements: statements,
   )
@@ -378,16 +380,55 @@ fn transform_expression(
                     False ->
                       case is_module_function(context, alias, label) {
                         True ->
-                          internal.empty_return(
-                            context,
-                            python.FieldAccess(
-                              python.ModuleRef(internal.module_binding(
+                          // Real Gleam resolves `name.label` by typing
+                          // `name` as a value and attempting field access
+                          // first; only when the value has no such field
+                          // does it fall back to module access. So when the
+                          // alias is shadowed by a parameter and the label
+                          // is a record field somewhere in the package,
+                          // this is a field access on the parameter and
+                          // must be emitted as a variable reference so the
+                          // shadowing passes rename it with the parameter.
+                          // Otherwise it is a module-qualified function
+                          // used as a value, which stays a module reference.
+                          case is_record_field(context, label) {
+                            True ->
+                              case
+                                list.contains(
+                                  context.module_reserved,
+                                  alias <> "_0",
+                                )
+                              {
+                                True ->
+                                  transform_expression(context, expression)
+                                  |> internal.map_return(python.FieldAccess(
+                                    _,
+                                    label,
+                                  ))
+                                False ->
+                                  internal.empty_return(
+                                    context,
+                                    python.FieldAccess(
+                                      python.ModuleRef(internal.module_binding(
+                                        context,
+                                        alias,
+                                      )),
+                                      label,
+                                    ),
+                                  )
+                              }
+                            False ->
+                              internal.empty_return(
                                 context,
-                                alias,
-                              )),
-                              label,
-                            ),
-                          )
+                                python.FieldAccess(
+                                  python.ModuleRef(internal.module_binding(
+                                    context,
+                                    alias,
+                                  )),
+                                  label,
+                                ),
+                              )
+                          }
                         False ->
                           transform_expression(context, expression)
                           |> internal.map_return(python.FieldAccess(_, label))
@@ -878,10 +919,7 @@ fn relabel_trailing_unlabelled(
             False -> #(False, list.prepend(out, argument))
           }
         glance.LabelledField(..) -> #(True, list.prepend(out, argument))
-        glance.ShorthandField(..) -> #(
-          seen_labelled,
-          list.prepend(out, argument),
-        )
+        glance.ShorthandField(..) -> #(True, list.prepend(out, argument))
       }
     })
   out |> list.reverse
@@ -983,25 +1021,34 @@ fn transform_fn(
 
   let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
   let parameters = list.reverse(parameters_result.item)
-  let #(parameters, body_statements) =
+  let transformed_body =
+    transform_statement_block_with_context(
+      internal.TransformerContext(
+        ..internal.empty_context(),
+        function_signatures: context.function_signatures,
+        module_aliases: context.module_aliases,
+        module_reserved: context.module_reserved,
+        constructor_arities: context.constructor_arities,
+        module_bindings: context.module_bindings,
+        external_functions: context.external_functions,
+        external_qualified: context.external_qualified,
+        fresh_pool: context.fresh_pool,
+      ),
+      body,
+    )
+  let #(body_statements, fresh_pool) =
+    transformed_body.statements
+    |> shadowing.resolve_block_shadowing(
+      shadowing.function_parameter_names(parameters),
+      context.module_reserved,
+      context.fresh_pool,
+    )
+  let #(parameters, body_statements, fresh_pool) =
     shadowing.resolve_module_shadowing(
-      transform_statement_block_with_context(
-        internal.TransformerContext(
-          ..internal.empty_context,
-          function_signatures: context.function_signatures,
-          module_aliases: context.module_aliases,
-          constructor_arities: context.constructor_arities,
-          module_bindings: context.module_bindings,
-          external_functions: context.external_functions,
-          external_qualified: context.external_qualified,
-        ),
-        body,
-      ).statements
-        |> shadowing.resolve_block_shadowing(shadowing.function_parameter_names(
-          parameters,
-        )),
+      body_statements,
       parameters,
       context.module_aliases,
+      fresh_pool,
     )
   let function = python.Function(function_name, parameters, body_statements)
 
@@ -1009,6 +1056,7 @@ fn transform_fn(
     context: internal.TransformerContext(
       ..parameters_result.context,
       next_function_id: context.next_function_id + 1,
+      fresh_pool: fresh_pool,
     ),
     statements: list.append(parameters_result.statements, [
       python.FunctionDef(function),
@@ -1047,28 +1095,34 @@ fn transform_block(
   body: List(glance.Statement),
 ) -> internal.ExpressionReturn {
   let function_name = "_fn_block_" <> int.to_string(context.next_block_id)
-  let function =
-    python.Function(
-      function_name,
-      [],
-      transform_statement_block_with_context(
-        internal.TransformerContext(
-          ..internal.empty_context,
-          function_signatures: context.function_signatures,
-          module_aliases: context.module_aliases,
-          constructor_arities: context.constructor_arities,
-          module_bindings: context.module_bindings,
-          external_functions: context.external_functions,
-          external_qualified: context.external_qualified,
-        ),
-        body,
-      ).statements
-        |> shadowing.resolve_block_shadowing([]),
+  let transformed_body =
+    transform_statement_block_with_context(
+      internal.TransformerContext(
+        ..internal.empty_context(),
+        function_signatures: context.function_signatures,
+        module_aliases: context.module_aliases,
+        module_reserved: context.module_reserved,
+        constructor_arities: context.constructor_arities,
+        module_bindings: context.module_bindings,
+        external_functions: context.external_functions,
+        external_qualified: context.external_qualified,
+        fresh_pool: context.fresh_pool,
+      ),
+      body,
     )
+  let #(body_statements, fresh_pool) =
+    transformed_body.statements
+    |> shadowing.resolve_block_shadowing(
+      [],
+      context.module_reserved,
+      context.fresh_pool,
+    )
+  let function = python.Function(function_name, [], body_statements)
   internal.ExpressionReturn(
     context: internal.TransformerContext(
       ..context,
       next_block_id: context.next_block_id + 1,
+      fresh_pool: fresh_pool,
     ),
     statements: [python.FunctionDef(function)],
     expression: python.Call(python.Variable(function_name), []),
@@ -1097,20 +1151,17 @@ fn transform_case(
     )
 
   let function_name = "_fn_case_" <> int.to_string(context.next_case_id)
+  let cases = clause_result.item |> list.reverse
   let function =
     python.Function(function_name, [python.NameParam("_case_subject")], [
-      python.Match(
-        subject: python.Variable("_case_subject"),
-        cases: clause_result.item
-          |> list.reverse
-          |> shadowing.resolve_shadowing,
-      ),
+      python.Match(subject: python.Variable("_case_subject"), cases: cases),
     ])
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(
       ..subjects_result.context,
       next_case_id: context.next_case_id + 1,
+      fresh_pool: clause_result.context.fresh_pool,
     ),
     statements: list.append(subjects_result.statements, [
       python.FunctionDef(function),
@@ -1139,8 +1190,13 @@ fn fold_case_clause(
         transform_statement_block_with_context(guard_return.context, statements)
       let match_cases =
         list.map(pattern_results, fn(pattern_result) {
+          let rewritten_clause_guard =
+            guard_return.expression
+            |> option.map(fn(guard) {
+              patterns.rewrite_guard_binds(guard, pattern_result.guard_binds)
+            })
           let combined_guard =
-            combine_guards(pattern_result.guard, guard_return.expression)
+            combine_guards(pattern_result.guard, rewritten_clause_guard)
           python.MatchCase(
             pattern_result.pattern,
             combined_guard,
@@ -1172,7 +1228,16 @@ fn fold_case_clause(
       let match_cases =
         list.map(pattern_results, fn(pattern_result) {
           let combined_guard =
-            combine_guards(pattern_result.guard, guard_return.expression)
+            combine_guards(
+              pattern_result.guard,
+              guard_return.expression
+                |> option.map(fn(guard) {
+                  patterns.rewrite_guard_binds(
+                    guard,
+                    pattern_result.guard_binds,
+                  )
+                }),
+            )
           python.MatchCase(
             pattern_result.pattern,
             combined_guard,
@@ -1458,5 +1523,22 @@ fn is_module_function(
         Ok(_) -> True
         Error(_) -> False
       }
+  }
+}
+
+// Whether the label names a record field somewhere in the package. Used to
+// disambiguate `alias.label` when `label` is both a module function and a
+// record field name: if the alias is shadowed by a parameter, the access is
+// a field access on that parameter (real Gleam types the container as a
+// value first), not a module-qualified function reference.
+fn is_record_field(
+  context: internal.TransformerContext,
+  label: String,
+) -> Bool {
+  case context.constructor_arities {
+    option.None -> False
+    option.Some(arities) ->
+      dict.values(arities)
+      |> list.any(fn(fields) { list.contains(fields, label) })
   }
 }

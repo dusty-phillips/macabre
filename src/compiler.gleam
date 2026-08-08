@@ -87,11 +87,18 @@ pub fn compile_package(
         // the bare keys for the module being compiled come from its own
         // definitions, merged on top to win deterministically.
         let constructor_arities =
-          module_arities(value.module)
+          dict.new()
           |> dict.fold(
             package_arities(package.package.modules),
             fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
           )
+          |> dict.fold(
+            package_bare_arities(package.package.modules),
+            fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
+          )
+          |> dict.fold(module_arities(value.module), fn(acc, name, field_names) {
+            dict.insert(acc, name, field_names)
+          })
         compile_module_with_external_qualified(
           value.module,
           function_signatures(package.package.modules, module_name),
@@ -165,6 +172,23 @@ fn package_arities(
     })
   })
   |> add_import_alias_arities(modules)
+}
+
+// Bare constructor names across the whole package, e.g. `LocaleBaseName` when
+// `import arc/vm/value.{LocaleBaseName, ..}` brings a nullary variant into the
+// module without qualifying it. The module being compiled contributes its own
+// definitions on top of these so its keys win deterministically (bare names
+// can collide across modules).
+fn package_bare_arities(
+  modules: dict.Dict(String, glimpse.Module),
+) -> dict.Dict(String, List(String)) {
+  modules
+  |> dict.fold(dict.new(), fn(acc, _module_name, module) {
+    module_arities(module.module)
+    |> dict.fold(acc, fn(acc, name, field_names) {
+      dict.insert(acc, name, field_names)
+    })
+  })
 }
 
 // References to constructors of an aliased import (e.g.

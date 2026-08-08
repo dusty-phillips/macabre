@@ -75,13 +75,16 @@ fn f() {
   |> should.equal(
     "from gleam_builtins import *
 
+def f():
+    mapper = option.Some
+    return mapper
+
+
 import gleam.option
 from gleam import option
 
 
-def f():
-    mapper = option.Some
-    return mapper",
+",
   )
 }
 
@@ -100,13 +103,16 @@ fn f() {
   |> should.equal(
     "from gleam_builtins import *
 
+def f():
+    ordering = order.Lt()
+    return ordering
+
+
 import gleam.order
 from gleam import order
 
 
-def f():
-    ordering = order.Lt()
-    return ordering",
+",
   )
 }
 
@@ -162,12 +168,15 @@ fn f() {
   |> should.equal(
     "from gleam_builtins import *
 
+def f():
+    ordering = o.Lt()
+    return ordering
+
+
 import gleam.order
 from gleam import order as o
 
 
-def f():
-    ordering = o.Lt()
-    return ordering",
+",
   )
 }

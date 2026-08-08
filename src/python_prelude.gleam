@@ -227,6 +227,13 @@ def gleam_match_bitstring(subject, *segments):
             bitsize = unit * size
             if bitsize % 8:
                 raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
+            # A segment that needs more bytes than remain cannot match: the
+            # subject is exhausted (the pattern extends past the end). Without
+            # this check `int.from_bytes(b'')` yields a phantom 0 and the
+            # pattern falsely matches, which can send scanners into an
+            # infinite loop.
+            if cursor + bitsize // 8 > len(subject):
+                return None
             match type:
                 case 'int':
                     value = int.from_bytes(
@@ -252,7 +259,7 @@ def gleam_match_bitstring(subject, *segments):
             case 'wildcard':
                 pass
             case 'int':
-                if value != int(payload):
+                if value != int(payload, 0):
                     return None
             case 'string':
                 if value != payload:

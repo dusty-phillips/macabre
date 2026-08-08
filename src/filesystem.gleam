@@ -113,6 +113,21 @@ pub fn copy_externals(
   source_directory: String,
   files: List(String),
 ) -> Result(Nil, errors.Error) {
+  // Copy every python helper found under the source directory in addition to
+  // the explicitly referenced externals: bindings may import helper modules
+  // (e.g. generated unicode tables) that are never referenced by an
+  // `@external(python, ...)` attribute.
+  let files =
+    simplifile.get_files(source_directory)
+    |> result.unwrap([])
+    |> list.filter(fn(file) { string.ends_with(file, ".py") })
+    |> list.map(fn(file) {
+      file
+      |> string.remove_prefix(source_directory)
+      |> string.remove_prefix("/")
+    })
+    |> list.append(files)
+    |> list.unique
   list.fold(files, Ok(Nil), fn(state, file) {
     case state {
       Ok(Nil) -> {

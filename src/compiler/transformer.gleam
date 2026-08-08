@@ -39,7 +39,16 @@ pub fn transform_with_signatures(
   |> list.fold(input.imports, _, fn(module, import_) {
     transform_import(module, import_, module_bindings)
   })
-  |> list.fold(input.constants, _, statements.transform_constant)
+  |> list.fold(input.constants, _, fn(module, constant) {
+    statements.transform_constant(
+      internal.TransformerContext(
+        ..internal.empty_context(),
+        constructor_arities:,
+      ),
+      module,
+      constant,
+    )
+  })
   |> list.fold(input.functions, _, fn(module, function) {
     transform_function_or_external(
       module,

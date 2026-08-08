@@ -17,6 +17,12 @@ pub type PatternWithGuard {
     pattern: python.Pattern,
     guard: option.Option(python.Expression),
     body_prepend: List(python.Statement),
+    // Names bound by a bitstring pattern through the walrus tuple in the
+    // guard. A clause guard (`case <<b, ..>> if b > 5`) references these
+    // names, but they only exist as `binds_variable[index]`, so the clause
+    // guard must rewrite those references to tuple index accesses. Each
+    // entry is #(name, binds_variable, tuple_index).
+    guard_binds: List(#(String, String, Int)),
   )
 }
 
@@ -31,7 +37,7 @@ const nested_subject_binds = "_nested_subject_"
 const nested_bitstring_binds = "_nested_bitstring_binds_"
 
 fn plain(pattern: python.Pattern) -> PatternWithGuard {
-  PatternWithGuard(pattern, option.None, [])
+  PatternWithGuard(pattern, option.None, [], [])
 }
 
 // alternative patterns are sent to us a a list of list of patters.
@@ -79,6 +85,7 @@ pub fn transform_alternative_patterns(
             list.map(transformed, fn(t) { t.pattern })
               |> python.PatternAlternate,
             option.None,
+            [],
             [],
           ),
         ]
@@ -131,6 +138,9 @@ fn transform_grouped_patterns(
         transformed
           |> list.map(fn(t) { t.body_prepend })
           |> list.flatten,
+        transformed
+          |> list.map(fn(t) { t.guard_binds })
+          |> list.flatten,
       )
     }
   }
@@ -171,12 +181,13 @@ fn transform_pattern_indexed(
     glance.PatternTuple(_, patterns) ->
       transform_nested_patterns(patterns, index, module_bindings)
       |> fn(result) {
-        let #(sub_patterns, guards, prepends, next_index) = result
+        let #(sub_patterns, guards, prepends, guard_binds, next_index) = result
         #(
           PatternWithGuard(
             python.PatternTuple(sub_patterns),
             combine_guard_list(guards),
             prepends,
+            guard_binds,
           ),
           next_index,
         )
@@ -184,18 +195,19 @@ fn transform_pattern_indexed(
     glance.PatternList(_, elems, rest) ->
       transform_nested_patterns(elems, index, module_bindings)
       |> fn(result) {
-        let #(sub_patterns, guards, prepends, next_index) = result
+        let #(sub_patterns, guards, prepends, guard_binds, next_index) = result
         case rest {
           option.None -> #(
             PatternWithGuard(
               python.PatternList(sub_patterns, option.None),
               combine_guard_list(guards),
               prepends,
+              guard_binds,
             ),
             next_index,
           )
           option.Some(rest_pattern) -> {
-            let #(rest_sub, rest_guards, rest_prepends, after_rest) =
+            let #(rest_sub, rest_guards, rest_prepends, rest_binds, after_rest) =
               transform_nested_pattern(
                 rest_pattern,
                 next_index,
@@ -207,6 +219,7 @@ fn transform_pattern_indexed(
                 python.PatternList(sub_patterns, option.Some(rest_sub)),
                 combine_guard_list(list.append(guards, rest_guards)),
                 list.append(prepends, rest_prepends),
+                list.append(guard_binds, rest_binds),
               ),
               after_rest,
             )
@@ -232,7 +245,7 @@ fn transform_pattern_indexed(
         True -> preferred_subject
         False -> option.None
       }
-      let #(sub, guards, prepends, next_index) =
+      let #(sub, guards, prepends, guard_binds, next_index) =
         transform_nested_pattern(inner, index, module_bindings, leaf_subject)
       let pattern = case guards, prepends {
         [], [] -> python.PatternAssignment(sub, subject)
@@ -245,7 +258,12 @@ fn transform_pattern_indexed(
           }
       }
       #(
-        PatternWithGuard(pattern, combine_guard_list(guards), prepends),
+        PatternWithGuard(
+          pattern,
+          combine_guard_list(guards),
+          prepends,
+          guard_binds,
+        ),
         next_index,
       )
     }
@@ -265,7 +283,7 @@ fn transform_pattern_indexed(
     glance.PatternVariant(_, module, constructor, arguments, _) ->
       transform_variant_fields(arguments, index, module_bindings)
       |> fn(result) {
-        let #(fields, guards, prepends, next_index) = result
+        let #(fields, guards, prepends, guard_binds, next_index) = result
         #(
           PatternWithGuard(
             python.PatternConstructor(
@@ -277,6 +295,7 @@ fn transform_pattern_indexed(
             ),
             combine_guard_list(guards),
             prepends,
+            guard_binds,
           ),
           next_index,
         )
@@ -314,20 +333,40 @@ fn transform_nested_pattern(
   index: Int,
   module_bindings: option.Option(dict.Dict(String, String)),
   preferred_subject: option.Option(String),
-) -> #(python.Pattern, List(python.Expression), List(python.Statement), Int) {
+) -> #(
+  python.Pattern,
+  List(python.Expression),
+  List(python.Statement),
+  List(#(String, String, Int)),
+  Int,
+) {
   case pattern {
-    glance.PatternInt(_, str) -> #(python.PatternInt(str), [], [], index)
-    glance.PatternFloat(_, str) -> #(python.PatternFloat(str), [], [], index)
-    glance.PatternString(_, str) -> #(python.PatternString(str), [], [], index)
-    glance.PatternVariable(_, str) -> #(
-      python.PatternVariable(str),
+    glance.PatternInt(_, str) -> #(python.PatternInt(str), [], [], [], index)
+    glance.PatternFloat(_, str) -> #(
+      python.PatternFloat(str),
+      [],
       [],
       [],
       index,
     )
-    glance.PatternDiscard(_, "") -> #(python.PatternWildcard, [], [], index)
+    glance.PatternString(_, str) -> #(
+      python.PatternString(str),
+      [],
+      [],
+      [],
+      index,
+    )
+    glance.PatternVariable(_, str) -> #(
+      python.PatternVariable(str),
+      [],
+      [],
+      [],
+      index,
+    )
+    glance.PatternDiscard(_, "") -> #(python.PatternWildcard, [], [], [], index)
     glance.PatternDiscard(_, str) -> #(
       python.PatternVariable("_" <> str),
+      [],
       [],
       [],
       index,
@@ -335,21 +374,28 @@ fn transform_nested_pattern(
     glance.PatternTuple(_, patterns) ->
       transform_nested_patterns(patterns, index, module_bindings)
       |> fn(result) {
-        let #(sub_patterns, guards, prepends, next_index) = result
-        #(python.PatternTuple(sub_patterns), guards, prepends, next_index)
+        let #(sub_patterns, guards, prepends, guard_binds, next_index) = result
+        #(
+          python.PatternTuple(sub_patterns),
+          guards,
+          prepends,
+          guard_binds,
+          next_index,
+        )
       }
     glance.PatternList(_, elems, rest) -> {
-      let #(sub_patterns, guards, prepends, next_index) =
+      let #(sub_patterns, guards, prepends, guard_binds, next_index) =
         transform_nested_patterns(elems, index, module_bindings)
       case rest {
         option.None -> #(
           python.PatternList(sub_patterns, option.None),
           guards,
           prepends,
+          guard_binds,
           next_index,
         )
         option.Some(rest_pattern) -> {
-          let #(rest_sub, rest_guards, rest_prepends, after_rest) =
+          let #(rest_sub, rest_guards, rest_prepends, rest_binds, after_rest) =
             transform_nested_pattern(
               rest_pattern,
               next_index,
@@ -360,6 +406,7 @@ fn transform_nested_pattern(
             python.PatternList(sub_patterns, option.Some(rest_sub)),
             list.append(guards, rest_guards),
             list.append(prepends, rest_prepends),
+            list.append(guard_binds, rest_binds),
             after_rest,
           )
         }
@@ -379,7 +426,7 @@ fn transform_nested_pattern(
         True -> preferred
         False -> option.None
       }
-      let #(sub, guards, prepends, next_index) =
+      let #(sub, guards, prepends, guard_binds, next_index) =
         transform_nested_pattern(
           inner,
           index,
@@ -394,7 +441,7 @@ fn transform_nested_pattern(
             _ -> python.PatternAssignment(sub, subject)
           }
       }
-      #(pattern, guards, prepends, next_index)
+      #(pattern, guards, prepends, guard_binds, next_index)
     }
     glance.PatternConcatenate(_, prefix, prefix_name, rest_name) -> {
       let #(subject, next_index) = nested_subject(index, preferred_subject)
@@ -405,7 +452,7 @@ fn transform_nested_pattern(
           rest_name,
           python.Variable(subject),
         )
-      #(python.PatternVariable(subject), [guard], [], next_index)
+      #(python.PatternVariable(subject), [guard], [], [], next_index)
     }
     glance.PatternBitString(_, segments) -> {
       let #(subject, next_index) = nested_subject(index, preferred_subject)
@@ -413,12 +460,18 @@ fn transform_nested_pattern(
       let guard =
         bitstring_guard(segments, python.Variable(subject), binds_variable)
       let prepends = bitstring_prepends(segments, binds_variable)
-      #(python.PatternVariable(subject), [guard], prepends, next_index + 1)
+      #(
+        python.PatternVariable(subject),
+        [guard],
+        prepends,
+        bitstring_guard_binds(segments, binds_variable),
+        next_index + 1,
+      )
     }
     glance.PatternVariant(_, module, constructor, arguments, _) ->
       transform_variant_fields(arguments, index, module_bindings)
       |> fn(result) {
-        let #(fields, guards, prepends, next_index) = result
+        let #(fields, guards, prepends, guard_binds, next_index) = result
         #(
           python.PatternConstructor(
             option.map(module, fn(module_name) {
@@ -429,6 +482,7 @@ fn transform_nested_pattern(
           ),
           guards,
           prepends,
+          guard_binds,
           next_index,
         )
       }
@@ -457,17 +511,19 @@ fn transform_nested_patterns(
   List(python.Pattern),
   List(python.Expression),
   List(python.Statement),
+  List(#(String, String, Int)),
   Int,
 ) {
   patterns
-  |> list.index_fold(#([], [], [], index), fn(acc, item, _index) {
-    let #(sub_patterns, guards, prepends, index) = acc
-    let #(sub, sub_guards, sub_prepends, next_index) =
+  |> list.index_fold(#([], [], [], [], index), fn(acc, item, _index) {
+    let #(sub_patterns, guards, prepends, guard_binds, index) = acc
+    let #(sub, sub_guards, sub_prepends, sub_binds, next_index) =
       transform_nested_pattern(item, index, module_bindings, option.None)
     #(
       list.append(sub_patterns, [sub]),
       list.append(guards, sub_guards),
       list.append(prepends, sub_prepends),
+      list.append(guard_binds, sub_binds),
       next_index,
     )
   })
@@ -483,29 +539,32 @@ fn transform_variant_fields(
   List(python.Field(python.Pattern)),
   List(python.Expression),
   List(python.Statement),
+  List(#(String, String, Int)),
   Int,
 ) {
   fields
-  |> list.index_fold(#([], [], [], index), fn(acc, field, _index) {
-    let #(fields, guards, prepends, index) = acc
+  |> list.index_fold(#([], [], [], [], index), fn(acc, field, _index) {
+    let #(fields, guards, prepends, guard_binds, index) = acc
     case field {
       glance.LabelledField(label, _, item) -> {
-        let #(sub, sub_guards, sub_prepends, next_index) =
+        let #(sub, sub_guards, sub_prepends, sub_binds, next_index) =
           transform_nested_pattern(item, index, module_bindings, option.None)
         #(
           list.append(fields, [python.LabelledField(label, sub)]),
           list.append(guards, sub_guards),
           list.append(prepends, sub_prepends),
+          list.append(guard_binds, sub_binds),
           next_index,
         )
       }
       glance.UnlabelledField(item) -> {
-        let #(sub, sub_guards, sub_prepends, next_index) =
+        let #(sub, sub_guards, sub_prepends, sub_binds, next_index) =
           transform_nested_pattern(item, index, module_bindings, option.None)
         #(
           list.append(fields, [python.UnlabelledField(sub)]),
           list.append(guards, sub_guards),
           list.append(prepends, sub_prepends),
+          list.append(guard_binds, sub_binds),
           next_index,
         )
       }
@@ -515,6 +574,7 @@ fn transform_variant_fields(
         ]),
         guards,
         prepends,
+        guard_binds,
         index,
       )
     }
@@ -582,7 +642,7 @@ fn transform_concatenate_pattern(
       rest_name,
       subject_expression(subject_index),
     )
-  PatternWithGuard(python.PatternWildcard, option.Some(guard), [])
+  PatternWithGuard(python.PatternWildcard, option.Some(guard), [], [])
 }
 
 // The guard for a concatenation pattern, checking that `subject` begins with
@@ -652,7 +712,27 @@ fn transform_bitstring_pattern(
     bitstring_guard(segments, subject_expression(subject_index), binds_variable)
   let body_prepend = bitstring_prepends(segments, binds_variable)
 
-  PatternWithGuard(python.PatternWildcard, option.Some(guard), body_prepend)
+  PatternWithGuard(
+    python.PatternWildcard,
+    option.Some(guard),
+    body_prepend,
+    bitstring_guard_binds(segments, binds_variable),
+  )
+}
+
+// The pattern-bound names of a bitstring pattern in tuple order, for
+// rewriting clause-guard references (`case <<b, ..>> if b > 5`) to tuple
+// index accesses of the walrus variable.
+fn bitstring_guard_binds(
+  segments: List(
+    #(glance.Pattern, List(glance.BitStringSegmentOption(glance.BitArraySize))),
+  ),
+  binds_variable: String,
+) -> List(#(String, String, Int)) {
+  segments
+  |> list.map(fn(segment) { collect_binds(segment.0) })
+  |> list.flatten
+  |> list.index_map(fn(name, index) { #(name, binds_variable, index) })
 }
 
 // The guard for a bitstring pattern: the subject is passed to the
@@ -824,5 +904,110 @@ fn assignment_name(name: glance.AssignmentName) -> String {
     glance.Named(str) -> str
     glance.Discarded("") -> "_"
     glance.Discarded(str) -> "_" <> str
+  }
+}
+
+// Rewrites references to bitstring-bound names in a clause guard. The
+// bitstring pattern's guard binds its variables into a tuple via a walrus
+// (`_bitstring_binds`); a clause guard like `case <<b, ..>> if b > 5` refers
+// to `b` directly, but `b` only exists as `_bitstring_binds[0]`, so the
+// reference is rewritten to a tuple index access.
+pub fn rewrite_guard_binds(
+  expression: python.Expression,
+  guard_binds: List(#(String, String, Int)),
+) -> python.Expression {
+  case expression {
+    python.Variable(name) ->
+      case
+        list.find(guard_binds, fn(bind) {
+          let #(bind_name, _, _) = bind
+          bind_name == name
+        })
+      {
+        Ok(#(_, binds_variable, index)) ->
+          python.TupleIndex(python.Variable(binds_variable), index)
+        Error(_) -> expression
+      }
+    python.String(_)
+    | python.Number(_)
+    | python.Bool(_)
+    | python.Nil
+    | python.ModuleRef(_) -> expression
+    python.Tuple(elements) ->
+      python.Tuple(list.map(elements, rewrite_guard_binds(_, guard_binds)))
+    python.Negate(inner) ->
+      python.Negate(rewrite_guard_binds(inner, guard_binds))
+    python.Not(inner) -> python.Not(rewrite_guard_binds(inner, guard_binds))
+    python.Panic(inner) -> python.Panic(rewrite_guard_binds(inner, guard_binds))
+    python.Todo(inner) -> python.Todo(rewrite_guard_binds(inner, guard_binds))
+    python.Lambda(args, body) ->
+      python.Lambda(args, rewrite_guard_binds(body, guard_binds))
+    python.List(elements) ->
+      python.List(list.map(elements, rewrite_guard_binds(_, guard_binds)))
+    python.ListWithRest(elements, rest) ->
+      python.ListWithRest(
+        list.map(elements, rewrite_guard_binds(_, guard_binds)),
+        rewrite_guard_binds(rest, guard_binds),
+      )
+    python.TupleIndex(tuple, index) ->
+      python.TupleIndex(rewrite_guard_binds(tuple, guard_binds), index)
+    python.FieldAccess(container, label) ->
+      python.FieldAccess(rewrite_guard_binds(container, guard_binds), label)
+    python.Call(function, arguments) ->
+      python.Call(
+        rewrite_guard_binds(function, guard_binds),
+        list.map(arguments, fn(field) {
+          case field {
+            python.LabelledField(label, item) ->
+              python.LabelledField(
+                label,
+                rewrite_guard_binds(item, guard_binds),
+              )
+            python.UnlabelledField(item) ->
+              python.UnlabelledField(rewrite_guard_binds(item, guard_binds))
+          }
+        }),
+      )
+    python.RecordUpdate(record, fields) ->
+      python.RecordUpdate(
+        rewrite_guard_binds(record, guard_binds),
+        list.map(fields, fn(field) {
+          case field {
+            python.LabelledField(label, item) ->
+              python.LabelledField(
+                label,
+                rewrite_guard_binds(item, guard_binds),
+              )
+            python.UnlabelledField(item) ->
+              python.UnlabelledField(rewrite_guard_binds(item, guard_binds))
+          }
+        }),
+      )
+    python.BinaryOperator(name, left, right) ->
+      python.BinaryOperator(
+        name,
+        rewrite_guard_binds(left, guard_binds),
+        rewrite_guard_binds(right, guard_binds),
+      )
+    python.Slice(container, start, end) ->
+      python.Slice(
+        rewrite_guard_binds(container, guard_binds),
+        rewrite_guard_binds(start, guard_binds),
+        option.map(end, rewrite_guard_binds(_, guard_binds)),
+      )
+    python.AssignmentExpression(name, value) ->
+      python.AssignmentExpression(name, rewrite_guard_binds(value, guard_binds))
+    python.IsNotNone(inner) ->
+      python.IsNotNone(rewrite_guard_binds(inner, guard_binds))
+    python.BitString(segments) ->
+      python.BitString(
+        list.map(segments, fn(segment) {
+          let python.BitStringSegment(value, options) = segment
+          python.BitStringSegment(
+            rewrite_guard_binds(value, guard_binds),
+            options,
+          )
+        }),
+      )
   }
 }

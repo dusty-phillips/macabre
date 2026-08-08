@@ -206,12 +206,15 @@ pub fn parameter_shadowing_imported_module_test() {
   |> should.equal(
     "from gleam_builtins import *
 
+def load(project_0):
+    return project.build_src_dir(project_0.name)
+
+
 import compiler.project
 from compiler import project
 
 
-def load(project_0):
-    return project.build_src_dir(project_0.name)",
+",
   )
 }
 
@@ -238,12 +241,15 @@ pub fn module_function_value_with_shadowing_parameter_test() {
   |> should.equal(
     "from gleam_builtins import *
 
+def count(list_0):
+    return list.fold(list_0, 0, list.append)
+
+
 import gleam.list
 from gleam import list
 
 
-def count(list_0):
-    return list.fold(list_0, 0, list.append)",
+",
   )
 }
 
@@ -267,16 +273,19 @@ pub fn module_binding_colliding_with_function_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import glexer.token
-from glexer import token
-
-
 def token_0(lexer, tok, source, offset):
     return tok
 
 
 def main():
-    return token_0(1, token.Name(\"x\"), \"\", 0)",
+    return token_0(1, token.Name(\"x\"), \"\", 0)
+
+
+import glexer.token
+from glexer import token
+
+
+",
   )
 }
 
@@ -299,16 +308,19 @@ pub fn module_binding_colliding_with_public_function_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import glexer.token
-from glexer import token as token_module
-
-
 def token(lexer, tok, source, offset):
     return tok
 
 
 def main():
-    return token(1, token_module.Name(\"x\"), \"\", 0)",
+    return token(1, token_module.Name(\"x\"), \"\", 0)
+
+
+import glexer.token
+from glexer import token as token_module
+
+
+",
   )
 }
 
@@ -330,16 +342,19 @@ pub fn module_binding_colliding_parameter_shadowing_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import glexer.token
-from glexer import token
-
-
 def token_0(lexer, tok, source, offset):
     return tok
 
 
 def use_token(token_0):
-    return token_0 + 1",
+    return token_0 + 1
+
+
+import glexer.token
+from glexer import token
+
+
+",
   )
 }
 
@@ -359,12 +374,15 @@ pub fn module_binding_colliding_with_constant_test() {
   |> should.equal(
     "from gleam_builtins import *
 
+def main():
+    return token_0
+
+
 import glexer.token
 from glexer import token
 
 
-def main():
-    return token_0
+
 
 
 token_0 = \"glexer\"
@@ -393,10 +411,6 @@ pub fn module_binding_colliding_with_function_pattern_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import glexer.token
-from glexer import token
-
-
 def token_0(lexer, tok, source, offset):
     return tok
 
@@ -406,6 +420,13 @@ def main():
         match _case_subject:
             case Some(token.Name(name)):
                 return name
-    return _fn_case_0(Some(token.Name(\"x\")))",
+    return _fn_case_0(Some(token.Name(\"x\")))
+
+
+import glexer.token
+from glexer import token
+
+
+",
   )
 }

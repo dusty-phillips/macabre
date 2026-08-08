@@ -476,9 +476,6 @@ pub fn other() -> Thing {
   |> should.equal(
     "from gleam_builtins import *
 
-import collision_other
-
-
 @dataclasses.dataclass(frozen=True)
 class Thing:
     label: str
@@ -491,6 +488,12 @@ def make(name, t):
 
 
 def main():
-    pass",
+    pass
+
+
+import collision_other
+
+
+",
   )
 }

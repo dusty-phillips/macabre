@@ -21,35 +21,11 @@ import gleam/set
 // a local of the whole match function and the second arm's reference to the
 // outer `input` fails with UnboundLocalError.
 //
-// To fix this we detect names that are bound by one arm's pattern or guard but
-// referenced (without being bound) in another arm of the same match, and
-// rename the bindings to fresh names consistently within their own arm.
-pub fn resolve_shadowing(
-  cases: List(python.MatchCase),
-) -> List(python.MatchCase) {
-  let all_binds =
-    cases
-    |> list.map(case_binds)
-    |> list.flatten
-  let all_refs =
-    cases
-    |> list.map(fn(match_case) { case_refs(match_case, set.new()) })
-    |> list.flatten
-  let used = set.from_list(all_binds) |> set.union(set.from_list(all_refs))
-  let collisions =
-    all_binds
-    |> list.filter(fn(name) {
-      list.any(all_refs, fn(referenced) { referenced == name })
-    })
-    |> list.unique
-
-  let renames =
-    list.fold(collisions, dict.new(), fn(renames, name) {
-      dict.insert(renames, name, fresh_name(name, used))
-    })
-
-  list.map(cases, fn(match_case) { rename_case(match_case, renames, False) })
-}
+// To fix this we detect names that are bound by one arm's pattern, guard, or
+// body but referenced (without being bound) in another arm of the same match,
+// and rename the bindings to fresh names consistently within their own arm.
+// This runs inside the single block-level pass, when a match statement is
+// reached: `resolve_match_cases` below.
 
 // Gleam `let` bindings are scoped from their binding onwards within a block,
 // but Python scopes simple assignments to the whole enclosing function. This
@@ -75,7 +51,9 @@ pub fn resolve_shadowing(
 pub fn resolve_block_shadowing(
   statements: List(python.Statement),
   parameter_names: List(String),
-) -> List(python.Statement) {
+  reserved: List(String),
+  pool: dict.Dict(String, Int),
+) -> #(List(python.Statement), dict.Dict(String, Int)) {
   let initial_scope = set.from_list(parameter_names)
 
   let #(_, outer_refs, all_binds) =
@@ -98,31 +76,90 @@ pub fn resolve_block_shadowing(
     |> list.unique
 
   case collisions {
-    [] -> statements
     _ -> {
-      let used =
-        set.from_list(all_binds)
-        |> set.union(set.from_list(outer_refs))
-      let renames =
-        list.fold(collisions, dict.new(), fn(acc, name) {
-          dict.insert(acc, name, fresh_name(name, used))
-        })
+      let #(renames, pool) = case collisions {
+        [] -> #(dict.new(), pool)
+        _ -> {
+          let used =
+            set.from_list(all_binds)
+            |> set.union(set.from_list(outer_refs))
+            |> set.union(set.from_list(reserved))
+            |> set.union(set.from_list(parameter_names))
+          list.fold(collisions, #(dict.new(), pool), fn(acc, name) {
+            let #(renames, pool) = acc
+            let #(fresh, pool) = fresh_name(name, used, pool)
+            #(dict.insert(renames, name, fresh), pool)
+          })
+        }
+      }
 
-      let #(_, reversed) =
-        list.fold(statements, #(initial_scope, []), fn(acc, statement) {
-          let #(scope, out) = acc
-          let active_renames =
-            dict.filter(renames, fn(name, _) { set.contains(scope, name) })
-          let renamed =
-            statement
-            |> rename_statement(active_renames, set.new(), True)
-            |> rename_binding_targets(renames)
-            |> resolve_nested_binds(renames, scope)
-          let next_scope =
-            set.union(scope, set.from_list(top_level_binds(statement)))
-          #(next_scope, [renamed, ..out])
-        })
-      list.reverse(reversed)
+      let #(_, _, _, _, _, _, reversed, pool) =
+        list.fold(
+          statements,
+          #(
+            initial_scope,
+            set.new(),
+            set.new(),
+            renames,
+            dict.new(),
+            dict.new(),
+            [],
+            pool,
+          ),
+          fn(acc, statement) {
+            let #(
+              scope,
+              cross_scope,
+              bound,
+              renames,
+              cross_renames,
+              own_cross,
+              out,
+              pool,
+            ) = acc
+            let active_renames =
+              active_renames_for(
+                renames,
+                cross_renames,
+                own_cross,
+                scope,
+                cross_scope,
+              )
+            let #(renamed, pool) =
+              statement
+              |> rename_statement(active_renames, set.new(), pool)
+            let #(renamed, renames, own_cross, pool) =
+              rename_binding_targets(renamed, renames, own_cross, bound, pool)
+            let #(renamed, pool) =
+              resolve_nested_binds(
+                renamed,
+                renames,
+                cross_renames,
+                own_cross,
+                scope,
+                cross_scope,
+                bound,
+                pool,
+              )
+            let next_scope =
+              set.union(scope, set.from_list(top_level_binds(statement)))
+            let next_cross_scope =
+              set.union(cross_scope, set.from_list(top_level_binds(statement)))
+            let next_bound =
+              set.union(bound, set.from_list(top_level_binds(statement)))
+            #(
+              next_scope,
+              next_cross_scope,
+              next_bound,
+              renames,
+              cross_renames,
+              own_cross,
+              [renamed, ..out],
+              pool,
+            )
+          },
+        )
+      #(list.reverse(reversed), pool)
     }
   }
 }
@@ -154,7 +191,12 @@ pub fn resolve_module_shadowing(
   statements: List(python.Statement),
   parameters: List(python.FunctionParameter),
   module_aliases: List(String),
-) -> #(List(python.FunctionParameter), List(python.Statement)) {
+  pool: dict.Dict(String, Int),
+) -> #(
+  List(python.FunctionParameter),
+  List(python.Statement),
+  dict.Dict(String, Int),
+) {
   let parameter_names = function_parameter_names(parameters)
 
   let collisions =
@@ -163,14 +205,16 @@ pub fn resolve_module_shadowing(
     |> list.unique
 
   case collisions {
-    [] -> #(parameters, statements)
+    [] -> #(parameters, statements, pool)
     _ -> {
       let used =
         set.from_list(parameter_names)
         |> set.union(set.from_list(module_aliases))
-      let renames =
-        list.fold(collisions, dict.new(), fn(acc, name) {
-          dict.insert(acc, name, fresh_name(name, used))
+      let #(renames, pool) =
+        list.fold(collisions, #(dict.new(), pool), fn(acc, name) {
+          let #(renames, pool) = acc
+          let #(fresh, pool) = fresh_name(name, used, pool)
+          #(dict.insert(renames, name, fresh), pool)
         })
 
       let renamed_parameters =
@@ -182,12 +226,196 @@ pub fn resolve_module_shadowing(
           }
         })
 
-      let renamed_statements =
-        list.map(statements, rename_statement(_, renames, set.new(), True))
+      let used_for_locals =
+        set.from_list(dict.values(renames))
+        |> set.union(used)
+        // Names bound inside nested functions and match arms (e.g. a
+        // case-branch local that the case-level shadowing pass renamed) are
+        // locals of the whole generated function in Python, so a fresh name
+        // minted here must not collide with them.
+        |> set.union(
+          set.from_list(list.flatten(list.map(statements, all_nested_binds))),
+        )
+        |> set.union(
+          set.from_list(list.flatten(list.map(statements, all_case_binds))),
+        )
+        |> set.union(
+          set.from_list(
+            list.flatten(list.map(statements, statement_refs(_, set.new()))),
+          ),
+        )
 
-      #(renamed_parameters, renamed_statements)
+      let #(renamed_statements, pool) =
+        rename_module_shadowed(statements, renames, used_for_locals, pool)
+
+      #(renamed_parameters, renamed_statements, pool)
     }
   }
+}
+
+// Renames references to module-shadowed parameters in a function body in
+// program order. A binding target that shadows a renamed parameter is a NEW
+// local, distinct from the parameter, so it gets its own fresh name and later
+// references to it use that name; references before the bind (e.g. in the
+// bind's own right hand side) refer to the parameter and use the parameter's
+// rename. Without this the bind target and the parameter reference would
+// collapse onto the same name, and Python would treat a reference made before
+// a same-scope assignment as referencing the (unbound) local.
+fn rename_module_shadowed(
+  statements: List(python.Statement),
+  param_renames: dict.Dict(String, String),
+  used: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(List(python.Statement), dict.Dict(String, Int)) {
+  let #(_, reversed, pool) =
+    list.fold(statements, #(param_renames, [], pool), fn(acc, statement) {
+      let #(renaming, out, pool) = acc
+      let #(renamed, renaming, pool) =
+        rename_module_statement(statement, renaming, used, pool)
+      #(renaming, [renamed, ..out], pool)
+    })
+  #(list.reverse(reversed), pool)
+}
+
+// Renames a statement in program order during module shadowing. The `renaming`
+// dict maps each renamed name to the name currently in effect for references
+// (the parameter's rename before any shadowing bind, the bind's fresh name
+// after it); each statement returns the dict updated with fresh names for its
+// own binding targets that shadow a renamed name.
+fn rename_module_statement(
+  statement: python.Statement,
+  renaming: dict.Dict(String, String),
+  used: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(python.Statement, dict.Dict(String, String), dict.Dict(String, Int)) {
+  case statement {
+    python.SimpleAssignment(name, value) -> {
+      let #(target, updated, pool) = shadow_target(name, renaming, used, pool)
+      #(
+        python.SimpleAssignment(
+          target,
+          rename_expression(value, renaming, set.new()),
+        ),
+        updated,
+        pool,
+      )
+    }
+    python.MultipleAssignment(names, value) -> {
+      let #(renamed_names, updated, pool) =
+        list.fold(names, #([], renaming, pool), fn(acc, name) {
+          let #(out, renaming, pool) = acc
+          let #(target, renaming, pool) =
+            shadow_target(name, renaming, used, pool)
+          #([target, ..out], renaming, pool)
+        })
+      #(
+        python.MultipleAssignment(
+          list.reverse(renamed_names),
+          rename_expression(value, renaming, set.new()),
+        ),
+        updated,
+        pool,
+      )
+    }
+    python.Expression(expression) -> #(
+      python.Expression(rename_expression(expression, renaming, set.new())),
+      renaming,
+      pool,
+    )
+    python.Return(expression) -> #(
+      python.Return(rename_expression(expression, renaming, set.new())),
+      renaming,
+      pool,
+    )
+    python.FunctionDef(function) -> {
+      let #(renamed_body, pool) =
+        rename_module_shadowed(function.body, renaming, used, pool)
+      let renamed_function =
+        python.Function(
+          ..function,
+          parameters: list.map(function.parameters, rename_function_parameter(
+            _,
+            renaming,
+          )),
+          body: renamed_body,
+        )
+      #(python.FunctionDef(renamed_function), renaming, pool)
+    }
+    python.Match(subject, cases) -> {
+      let #(renamed_cases, pool) =
+        list.fold(cases, #([], pool), fn(acc, match_case) {
+          let #(out, pool) = acc
+          let #(renamed, pool) =
+            rename_module_case(match_case, renaming, used, pool)
+          #([renamed, ..out], pool)
+        })
+      #(
+        python.Match(
+          subject: rename_expression(subject, renaming, set.new()),
+          cases: list.reverse(renamed_cases),
+        ),
+        renaming,
+        pool,
+      )
+    }
+    python.While(condition, body) -> {
+      let #(renamed_body, pool) =
+        rename_module_shadowed(body, renaming, used, pool)
+      #(
+        python.While(
+          rename_expression(condition, renaming, set.new()),
+          renamed_body,
+        ),
+        renaming,
+        pool,
+      )
+    }
+  }
+}
+
+// The fresh name for a binding target that shadows a renamed name, plus the
+// renaming dict updated so later references to the target use the fresh name.
+// A target whose name is not being renamed keeps its name and the dict.
+fn shadow_target(
+  name: String,
+  renaming: dict.Dict(String, String),
+  used: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(String, dict.Dict(String, String), dict.Dict(String, Int)) {
+  case dict.has_key(renaming, name) {
+    False -> #(name, renaming, pool)
+    True -> {
+      let #(fresh, pool) = fresh_name(name, used, pool)
+      #(fresh, dict.insert(renaming, name, fresh), pool)
+    }
+  }
+}
+
+fn rename_module_case(
+  match_case: python.MatchCase,
+  renaming: dict.Dict(String, String),
+  used: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(python.MatchCase, dict.Dict(String, Int)) {
+  let python.MatchCase(pattern, guard, body) = match_case
+  // Names the case pattern binds are locals of the whole generated match
+  // function; references to them in the body use the original name (matching
+  // the unrenamed pattern), so they are excluded from the renaming. The
+  // pattern itself keeps the original names.
+  let local_renames =
+    dict.filter(renaming, fn(name, _) {
+      !list.contains(pattern_binds(pattern), name)
+    })
+  let #(renamed_body, pool) =
+    rename_module_shadowed(body, local_renames, used, pool)
+  #(
+    python.MatchCase(
+      pattern,
+      option.map(guard, rename_expression(_, local_renames, set.new())),
+      renamed_body,
+    ),
+    pool,
+  )
 }
 
 // Names bound by a top level assignment in a function body. These become
@@ -207,28 +435,134 @@ fn top_level_binds(statement: python.Statement) -> List(String) {
 // Renames the target names of top level assignments. Used after renaming the
 // references in a statement, so the binding target of a name that is bound
 // before any reference to it still gets renamed.
+// Renames the targets of top-level assignments in a function body. A target
+// whose name is being renamed gets the rename — unless the name is already
+// bound in the current scope, meaning this is a REBIND that shadows a
+// previously-renamed local (e.g. two `let crossed = ...` in one function).
+// Python scopes the rebind to the whole generated function, so the rebind
+// must get its own fresh name from the shared pool (mirroring module
+// shadowing's `shadow_target`), with later references in that scope using the
+// fresh name.
 fn rename_binding_targets(
   statement: python.Statement,
   renames: dict.Dict(String, String),
-) -> python.Statement {
+  own_cross: dict.Dict(String, String),
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(
+  python.Statement,
+  dict.Dict(String, String),
+  dict.Dict(String, String),
+  dict.Dict(String, Int),
+) {
   case statement {
-    python.SimpleAssignment(name, value) ->
-      python.SimpleAssignment(
-        result.unwrap(dict.get(renames, name), name),
-        value,
+    python.SimpleAssignment(name, value) -> {
+      case dict.has_key(own_cross, name) {
+        True -> {
+          let #(target, own_cross, pool) =
+            cross_target(name, renames, own_cross, bound, pool)
+          #(python.SimpleAssignment(target, value), renames, own_cross, pool)
+        }
+        False -> {
+          let #(target, renames, pool) =
+            block_shadow_target(name, renames, own_cross, bound, pool)
+          #(python.SimpleAssignment(target, value), renames, own_cross, pool)
+        }
+      }
+    }
+    python.MultipleAssignment(names, value) -> {
+      let #(renamed_names, renames, own_cross, pool) =
+        list.fold(names, #([], renames, own_cross, pool), fn(acc, name) {
+          let #(out, renames, own_cross, pool) = acc
+          let #(target, renames, own_cross, pool) = case
+            dict.has_key(own_cross, name)
+          {
+            True -> {
+              let #(target, own_cross, pool) =
+                cross_target(name, renames, own_cross, bound, pool)
+              #(target, renames, own_cross, pool)
+            }
+            False -> {
+              let #(target, renames, pool) =
+                block_shadow_target(name, renames, own_cross, bound, pool)
+              #(target, renames, own_cross, pool)
+            }
+          }
+          #([target, ..out], renames, own_cross, pool)
+        })
+      #(
+        python.MultipleAssignment(list.reverse(renamed_names), value),
+        renames,
+        own_cross,
+        pool,
       )
-    python.MultipleAssignment(names, value) ->
-      python.MultipleAssignment(
-        list.map(names, fn(name) {
-          result.unwrap(dict.get(renames, name), name)
-        }),
-        value,
-      )
+    }
     python.Expression(_)
     | python.Return(_)
     | python.FunctionDef(_)
     | python.Match(_, _)
-    | python.While(_, _) -> statement
+    | python.While(_, _) -> #(statement, renames, own_cross, pool)
+  }
+}
+
+// The fresh name for a cross-renamed binding target (a name the case itself
+// binds that collides with another arm's references) that rebinds a name
+// already bound earlier in this program-order walk. The case's own renaming
+// dict is updated so later references to the target use the fresh name.
+fn cross_target(
+  name: String,
+  renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(String, dict.Dict(String, String), dict.Dict(String, Int)) {
+  let plain = result.unwrap(dict.get(own_cross, name), name)
+  case set.contains(bound, name) {
+    False -> #(plain, own_cross, pool)
+    True -> {
+      let used =
+        set.from_list(dict.values(renames))
+        |> set.union(set.from_list(dict.values(own_cross)))
+      let #(fresh, pool) = fresh_name(name, used, pool)
+      #(fresh, dict.insert(own_cross, name, fresh), pool)
+    }
+  }
+}
+
+// The fresh name for a binding target that shadows a renamed name, plus the
+// renaming dict updated so later references to the target use the fresh name.
+// A target whose name is not being renamed keeps its name and the dict. A
+// target that rebinds a name already bound by a previous statement in this
+// program-order walk (e.g. a second `let crossed = ...`) is a new local
+// shadowing the first, and gets a fresh name from the shared pool (like
+// module shadowing's `shadow_target`); later references to it in this scope
+// use the fresh name. The `bound` set holds names bound by earlier
+// statements — parameters are NOT included, so a first bind shadowing a
+// parameter still takes the plain rename. Rebinds are always freshened, even
+// when the name is not being renamed: a closure inside the same scope may
+// reference the earlier binding (e.g. a `use` callback rebinding a name its
+// own right hand side references from the enclosing scope), and Python would
+// make the closure see the rebind instead.
+fn block_shadow_target(
+  name: String,
+  renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(String, dict.Dict(String, String), dict.Dict(String, Int)) {
+  case set.contains(bound, name) {
+    True -> {
+      let used =
+        set.from_list(dict.values(renames))
+        |> set.union(set.from_list(dict.values(own_cross)))
+      let #(fresh, pool) = fresh_name(name, used, pool)
+      #(fresh, dict.insert(renames, name, fresh), pool)
+    }
+    False ->
+      case dict.has_key(renames, name) {
+        False -> #(name, renames, pool)
+        True -> #(result.unwrap(dict.get(renames, name), name), renames, pool)
+      }
   }
 }
 
@@ -277,7 +611,7 @@ fn body_refs_in_order(
   let #(_, refs) =
     list.fold(statements, #(initial_scope, []), fn(acc, statement) {
       let #(scope, out) = acc
-      let more_refs = statement_refs(statement, scope)
+      let more_refs = deep_statement_refs(statement, scope)
       let next_scope =
         set.union(scope, set.from_list(top_level_binds(statement)))
       #(next_scope, list.append(out, more_refs))
@@ -320,12 +654,19 @@ fn pattern_refs(pattern: python.Pattern) -> List(String) {
 }
 
 // A fresh name that doesn't collide with any name used in the match or the
-// reserved `_case_subject`.
-fn fresh_name(name: String, used: set.Set(String)) -> String {
-  let candidate = name <> "_0"
+// reserved `_case_subject`. All shadowing passes share one pool of per-base
+// counters so `state` becomes `state_0`, `state_1`, `state_2`... and no two
+// passes can independently mint the same fresh name.
+pub fn fresh_name(
+  name: String,
+  used: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(String, dict.Dict(String, Int)) {
+  let index = dict.get(pool, name) |> result.unwrap(0)
+  let candidate = name <> "_" <> int.to_string(index)
   case set.contains(used, candidate) || candidate == "_case_subject" {
-    True -> fresh_name(name <> "_", used)
-    False -> candidate
+    True -> fresh_name(name, used, dict.insert(pool, name, index + 1))
+    False -> #(candidate, dict.insert(pool, name, index + 1))
   }
 }
 
@@ -541,6 +882,30 @@ fn statement_refs(
       function.body
       |> list.map(statement_refs(_, function_scope(function, in_scope)))
       |> list.flatten
+    python.Match(subject, _cases) -> expression_refs(subject, in_scope)
+    python.While(condition, body) ->
+      expression_refs(condition, in_scope)
+      |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
+  }
+}
+
+// Like `statement_refs` but also descends into match case bodies. Used for
+// cross-arm collision detection, which must see references nested inside
+// other matches (e.g. a reference to an enclosing scope's `tokens` inside a
+// nested case in another arm).
+fn deep_statement_refs(
+  statement: python.Statement,
+  in_scope: set.Set(String),
+) -> List(String) {
+  case statement {
+    python.Expression(expression) | python.Return(expression) ->
+      expression_refs(expression, in_scope)
+    python.SimpleAssignment(_, value) -> expression_refs(value, in_scope)
+    python.MultipleAssignment(_, value) -> expression_refs(value, in_scope)
+    python.FunctionDef(function) ->
+      function.body
+      |> list.map(deep_statement_refs(_, function_scope(function, in_scope)))
+      |> list.flatten
     python.Match(subject, cases) ->
       list.append(
         expression_refs(subject, in_scope),
@@ -550,7 +915,9 @@ fn statement_refs(
       )
     python.While(condition, body) ->
       expression_refs(condition, in_scope)
-      |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
+      |> list.append(
+        list.flatten(list.map(body, deep_statement_refs(_, in_scope))),
+      )
   }
 }
 
@@ -568,106 +935,6 @@ fn function_scope(
     |> list.flatten
   set.from_list([function.name, ..parameter_names])
   |> set.union(in_scope)
-}
-
-fn rename_case(
-  match_case: python.MatchCase,
-  renames: dict.Dict(String, String),
-  block_mode: Bool,
-) -> python.MatchCase {
-  // In match mode only the names this case binds are renamed; references to
-  // other names come from the enclosing scope and must be left alone. For
-  // example in
-  //
-  //     case input {
-  //       ["\"", ..input] -> parse_key_quoted(input, "\"", "")
-  //       _ -> parse_key_bare(input, "")
-  //     }
-  //
-  // the second arm references the outer `input`, so renaming its body
-  // reference would produce an undefined variable.
-  //
-  // In block mode we are renaming names bound at the top level of an enclosing
-  // function body, and references to them inside a nested match are closures
-  // over that renamed local, so they must be renamed too. Names the case
-  // itself binds are case locals and are excluded.
-  let python.MatchCase(pattern, guard, body) = match_case
-  let local_renames = case block_mode {
-    False ->
-      case_binds(match_case)
-      |> list.fold(dict.new(), fn(acc, name) {
-        case dict.get(renames, name) {
-          Ok(new_name) -> dict.insert(acc, name, new_name)
-          Error(_) -> acc
-        }
-      })
-    True ->
-      dict.filter(renames, fn(name, _) {
-        !list.contains(case_binds(match_case), name)
-      })
-  }
-  python.MatchCase(
-    case block_mode {
-      False -> rename_pattern(pattern, local_renames)
-      True -> pattern
-    },
-    case block_mode {
-      // In match mode nothing is in scope when the guard runs, so references
-      // in it (e.g. to an enclosing function parameter) must never be
-      // renamed; only the assignment-expression targets it binds are.
-      False ->
-        option.map(guard, rename_expression(
-          _,
-          local_renames,
-          set.from_list(dict.keys(local_renames)),
-        ))
-      True -> option.map(guard, rename_expression(_, local_renames, set.new()))
-    },
-    case block_mode {
-      False ->
-        rename_case_body(
-          body,
-          local_renames,
-          set.union(
-            set.from_list(pattern_binds(pattern)),
-            set.from_list(
-              option.unwrap(option.map(guard, expression_binds), []),
-            ),
-          ),
-        )
-      True ->
-        list.map(body, rename_statement(_, local_renames, set.new(), True))
-    },
-  )
-}
-
-// In match mode a case arm's body binds names that become locals of the whole
-// generated match function, so a reference to a bound name that appears before
-// its binding statement refers to the enclosing scope and must not be renamed.
-// The body is therefore renamed in program order, tracking which names are in
-// scope, the same way `resolve_block_shadowing` does for function bodies.
-fn rename_case_body(
-  body: List(python.Statement),
-  renames: dict.Dict(String, String),
-  initial_scope: set.Set(String),
-) -> List(python.Statement) {
-  let #(_, reversed) =
-    list.fold(body, #(initial_scope, []), fn(acc, statement) {
-      let #(scope, out) = acc
-      let active_renames =
-        dict.filter(renames, fn(name, _) { set.contains(scope, name) })
-      let renamed =
-        statement
-        // Block mode: references to the renamed names inside nested matches
-        // are closures over the renamed local and must be renamed too, while
-        // names the nested cases bind themselves are excluded.
-        |> rename_statement(active_renames, set.new(), True)
-        |> rename_binding_targets(renames)
-      let next_scope =
-        set.union(scope, set.from_list(top_level_binds(statement)))
-      #(next_scope, [renamed, ..out])
-    })
-  list.reverse(reversed)
 }
 
 // Binds anywhere in a statement tree, including inside nested function
@@ -689,62 +956,243 @@ fn all_nested_binds(statement: python.Statement) -> List(String) {
   }
 }
 
+// The names bound by match case patterns and guards anywhere in a statement
+// tree, including inside nested functions and while loops. Used to keep fresh
+// names minted for module-shadowed parameters from colliding with case locals
+// of the generated match functions.
+fn all_case_binds(statement: python.Statement) -> List(String) {
+  case statement {
+    python.FunctionDef(function) ->
+      list.flatten(list.map(function.body, all_case_binds))
+    python.Match(_, cases) ->
+      list.flatten(
+        list.map(cases, fn(match_case) {
+          let python.MatchCase(pattern, guard, body) = match_case
+          let pattern_binds = pattern_binds(pattern)
+          let guard_binds =
+            option.unwrap(option.map(guard, expression_binds), [])
+          let body_binds = list.flatten(list.map(body, all_case_binds))
+          pattern_binds
+          |> list.append(guard_binds)
+          |> list.append(body_binds)
+        }),
+      )
+    python.While(_, body) -> list.flatten(list.map(body, all_case_binds))
+    _ -> []
+  }
+}
+
 // Applies the block's renames inside a nested function definition, match or
 // while loop, where program order determines whether a reference points at a
 // renamed local or at the enclosing scope.
+//
+// Three renaming dicts are in play, each activated differently:
+//   - `renames`        - block-level renames (a name bound at the top level of
+//                        a function body that collides with a reference from
+//                        the enclosing scope). Active when the name is in the
+//                        accumulated program-order `scope`.
+//   - `cross_renames`  - the enclosing match case's effective renames (names
+//                        the enclosing case binds, which this scope references
+//                        as closures over the renamed locals). Always active.
+//   - `own_cross`      - the current match case's own renames (names it binds
+//                        that collide with another arm's references). Active
+//                        once the name is bound in this program-order walk
+//                        (`cross_scope`), so a reference before the binding
+//                        still points at the enclosing scope.
 fn resolve_nested_binds(
   statement: python.Statement,
   renames: dict.Dict(String, String),
+  cross_renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
   scope: set.Set(String),
-) -> python.Statement {
+  cross_scope: set.Set(String),
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(python.Statement, dict.Dict(String, Int)) {
   case statement {
-    python.FunctionDef(function) ->
-      python.FunctionDef(
+    python.FunctionDef(function) -> {
+      let renamed_function =
         python.Function(
           ..function,
-          body: nested_resolve_fold(
-            function.body,
+          parameters: list.map(function.parameters, rename_function_parameter(
+            _,
             renames,
-            function_scope(function, scope),
+          )),
+        )
+      // References inside the function body to the enclosing case's renamed
+      // bindings are closures: the case's active renames become this scope's
+      // always-active renames. The case's own renames are threaded through so
+      // a rebind inside the function gets a fresh name (e.g. a `use` callback
+      // destructuring the same name its enclosing case pattern bound).
+      let effective =
+        dict.merge(
+          cross_renames,
+          dict.filter(own_cross, fn(name, _) { set.contains(cross_scope, name) }),
+        )
+      let #(body, pool) =
+        nested_resolve_fold(
+          renamed_function.body,
+          renames,
+          effective,
+          own_cross,
+          set.union(
+            function_scope(renamed_function, scope),
+            set.from_list(function_parameter_names(function.parameters)),
           ),
+          // A new function scope: its own binds activate the case renames,
+          // but the enclosing case's binds do not.
+          set.new(),
+          bound,
+          pool,
+        )
+      #(
+        python.FunctionDef(python.Function(..renamed_function, body: body)),
+        pool,
+      )
+    }
+    python.Match(subject, cases) -> {
+      let #(renamed_cases, pool) =
+        resolve_match_cases(
+          cases,
+          renames,
+          cross_renames,
+          own_cross,
+          scope,
+          bound,
+          pool,
+        )
+      #(
+        python.Match(
+          subject: rename_expression(subject, renames, scope),
+          cases: renamed_cases,
         ),
+        pool,
       )
-    python.Match(subject, cases) ->
-      python.Match(
-        subject: rename_expression(subject, renames, scope),
-        cases: list.map(cases, fn(match_case) {
-          nested_resolve_case(match_case, renames, scope)
-        }),
+    }
+    python.While(condition, body) -> {
+      let #(body, pool) =
+        nested_resolve_fold(
+          body,
+          renames,
+          cross_renames,
+          own_cross,
+          scope,
+          cross_scope,
+          bound,
+          pool,
+        )
+      #(
+        python.While(
+          condition: rename_expression(condition, renames, scope),
+          body: body,
+        ),
+        pool,
       )
-    python.While(condition, body) ->
-      python.While(
-        condition: rename_expression(condition, renames, scope),
-        body: nested_resolve_fold(body, renames, scope),
-      )
-    _ -> statement
+    }
+    _ -> #(statement, pool)
   }
+}
+
+// The names that are being renamed in this program-order walk right now: the
+// block renames for names in scope (except the case's own, which are handled
+// by the cross machinery), the enclosing case's renames for closures, and the
+// current case's renames once its bindings are in scope.
+fn active_renames_for(
+  renames: dict.Dict(String, String),
+  cross_renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
+  scope: set.Set(String),
+  cross_scope: set.Set(String),
+) -> dict.Dict(String, String) {
+  let cross_keys = set.from_list(dict.keys(own_cross))
+  dict.merge(
+    dict.merge(
+      dict.filter(renames, fn(name, _) {
+        set.contains(scope, name) && !set.contains(cross_keys, name)
+      }),
+      cross_renames,
+    ),
+    dict.filter(own_cross, fn(name, _) { set.contains(cross_scope, name) }),
+  )
 }
 
 fn nested_resolve_fold(
   statements: List(python.Statement),
   renames: dict.Dict(String, String),
+  cross_renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
   initial_scope: set.Set(String),
-) -> List(python.Statement) {
-  let #(_, reversed) =
-    list.fold(statements, #(initial_scope, []), fn(acc, statement) {
-      let #(scope, out) = acc
-      let active_renames =
-        dict.filter(renames, fn(name, _) { set.contains(scope, name) })
-      let renamed =
-        statement
-        |> rename_statement(active_renames, set.new(), True)
-        |> rename_binding_targets(renames)
-        |> resolve_nested_binds(renames, scope)
-      let next_scope =
-        set.union(scope, set.from_list(top_level_binds(statement)))
-      #(next_scope, [renamed, ..out])
-    })
-  list.reverse(reversed)
+  initial_cross_scope: set.Set(String),
+  initial_bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(List(python.Statement), dict.Dict(String, Int)) {
+  let #(_, _, _, _, _, _, reversed, pool) =
+    list.fold(
+      statements,
+      #(
+        initial_scope,
+        initial_cross_scope,
+        initial_bound,
+        renames,
+        cross_renames,
+        own_cross,
+        [],
+        pool,
+      ),
+      fn(acc, statement) {
+        let #(
+          scope,
+          cross_scope,
+          bound,
+          renames,
+          cross_renames,
+          own_cross,
+          out,
+          pool,
+        ) = acc
+        let active_renames =
+          active_renames_for(
+            renames,
+            cross_renames,
+            own_cross,
+            scope,
+            cross_scope,
+          )
+        let #(renamed, pool) =
+          statement
+          |> rename_statement(active_renames, set.new(), pool)
+        let #(renamed, renames, own_cross, pool) =
+          rename_binding_targets(renamed, renames, own_cross, bound, pool)
+        let #(renamed, pool) =
+          resolve_nested_binds(
+            renamed,
+            renames,
+            cross_renames,
+            own_cross,
+            scope,
+            cross_scope,
+            bound,
+            pool,
+          )
+        let next_scope =
+          set.union(scope, set.from_list(top_level_binds(statement)))
+        let next_cross_scope =
+          set.union(cross_scope, set.from_list(top_level_binds(statement)))
+        let next_bound =
+          set.union(bound, set.from_list(top_level_binds(statement)))
+        #(
+          next_scope,
+          next_cross_scope,
+          next_bound,
+          renames,
+          cross_renames,
+          own_cross,
+          [renamed, ..out],
+          pool,
+        )
+      },
+    )
+  #(list.reverse(reversed), pool)
 }
 
 // Names a case pattern binds are locals of the generated match function;
@@ -752,25 +1200,138 @@ fn nested_resolve_fold(
 // enclosing scope's renamed locals, so they are renamed in program order.
 // Body assignments that shadow an enclosing renamed name are handled by the
 // program order fold (their binding targets are always renamed).
+fn resolve_match_cases(
+  cases: List(python.MatchCase),
+  renames: dict.Dict(String, String),
+  cross_renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
+  scope: set.Set(String),
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(List(python.MatchCase), dict.Dict(String, Int)) {
+  let all_binds =
+    cases
+    |> list.map(case_binds)
+    |> list.flatten
+  let all_refs =
+    cases
+    |> list.map(fn(match_case) { case_refs(match_case, set.new()) })
+    |> list.flatten
+  let used =
+    set.from_list(all_binds)
+    |> set.union(set.from_list(all_refs))
+    |> set.union(set.from_list(dict.values(renames)))
+    |> set.union(set.from_list(dict.values(cross_renames)))
+  let collisions =
+    all_binds
+    |> list.filter(fn(name) {
+      list.any(all_refs, fn(referenced) { referenced == name })
+    })
+    |> list.unique
+
+  let #(new_cross, pool) =
+    list.fold(collisions, #(dict.new(), pool), fn(acc, name) {
+      let #(renames, pool) = acc
+      let #(fresh, pool) = fresh_name(name, used, pool)
+      #(dict.insert(renames, name, fresh), pool)
+    })
+
+  let #(renamed_cases, pool) =
+    list.fold(cases, #([], pool), fn(acc, match_case) {
+      let #(out, pool) = acc
+      let #(renamed, pool) =
+        nested_resolve_case(
+          match_case,
+          renames,
+          cross_renames,
+          own_cross,
+          new_cross,
+          scope,
+          bound,
+          pool,
+        )
+      #([renamed, ..out], pool)
+    })
+
+  #(list.reverse(renamed_cases), pool)
+}
+
 fn nested_resolve_case(
   match_case: python.MatchCase,
   renames: dict.Dict(String, String),
+  cross_renames: dict.Dict(String, String),
+  own_cross: dict.Dict(String, String),
+  new_cross: dict.Dict(String, String),
   scope: set.Set(String),
-) -> python.MatchCase {
+  bound: set.Set(String),
+  pool: dict.Dict(String, Int),
+) -> #(python.MatchCase, dict.Dict(String, Int)) {
   let python.MatchCase(pattern, guard, body) = match_case
   let pattern_binds = pattern_binds(pattern)
   let guard_binds = option.unwrap(option.map(guard, expression_binds), [])
+  let case_names = list.append(pattern_binds, guard_binds)
+  // The names this case itself binds (pattern, guard, or body) that collide
+  // with another arm's references are renamed within this case: its pattern,
+  // guard, and the body references that come after the binding.
+  let cross_local =
+    dict.filter(new_cross, fn(name, _) {
+      list.contains(case_binds(match_case), name)
+    })
+  // The enclosing case's renames are threaded through so a rebind inside
+  // this case (e.g. a `use` callback destructuring a name the enclosing
+  // case's pattern bound) still gets a fresh name, but names this case's
+  // pattern binds shadow the enclosing scope for the whole body.
+  let own_cross_local =
+    dict.merge(
+      dict.filter(own_cross, fn(name, _) { !list.contains(pattern_binds, name) }),
+      cross_local,
+    )
+  // Names the case's pattern binds shadow the enclosing scope for the whole
+  // body, so both the block renames and the enclosing case's renames for
+  // those names must not apply.
   let local_renames =
     dict.filter(renames, fn(name, _) { !list.contains(pattern_binds, name) })
+  let local_cross_renames =
+    dict.filter(cross_renames, fn(name, _) {
+      !list.contains(pattern_binds, name)
+    })
+  // The guard runs after the pattern binds, so references to the case's own
+  // renamed pattern binds are renamed, but references to names the body binds
+  // still point at the enclosing scope.
+  let guard_renames =
+    dict.merge(
+      dict.merge(local_renames, local_cross_renames),
+      dict.filter(new_cross, fn(name, _) { list.contains(case_names, name) }),
+    )
   let initial_scope =
     scope
     |> set.union(set.from_list(pattern_binds))
     |> set.union(set.from_list(guard_binds))
-  python.MatchCase(
-    pattern,
-    option.map(guard, rename_expression(_, local_renames, initial_scope)),
-    nested_resolve_fold(body, local_renames, initial_scope),
-  )
+  // Only the case's own bindings are in scope for its renames at the start of
+  // its body: a reference that comes before the binding (e.g. in a nested
+  // function in the binding's own right hand side) still points at the
+  // enclosing scope.
+  let initial_cross_scope =
+    set.from_list(pattern_binds)
+    |> set.union(set.from_list(guard_binds))
+  let initial_bound =
+    bound
+    |> set.union(set.from_list(pattern_binds))
+    |> set.union(set.from_list(guard_binds))
+  let #(body, pool) =
+    nested_resolve_fold(
+      body,
+      local_renames,
+      local_cross_renames,
+      own_cross_local,
+      initial_scope,
+      initial_cross_scope,
+      initial_bound,
+      pool,
+    )
+  let pattern = rename_pattern(pattern, cross_local)
+  let guard = option.map(guard, rename_expression(_, guard_renames, set.new()))
+  #(python.MatchCase(pattern, guard, body), pool)
 }
 
 fn rename_pattern(
@@ -835,60 +1396,58 @@ fn rename_statement(
   statement: python.Statement,
   renames: dict.Dict(String, String),
   in_scope: set.Set(String),
-  block_mode: Bool,
-) -> python.Statement {
+  pool: dict.Dict(String, Int),
+) -> #(python.Statement, dict.Dict(String, Int)) {
   case statement {
-    python.Expression(expression) ->
-      python.Expression(rename_expression(expression, renames, in_scope))
-    python.Return(expression) ->
-      python.Return(rename_expression(expression, renames, in_scope))
-    python.SimpleAssignment(name, value) ->
-      python.SimpleAssignment(
-        result.unwrap(dict.get(renames, name), name),
-        rename_expression(value, renames, in_scope),
-      )
-    python.MultipleAssignment(names, value) ->
+    python.Expression(expression) -> #(
+      python.Expression(rename_expression(expression, renames, in_scope)),
+      pool,
+    )
+    python.Return(expression) -> #(
+      python.Return(rename_expression(expression, renames, in_scope)),
+      pool,
+    )
+    // Binding targets are handled by `rename_binding_targets` after this
+    // call, which knows whether the name is already bound in this program
+    // order walk (a rebind needing a fresh name) or not; renaming the target
+    // here would hide the original name from that check.
+    python.SimpleAssignment(name, value) -> #(
+      python.SimpleAssignment(name, rename_expression(value, renames, in_scope)),
+      pool,
+    )
+    python.MultipleAssignment(names, value) -> #(
       python.MultipleAssignment(
-        list.map(names, fn(name) {
-          result.unwrap(dict.get(renames, name), name)
-        }),
+        names,
         rename_expression(value, renames, in_scope),
-      )
-    python.FunctionDef(function) -> {
-      // A nested function's parameter that collides with a renamed name
-      // (e.g. a lambda argument that shadows an imported module binding) is
-      // renamed along with the references to it, since Python function
-      // parameters shadow module-level bindings.
-      let renamed_function =
-        python.Function(
-          ..function,
-          parameters: list.map(function.parameters, rename_function_parameter(
-            _,
-            renames,
-          )),
-        )
-      python.FunctionDef(
-        python.Function(
-          ..renamed_function,
-          body: list.map(renamed_function.body, rename_statement(
-            _,
-            renames,
-            function_scope(renamed_function, in_scope),
-            block_mode,
-          )),
+      ),
+      pool,
+    )
+    // Nested function bodies are handled by `resolve_nested_binds` during the
+    // program-order fold, which tracks whether a reference points at a renamed
+    // enclosing local or at a binding inside the function itself. Renaming
+    // here would apply the renames before a rebind inside the function has
+    // been given its fresh name.
+    python.FunctionDef(_) -> #(statement, pool)
+    python.Match(subject, cases) -> #(
+      python.Match(rename_expression(subject, renames, in_scope), cases),
+      pool,
+    )
+    python.While(condition, body) -> {
+      let #(body, pool) =
+        list.fold(body, #([], pool), fn(acc, statement) {
+          let #(out, pool) = acc
+          let #(renamed, pool) =
+            rename_statement(statement, renames, in_scope, pool)
+          #([renamed, ..out], pool)
+        })
+      #(
+        python.While(
+          rename_expression(condition, renames, in_scope),
+          list.reverse(body),
         ),
+        pool,
       )
     }
-    python.Match(subject, cases) ->
-      python.Match(
-        subject: rename_expression(subject, renames, in_scope),
-        cases: list.map(cases, rename_case(_, renames, block_mode)),
-      )
-    python.While(condition, body) ->
-      python.While(
-        rename_expression(condition, renames, in_scope),
-        list.map(body, rename_statement(_, renames, in_scope, block_mode)),
-      )
   }
 }
 

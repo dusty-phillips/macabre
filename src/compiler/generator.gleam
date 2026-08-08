@@ -9,7 +9,6 @@ import python_prelude
 pub fn generate(module: python.Module) -> String {
   string_tree.new()
   |> string_tree.append(python_prelude.prelude)
-  |> string_tree.append_tree(imports.generate_imports(module.imports))
   |> string_tree.append_tree(internal.generate_plural(
     module.custom_types,
     types.generate_custom_type,
@@ -20,6 +19,22 @@ pub fn generate(module: python.Module) -> String {
     statements.generate_function,
     "\n\n\n",
   ))
+  // Imports are emitted after classes and functions: module imports form
+  // cycles (e.g. a imports b which imports names from a) that only resolve
+  // once the importing module has finished loading. Function and class
+  // bodies reference imported names at call time only (annotations are
+  // lazy strings thanks to `from __future__ import annotations` in the
+  // prelude), so a late import is safe. Constants are emitted last because
+  // they are evaluated at module load.
+  |> string_tree.append_tree(
+    imports.generate_imports(module.imports)
+    |> internal.prepend_if_not_empty(
+      case module.custom_types != [] || module.functions != [] {
+        True -> "\n\n\n"
+        False -> ""
+      },
+    ),
+  )
   |> string_tree.append_tree(
     internal.generate_plural(
       module.constants,

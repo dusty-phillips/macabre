@@ -72,7 +72,7 @@ pub fn transform_top_level_function(
     )
   let context =
     transformer.TransformerContext(
-      ..transformer.empty_context,
+      ..transformer.empty_context(),
       function_signatures: function_signatures,
       module_aliases: module_aliases,
       constructor_arities: constructor_arities,
@@ -81,17 +81,39 @@ pub fn transform_top_level_function(
       module_bindings: module_bindings,
     )
   let parameters = fold_result.reversed_params |> list.reverse
+  let parameter_names =
+    list.filter_map(parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) -> Ok(name)
+        python.DiscardParam(_) -> Error(Nil)
+      }
+    })
+  let module_reserved =
+    module_aliases
+    |> list.filter(fn(alias) { list.contains(parameter_names, alias) })
+    |> list.map(fn(alias) { alias <> "_0" })
+  let context =
+    transformer.TransformerContext(..context, module_reserved: module_reserved)
   let body =
     fold_result.reversed_binds
     |> list.reverse
     |> list.append(
       statements.transform_statement_block_with_context(context, function.body).statements,
     )
-    |> shadowing.resolve_block_shadowing(shadowing.function_parameter_names(
+  let #(parameters, body, fresh_pool) =
+    shadowing.resolve_module_shadowing(
+      body,
       parameters,
-    ))
-  let #(parameters, body) =
-    shadowing.resolve_module_shadowing(body, parameters, module_aliases)
+      module_aliases,
+      context.fresh_pool,
+    )
+  let #(body, _) =
+    body
+    |> shadowing.resolve_block_shadowing(
+      shadowing.function_parameter_names(parameters),
+      list.map(module_aliases, fn(alias) { alias <> "_0" }),
+      fresh_pool,
+    )
   python.Function(
     name: function.name,
     parameters: parameters,

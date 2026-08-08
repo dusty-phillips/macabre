@@ -263,14 +263,17 @@ pub fn main() {
   |> should.equal(
     "from gleam_builtins import *
 
+def main():
+    def _fn_def_0():
+        return \"done\"
+    return bool.guard(when=True, return_=\"\", otherwise=_fn_def_0)
+
+
 import gleam.bool
 from gleam import bool
 
 
-def main():
-    def _fn_def_0():
-        return \"done\"
-    return bool.guard(when=True, return_=\"\", otherwise=_fn_def_0)",
+",
   )
 }
 
@@ -298,5 +301,197 @@ def main():
     def _fn_def_0():
         return \"done\"
     return list.try_fold(contents, to_gleam_list([]), _fn_def_0)",
+  )
+}
+
+// A use callback destructuring a name that the enclosing case's pattern bound
+// must rebind it to a fresh name: the callback's destructure shadows the
+// pattern bind (which another arm references), and references after the
+// destructure must point at the callback's own binding. This is the
+// self-hosting bug in glance's `optional_return_annotation`, where the final
+// reference was renamed to the pattern bind's name instead of the callback's.
+pub fn use_callback_rebinding_case_pattern_bind_test() {
+  "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+    case x {
+      [] -> Ok(#(0, x))
+      _ -> Ok(#(1, x))
+    }
+  }
+  pub fn parse(tokens: List(Int)) -> Result(#(Option(Int), List(Int)), Nil) {
+    case tokens {
+      [1, ..tokens] -> {
+        use #(return_type, tokens) <- do_thing(tokens)
+        Ok(#(Some(return_type), tokens))
+      }
+      _ -> Ok(#(None, tokens))
+    }
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def do_thing(x):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case None:
+                return Ok((0, x,))
+            case _:
+                return Ok((1, x,))
+    return _fn_case_0(x)
+
+
+def parse(tokens):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case GleamList(1, tokens_0):
+                def _fn_def_0(use_capture_0):
+                    def _fn_match_0(_case_subject):
+                        match _case_subject:
+                            case (return_type, tokens):
+                                return (return_type, tokens,)
+                    return_type, tokens_1 = _fn_match_0(use_capture_0)
+                    return Ok((Some(return_type), tokens_1,))
+                return do_thing(tokens_0, _fn_def_0)
+            case _:
+                return Ok((None, tokens,))
+    return _fn_case_0(tokens)",
+  )
+}
+
+// Same scenario when the use callback sits inside a nested case within the
+// arm: the enclosing case's renaming must survive the nested case's own
+// (empty) renaming so the callback's destructure still rebinds fresh. This is
+// the self-hosting bug in glance's `field`, where the labelled field value's
+// reference was renamed to the outer pattern bind instead of the callback's.
+pub fn use_callback_rebinding_nested_case_pattern_bind_test() {
+  "fn do_thing(x: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+    case x {
+      [] -> Ok(#(0, x))
+      _ -> Ok(#(1, x))
+    }
+  }
+  pub fn fields(tokens: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+    case tokens {
+      [1, 2, ..tokens] -> {
+        use #(t, tokens) <- do_thing(tokens)
+        Ok(#(t, tokens))
+      }
+      _ -> case tokens {
+        [] -> Error(Nil)
+        _ -> {
+          use #(t, tokens) <- do_thing(tokens)
+          Ok(#(t, tokens))
+        }
+      }
+    }
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def do_thing(x):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case None:
+                return Ok((0, x,))
+            case _:
+                return Ok((1, x,))
+    return _fn_case_0(x)
+
+
+def fields(tokens):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case GleamList(1, GleamList(2, tokens_0)):
+                def _fn_def_0(use_capture_0):
+                    def _fn_match_0(_case_subject):
+                        match _case_subject:
+                            case (t, tokens):
+                                return (t, tokens,)
+                    t, tokens_1 = _fn_match_0(use_capture_0)
+                    return Ok((t, tokens_1,))
+                return do_thing(tokens_0, _fn_def_0)
+            case _:
+                def _fn_case_0(_case_subject):
+                    match _case_subject:
+                        case None:
+                            return Error(None)
+                        case _:
+                            def _fn_def_1(use_capture_0):
+                                def _fn_match_0(_case_subject):
+                                    match _case_subject:
+                                        case (t, tokens):
+                                            return (t, tokens,)
+                                t, tokens = _fn_match_0(use_capture_0)
+                                return Ok((t, tokens,))
+                            return do_thing(tokens, _fn_def_1)
+                return _fn_case_0(tokens)
+    return _fn_case_0(tokens)",
+  )
+}
+
+// A use callback rebinding a name that its own right hand side references
+// from the enclosing scope must get a fresh name, leaving the references
+// pointing at the earlier binding. This is the arc bug in
+// `define_method_property`, where `let prop = case dict.get(...) {...}` inside
+// the `heap.update` callback referenced the outer `prop` in the case arms.
+pub fn use_callback_rebinding_enclosing_bind_test() {
+  "fn update(x: Int) -> Result(Int, Nil) {
+    Ok(x)
+  }
+  fn with_seq(a: Int, b: Int) -> Int {
+    a + b
+  }
+  pub fn rebind(key: Int, val: Int) -> Int {
+    let prop = case key {
+      1 -> val
+      _ -> val
+    }
+    use slot <- update(slot)
+    let prop = case slot {
+      Ok(old) -> with_seq(prop, old)
+      Error(Nil) -> prop
+    }
+    with_seq(prop, slot)
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def update(x):
+    return Ok(x)
+
+
+def with_seq(a, b):
+    return a + b
+
+
+def rebind(key, val):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 1:
+                return val
+            case _:
+                return val
+    prop = _fn_case_0(key)
+    def _fn_def_0(slot):
+        def _fn_case_0(_case_subject):
+            match _case_subject:
+                case Ok(old):
+                    return with_seq(prop, old)
+                case Error(None):
+                    return prop
+        prop_0 = _fn_case_0(slot)
+        return with_seq(prop_0, slot)
+    return update(slot, _fn_def_0)",
   )
 }

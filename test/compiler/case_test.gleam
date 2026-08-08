@@ -533,10 +533,6 @@ pub fn pattern_capture_colliding_with_module_pattern_test() {
   |> should.equal(
     "from gleam_builtins import *
 
-import glexer.token
-from glexer import token
-
-
 def do_lex():
     def _fn_case_0(_case_subject):
         match _case_subject:
@@ -546,6 +542,13 @@ def do_lex():
                 return 1
             case (lexer, Some(token_0)):
                 return token_0
-    return _fn_case_0((1, Some(2),))",
+    return _fn_case_0((1, Some(2),))
+
+
+import glexer.token
+from glexer import token
+
+
+",
   )
 }
