@@ -1,26 +1,22 @@
 import compiler/internal/transformer
-import gleeunit/should
 
 pub fn transform_last_empty_test() {
-  []
-  |> transformer.transform_last(fn(a) { a })
-  |> should.equal([])
+  assert [] |> transformer.transform_last(fn(a) { a }) == []
 }
 
 pub fn transform_last_single_test() {
-  ["a"]
-  |> transformer.transform_last(fn(_) { "b" })
-  |> should.equal(["b"])
+  assert ["a"] |> transformer.transform_last(fn(_) { "b" }) == ["b"]
 }
 
 pub fn transform_last_two_element_test() {
-  ["a", "b"]
-  |> transformer.transform_last(fn(_) { "c" })
-  |> should.equal(["a", "c"])
+  assert ["a", "b"] |> transformer.transform_last(fn(_) { "c" }) == ["a", "c"]
 }
 
 pub fn transform_last_three_element_test() {
-  ["a", "b", "c"]
-  |> transformer.transform_last(fn(_) { "d" })
-  |> should.equal(["a", "b", "d"])
+  assert ["a", "b", "c"] |> transformer.transform_last(fn(_) { "d" })
+    == [
+      "a",
+      "b",
+      "d",
+    ]
 }

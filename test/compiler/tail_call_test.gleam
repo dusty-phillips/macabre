@@ -1,6 +1,5 @@
 import compiler
 import glance
-import gleeunit/should
 
 // Recursion through a `use` callback IS TCO'd: `result.try` returns the
 // callback's value unchanged (a transparent callee), so the `GleamTco` marker
@@ -8,7 +7,8 @@ import gleeunit/should
 // consume the callback result with their own match protocol (like `list.any`)
 // are not descended into.
 pub fn tail_call_through_use_callback_test() {
-  "fn split(tokens: List(Int)) -> Result(#(Int, List(Int)), Nil) {
+  let assert Ok(module) =
+    "fn split(tokens: List(Int)) -> Result(#(Int, List(Int)), Nil) {
     case tokens {
       [head, ..rest] -> Ok(#(head, rest))
       [] -> Error(Nil)
@@ -23,11 +23,8 @@ pub fn tail_call_through_use_callback_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def split(tokens):
     def _fn_case_0(_case_subject):
@@ -54,12 +51,12 @@ def process(acc, tokens):
             case True:
                 acc, tokens = _result.args
             case False:
-                return _result",
-  )
+                return _result"
 }
 
 pub fn single_parameter_tail_call_test() {
-  "fn countdown(n: Int) -> Int {
+  let assert Ok(module) =
+    "fn countdown(n: Int) -> Int {
     case n {
       0 -> 0
       _ -> countdown(n - 1)
@@ -69,11 +66,8 @@ pub fn single_parameter_tail_call_test() {
   fn main() {
     countdown(10)
   }"
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def countdown(n):
     while True:
@@ -92,12 +86,12 @@ def countdown(n):
 
 
 def main():
-    return countdown(10)",
-  )
+    return countdown(10)"
 }
 
 pub fn multiple_parameter_tail_call_test() {
-  "fn drop_until(n: Int, acc: List(Int)) -> List(Int) {
+  let assert Ok(module) =
+    "fn drop_until(n: Int, acc: List(Int)) -> List(Int) {
     case n {
       0 -> acc
       _ -> drop_until(n - 1, [n, ..acc])
@@ -107,11 +101,8 @@ pub fn multiple_parameter_tail_call_test() {
   fn main() {
     drop_until(3, [])
   }"
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def drop_until(n, acc):
     while True:
@@ -130,12 +121,12 @@ def drop_until(n, acc):
 
 
 def main():
-    return drop_until(3, to_gleam_list([]))",
-  )
+    return drop_until(3, to_gleam_list([]))"
 }
 
 pub fn non_tail_call_not_optimized_test() {
-  "fn factorial(n: Int) -> Int {
+  let assert Ok(module) =
+    "fn factorial(n: Int) -> Int {
     case n {
       0 -> 1
       _ -> n * factorial(n - 1)
@@ -145,11 +136,8 @@ pub fn non_tail_call_not_optimized_test() {
   fn main() {
     factorial(5)
   }"
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def factorial(n):
     def _fn_case_0(_case_subject):
@@ -162,6 +150,5 @@ def factorial(n):
 
 
 def main():
-    return factorial(5)",
-  )
+    return factorial(5)"
 }

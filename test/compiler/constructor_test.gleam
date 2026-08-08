@@ -1,10 +1,10 @@
 import compiler
 import glance
 import gleam/dict
-import gleeunit/should
 
 pub fn non_nullary_constructor_as_function_value_test() {
-  "pub type Wrap {
+  let assert Ok(module) =
+    "pub type Wrap {
   Wrap(Int)
 }
 
@@ -12,11 +12,8 @@ fn f() {
   use_thing(Wrap)
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Wrap:
@@ -24,12 +21,12 @@ class Wrap:
 
 
 def f():
-    return use_thing(Wrap)",
-  )
+    return use_thing(Wrap)"
 }
 
 pub fn nullary_value_emitted_as_instance_test() {
-  "pub type State {
+  let assert Ok(module) =
+    "pub type State {
   Idle
   Active
 }
@@ -39,11 +36,8 @@ fn f() {
   state
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
@@ -56,24 +50,22 @@ class Active:
 
 def f():
     state = Idle()
-    return state",
-  )
+    return state"
 }
 
 pub fn module_qualified_non_nullary_function_value_test() {
   let arities = dict.from_list([#("option.Some", ["_0"])])
-  "import gleam/option
+  let assert Ok(module) =
+    "import gleam/option
 
 fn f() {
   let mapper = option.Some
   mapper
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_arities(dict.new(), arities)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_arities(module, dict.new(), arities)
+    == "from gleam_builtins import *
 
 def f():
     mapper = option.Some
@@ -84,24 +76,22 @@ import gleam.option
 from gleam import option
 
 
-",
-  )
+"
 }
 
 pub fn module_qualified_nullary_value_emitted_as_instance_test() {
   let arities = dict.from_list([#("order.Lt", [])])
-  "import gleam/order
+  let assert Ok(module) =
+    "import gleam/order
 
 fn f() {
   let ordering = order.Lt
   ordering
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_arities(dict.new(), arities)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_arities(module, dict.new(), arities)
+    == "from gleam_builtins import *
 
 def f():
     ordering = order.Lt()
@@ -112,8 +102,7 @@ import gleam.order
 from gleam import order
 
 
-",
-  )
+"
 }
 
 // A constructor call mixing positional and labelled arguments must be
@@ -122,7 +111,8 @@ from gleam import order
 // `LabelledField(name, t, label_location: span)`).
 pub fn mixed_positional_and_labelled_arguments_test() {
   let arities = dict.from_list([#("Thing", ["label", "location", "item"])])
-  "pub type Thing {
+  let assert Ok(module) =
+    "pub type Thing {
     Thing(label: String, location: Int, item: String)
 
   }
@@ -131,11 +121,9 @@ pub fn mixed_positional_and_labelled_arguments_test() {
     t
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_arities(dict.new(), arities)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_arities(module, dict.new(), arities)
+    == "from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Thing:
@@ -146,8 +134,7 @@ class Thing:
 
 def main():
     t = Thing(label=\"a\", location=1, item=\"x\")
-    return t",
-  )
+    return t"
 }
 
 // A nullary constructor of an ALIASED import must also emit as an instance:
@@ -155,18 +142,17 @@ def main():
 // `import gleam/order as o`), not the module's last path segment.
 pub fn aliased_import_nullary_value_emitted_as_instance_test() {
   let arities = dict.from_list([#("o.Lt", [])])
-  "import gleam/order as o
+  let assert Ok(module) =
+    "import gleam/order as o
 
 fn f() {
   let ordering = o.Lt
   ordering
 }
 "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module_with_arities(dict.new(), arities)
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module_with_arities(module, dict.new(), arities)
+    == "from gleam_builtins import *
 
 def f():
     ordering = o.Lt()
@@ -177,6 +163,5 @@ import gleam.order
 from gleam import order as o
 
 
-",
-  )
+"
 }

@@ -1,9 +1,9 @@
 import compiler
 import glance
-import gleeunit/should
 
 pub fn option_none_value_and_pattern_test() {
-  "
+  let assert Ok(module) =
+    "
   import gleam/option.{None, Some}
   pub fn main() {
     case Some(1) {
@@ -12,11 +12,8 @@ pub fn option_none_value_and_pattern_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -33,12 +30,12 @@ from gleam import option
 from gleam.option import Some
 
 
-",
-  )
+"
 }
 
 pub fn option_none_variant_no_class_test() {
-  "
+  let assert Ok(module) =
+    "
   import gleam/option.{None, Some}
   pub fn main() {
     let value = None
@@ -48,11 +45,8 @@ pub fn option_none_variant_no_class_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     value = None
@@ -70,12 +64,12 @@ from gleam import option
 from gleam.option import Some
 
 
-",
-  )
+"
 }
 
 pub fn option_none_module_qualified_test() {
-  "
+  let assert Ok(module) =
+    "
   import gleam/option
   pub fn main() {
     let value = option.None
@@ -85,11 +79,8 @@ pub fn option_none_module_qualified_test() {
     }
   }
   "
-  |> glance.module
-  |> should.be_ok
-  |> compiler.compile_module
-  |> should.equal(
-    "from gleam_builtins import *
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
 
 def main():
     value = None
@@ -106,6 +97,5 @@ import gleam.option
 from gleam import option
 
 
-",
-  )
+"
 }
