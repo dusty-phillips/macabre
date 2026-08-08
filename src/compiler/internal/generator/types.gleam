@@ -1,10 +1,17 @@
 import compiler/internal/generator as internal
 import compiler/python
+import gleam/int
+import gleam/list
 import gleam/option
 import gleam/string_tree.{type StringTree}
 
 pub fn generate_custom_type(custom_type: python.CustomType) -> StringTree {
-  case custom_type.variants {
+  // The `None` variant of the `Option` type is represented by the Python
+  // keyword `None` rather than a class, so it doesn't need a class
+  // definition.
+  let variants =
+    list.filter(custom_type.variants, fn(variant) { variant.name != "None" })
+  case variants {
     // empty types get discarded
     [] -> string_tree.new()
 
@@ -41,22 +48,49 @@ fn generate_type_variant(variant: python.Variant) -> StringTree {
   |> string_tree.append_tree(
     case variant.fields {
       [] -> string_tree.from_string("pass")
-      fields -> internal.generate_plural(fields, generate_type_field, "\n")
+      fields -> generate_type_fields(fields)
     }
     |> internal.indent(4),
   )
 }
 
-fn generate_type_field(field: python.Field(python.Type)) -> StringTree {
-  case field {
-    python.UnlabelledField(_) ->
-      todo as "not handling unlabeled fields in custom types yet"
-    python.LabelledField(label, item) ->
-      string_tree.new()
-      |> string_tree.append(label)
-      |> string_tree.append(": ")
-      |> string_tree.append_tree(generate_type(item))
+fn generate_type_fields(fields: List(python.Field(python.Type))) -> StringTree {
+  fields
+  |> list.fold(#(string_tree.new(), 0), fn(acc, field) {
+    let #(tree, index) = acc
+    let field_tree = case field {
+      python.UnlabelledField(item) ->
+        string_tree.new()
+        |> string_tree.append("_")
+        |> string_tree.append(int.to_string(index))
+        |> string_tree.append(": ")
+        |> string_tree.append_tree(generate_type(item))
+      python.LabelledField(label, item) ->
+        string_tree.new()
+        |> string_tree.append(label |> internal.python_name)
+        |> string_tree.append(": ")
+        |> string_tree.append_tree(generate_type(item))
+    }
+    let next_index = case field {
+      python.UnlabelledField(_) -> index + 1
+      python.LabelledField(..) -> index
+    }
+    #(append_with_newline(tree, field_tree), next_index)
+  })
+  |> pair_first
+}
+
+fn append_with_newline(tree: StringTree, field_tree: StringTree) -> StringTree {
+  case string_tree.is_empty(tree) {
+    True -> field_tree
+    False ->
+      string_tree.append(tree, "\n")
+      |> string_tree.append_tree(field_tree)
   }
+}
+
+fn pair_first(pair: #(StringTree, Int)) -> StringTree {
+  pair.0
 }
 
 fn generate_type(type_: python.Type) -> StringTree {
@@ -90,6 +124,14 @@ fn generate_type(type_: python.Type) -> StringTree {
       elements
       |> internal.generate_plural(generate_type, ", ")
       |> string_tree.prepend("typing.Tuple[")
+      |> string_tree.append("]")
+
+    python.FunctionType(parameters, return_type) ->
+      parameters
+      |> internal.generate_plural(generate_type, ", ")
+      |> string_tree.prepend("typing.Callable[[")
+      |> string_tree.append("], ")
+      |> string_tree.append_tree(generate_type(return_type))
       |> string_tree.append("]")
 
     python.GenericType(name) ->

@@ -18,15 +18,15 @@ fn generate_import(import_: python.Import) -> StringTree {
       |> string_tree.append("from ")
       |> string_tree.append(module)
       |> string_tree.append(" import ")
-      |> string_tree.append(name)
+      |> string_tree.append(name |> internal.python_name)
     python.AliasedUnqualifiedImport(module, name, alias) -> {
       string_tree.new()
       |> string_tree.append("from ")
       |> string_tree.append(module)
       |> string_tree.append(" import ")
-      |> string_tree.append(name)
+      |> string_tree.append(name |> internal.python_name)
       |> string_tree.append(" as ")
-      |> string_tree.append(alias)
+      |> string_tree.append(alias |> internal.python_name)
     }
   }
 }

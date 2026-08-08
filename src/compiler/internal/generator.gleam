@@ -1,6 +1,54 @@
 import gleam/list
 import gleam/string_tree
 
+// Python keywords that cannot be used as identifiers. Gleam allows many of
+// these as function and variable names, so we suffix them with an underscore
+// when generating Python.
+const python_keywords = [
+  "False",
+  "None",
+  "True",
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "try",
+  "while",
+  "with",
+  "yield",
+]
+
+pub fn python_name(name: String) -> String {
+  case list.contains(python_keywords, name) {
+    True -> name <> "_"
+    False -> name
+  }
+}
+
 pub fn indent(
   builder: string_tree.StringTree,
   count: Int,
@@ -25,6 +73,16 @@ pub fn append_if_not_empty(
   case string_tree.is_empty(builder) {
     True -> builder
     False -> string_tree.append(builder, with)
+  }
+}
+
+pub fn prepend_if_not_empty(
+  builder: string_tree.StringTree,
+  with: String,
+) -> string_tree.StringTree {
+  case string_tree.is_empty(builder) {
+    True -> builder
+    False -> string_tree.prepend(builder, with)
   }
 }
 

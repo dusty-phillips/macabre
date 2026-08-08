@@ -38,7 +38,9 @@ pub type Expression {
   String(String)
   Number(String)
   Bool(String)
+  Nil
   Variable(String)
+  ModuleRef(String)
   Tuple(List(Expression))
   Negate(Expression)
   Not(Expression)
@@ -52,6 +54,13 @@ pub type Expression {
   Call(function: Expression, arguments: List(Field(Expression)))
   RecordUpdate(record: Expression, fields: List(Field(Expression)))
   BinaryOperator(name: BinaryOperator, left: Expression, right: Expression)
+  Slice(
+    container: Expression,
+    start: Expression,
+    end: option.Option(Expression),
+  )
+  AssignmentExpression(name: String, value: Expression)
+  IsNotNone(expression: Expression)
   BitString(List(BitStringSegment))
 }
 
@@ -70,6 +79,9 @@ pub type BitStringSegmentOption {
   Utf8Option
   Utf16Option
   Utf32Option
+  Utf8CodepointOption
+  Utf16CodepointOption
+  Utf32CodepointOption
   NativeOption
 }
 
@@ -77,8 +89,10 @@ pub type Statement {
   Expression(Expression)
   Return(Expression)
   FunctionDef(Function)
-  Match(cases: List(MatchCase))
+  Match(subject: Expression, cases: List(MatchCase))
   SimpleAssignment(name: String, value: Expression)
+  MultipleAssignment(names: List(String), value: Expression)
+  While(condition: Expression, body: List(Statement))
 }
 
 pub type FunctionParameter {
@@ -98,6 +112,7 @@ pub type Type {
     generic_parameters: List(Type),
   )
   TupleType(elements: List(Type))
+  FunctionType(parameters: List(Type), return_type: Type)
   GenericType(name: String)
 }
 

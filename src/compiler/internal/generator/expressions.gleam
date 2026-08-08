@@ -2,17 +2,30 @@ import compiler/internal/generator as internal
 import compiler/python
 import gleam/int
 import gleam/list
+import gleam/option
+import gleam/string
 import gleam/string_tree.{type StringTree}
+import glexer
 
 pub fn generate_expression(expression: python.Expression) -> StringTree {
   case expression {
-    python.String(string) -> string_tree.from_strings(["\"", string, "\""])
+    python.String(string) ->
+      case glexer.unescape_string(string) {
+        Error(_) -> string_tree.from_strings(["\"", string, "\""])
+        Ok(unescaped) ->
+          string_tree.from_string("\"" <> python_escape(unescaped) <> "\"")
+      }
 
     python.Number(number) -> string_tree.from_string(number)
 
     python.Bool(value) -> string_tree.from_string(value)
 
-    python.Variable(value) -> string_tree.from_string(value)
+    python.Nil -> string_tree.from_string("None")
+
+    python.Variable(value) ->
+      string_tree.from_string(value |> internal.python_name)
+
+    python.ModuleRef(name) -> string_tree.from_string(name)
 
     python.Negate(expression) ->
       generate_expression(expression) |> string_tree.prepend("-")
@@ -68,7 +81,7 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
     python.FieldAccess(expression, label) ->
       generate_expression(expression)
       |> string_tree.append(".")
-      |> string_tree.append(label)
+      |> string_tree.append(label |> internal.python_name)
 
     python.RecordUpdate(record, fields) ->
       string_tree.new()
@@ -108,6 +121,28 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
     python.BinaryOperator(name, left, right) ->
       generate_binop(name, left, right)
 
+    python.Slice(container, start, end) ->
+      generate_expression(container)
+      |> string_tree.append("[")
+      |> string_tree.append_tree(generate_expression(start))
+      |> string_tree.append(":")
+      |> string_tree.append_tree(case end {
+        option.None -> string_tree.new()
+        option.Some(end) -> generate_expression(end)
+      })
+      |> string_tree.append("]")
+
+    python.AssignmentExpression(name, value) ->
+      string_tree.from_string("(")
+      |> string_tree.append(name |> internal.python_name)
+      |> string_tree.append(" := ")
+      |> string_tree.append_tree(generate_expression(value))
+      |> string_tree.append(")")
+
+    python.IsNotNone(expression) ->
+      generate_expression(expression)
+      |> string_tree.append(" is not None")
+
     python.BitString(segments) -> generate_bitstring(segments)
   }
 }
@@ -120,7 +155,7 @@ fn generate_record_update_fields(
       panic as "Unlabeled fields are not expected on record updates"
     python.LabelledField(label, expression) ->
       string_tree.new()
-      |> string_tree.append(label)
+      |> string_tree.append(label |> internal.python_name)
       |> string_tree.append("=")
       |> string_tree.append_tree(generate_expression(expression))
   }
@@ -132,7 +167,7 @@ fn generate_call_fields(field: python.Field(python.Expression)) -> StringTree {
     python.LabelledField(label, expression) ->
       generate_expression(expression)
       |> string_tree.prepend("=")
-      |> string_tree.prepend(label)
+      |> string_tree.prepend(label |> internal.python_name)
   }
 }
 
@@ -209,7 +244,53 @@ fn generate_bitstring_segment_option(
     python.Utf8Option -> string_tree.from_string("\"Utf8\", None")
     python.Utf16Option -> string_tree.from_string("\"Utf16\", None")
     python.Utf32Option -> string_tree.from_string("\"Utf32\", None")
+    python.Utf8CodepointOption ->
+      string_tree.from_string("\"Utf8Codepoint\", None")
+    python.Utf16CodepointOption ->
+      string_tree.from_string("\"Utf16Codepoint\", None")
+    python.Utf32CodepointOption ->
+      string_tree.from_string("\"Utf32Codepoint\", None")
   }
   |> string_tree.prepend("(")
   |> string_tree.append(")")
+}
+
+pub fn python_escape(content: String) -> String {
+  content
+  |> string.to_utf_codepoints
+  |> list.map(escape_codepoint)
+  |> string.join("")
+}
+
+fn escape_codepoint(codepoint) -> String {
+  let value = string.utf_codepoint_to_int(codepoint)
+  case value {
+    34 -> "\\\""
+    92 -> "\\\\"
+    8 -> "\\b"
+    9 -> "\\t"
+    10 -> "\\n"
+    12 -> "\\f"
+    13 -> "\\r"
+    _ ->
+      case value < 32 || value == 127 {
+        True -> {
+          let hex =
+            value
+            |> int.to_base16
+            |> string.lowercase
+            |> string.replace("0x", "")
+            |> zero_pad_hex
+          "\\x" <> hex
+        }
+        False -> string.from_utf_codepoints([codepoint])
+      }
+  }
+}
+
+fn zero_pad_hex(hex: String) -> String {
+  case string.length(hex) {
+    1 -> "0" <> hex
+    _ -> hex
+  }
 }

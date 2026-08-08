@@ -5,12 +5,13 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_tree.{type StringTree}
+import glexer
 
 pub fn generate_function(function: python.Function) -> StringTree {
   // TODO: The parameters and return types can have Python type hints
   string_tree.new()
   |> string_tree.append("def ")
-  |> string_tree.append(function.name)
+  |> string_tree.append(function.name |> internal.python_name)
   |> string_tree.append("(")
   |> string_tree.append_tree(internal.generate_plural(
     function.parameters,
@@ -25,7 +26,8 @@ pub fn generate_function(function: python.Function) -> StringTree {
 
 fn generate_parameter(param: python.FunctionParameter) -> StringTree {
   case param {
-    python.NameParam(name) -> string_tree.from_string(name)
+    python.NameParam(name) ->
+      string_tree.from_string(name |> internal.python_name)
     python.DiscardParam(index) ->
       string_tree.from_string("_")
       |> string_tree.append(case index {
@@ -51,21 +53,41 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
       |> string_tree.append_tree(expressions.generate_expression(expression))
     python.SimpleAssignment(name, value) -> {
       string_tree.new()
-      |> string_tree.append(name)
+      |> string_tree.append(name |> internal.python_name)
       |> string_tree.append(" = ")
       |> string_tree.append_tree(expressions.generate_expression(value))
     }
-    python.Match(cases) ->
+    python.MultipleAssignment(names, value) -> {
       string_tree.new()
-      |> string_tree.append("match _case_subject:\n")
+      |> string_tree.append_tree(
+        names
+        |> list.map(fn(name) {
+          name |> internal.python_name |> string_tree.from_string
+        })
+        |> string_tree.join(", "),
+      )
+      |> string_tree.append(" = ")
+      |> string_tree.append_tree(expressions.generate_expression(value))
+    }
+    python.Match(subject, cases) ->
+      string_tree.new()
+      |> string_tree.append("match ")
+      |> string_tree.append_tree(expressions.generate_expression(subject))
+      |> string_tree.append(":\n")
       |> string_tree.append_tree(generate_cases(cases) |> internal.indent(4))
+    python.While(condition, body) ->
+      string_tree.new()
+      |> string_tree.append("while ")
+      |> string_tree.append_tree(expressions.generate_expression(condition))
+      |> string_tree.append(":\n")
+      |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
     // TODO: Deal with cases
     python.FunctionDef(function) -> generate_function(function)
   }
 }
 
 pub fn generate_constant(constant: python.Constant) -> StringTree {
-  string_tree.from_string(constant.name)
+  string_tree.from_string(constant.name |> internal.python_name)
   |> string_tree.append(" = ")
   |> string_tree.append_tree(expressions.generate_expression(constant.value))
 }
@@ -88,14 +110,22 @@ fn generate_case(case_: python.MatchCase) -> StringTree {
 fn generate_pattern(pattern: python.Pattern) -> StringTree {
   case pattern {
     python.PatternWildcard -> string_tree.from_string("_")
-    python.PatternInt(str)
-    | python.PatternFloat(str)
-    | python.PatternVariable(str) -> string_tree.from_string(str)
-    python.PatternString(str) -> string_tree.from_strings(["\"", str, "\""])
+    python.PatternInt(str) | python.PatternFloat(str) ->
+      string_tree.from_string(str)
+    python.PatternVariable(str) ->
+      string_tree.from_string(str |> internal.python_name)
+    python.PatternString(str) ->
+      case glexer.unescape_string(str) {
+        Error(_) -> string_tree.from_strings(["\"", str, "\""])
+        Ok(unescaped) ->
+          string_tree.from_string(
+            "\"" <> expressions.python_escape(unescaped) <> "\"",
+          )
+      }
     python.PatternAssignment(pattern, name) ->
       generate_pattern(pattern)
       |> string_tree.append(" as ")
-      |> string_tree.append(name)
+      |> string_tree.append(name |> internal.python_name)
     python.PatternTuple(patterns) ->
       patterns
       |> list.map(generate_pattern)
@@ -108,17 +138,35 @@ fn generate_pattern(pattern: python.Pattern) -> StringTree {
       |> list.map(generate_pattern)
       |> string_tree.join(" | ")
     python.PatternConstructor(module, constructor, arguments) ->
-      module
-      |> option.map(fn(mod) { string_tree.from_strings([mod, "."]) })
-      |> option.unwrap(string_tree.new())
-      |> string_tree.append(constructor)
-      |> string_tree.append("(")
-      |> string_tree.append_tree(internal.generate_plural(
-        arguments,
-        generate_pattern_constructor_field,
-        ", ",
-      ))
-      |> string_tree.append(")")
+      case constructor, arguments, module {
+        // The Bool and Option constructors are represented in the Python
+        // runtime by the Python keywords `True`, `False`, and `None`, so
+        // patterns referencing them must not be rendered as constructor
+        // calls. This applies even to module qualified references (e.g.
+        // `option.None`), since at runtime an option's None value is the
+        // literal `None`. The exception is the compiler's own `python.Nil`
+        // AST node, which is a real class whose instances need a class
+        // pattern.
+        "True", [], _ -> string_tree.from_string("True")
+        "False", [], _ -> string_tree.from_string("False")
+        "None", [], _ -> string_tree.from_string("None")
+        "Nil", [], option.None -> string_tree.from_string("None")
+        // Nullary constructors are represented at runtime by an instance of
+        // the constructor class (e.g. `File()`), so a pattern matches them
+        // as a class pattern (isinstance check).
+        _, _, _ ->
+          module
+          |> option.map(fn(mod) { string_tree.from_strings([mod, "."]) })
+          |> option.unwrap(string_tree.new())
+          |> string_tree.append(constructor)
+          |> string_tree.append("(")
+          |> string_tree.append_tree(internal.generate_plural(
+            arguments,
+            generate_pattern_constructor_field,
+            ", ",
+          ))
+          |> string_tree.append(")")
+      }
   }
 }
 
@@ -127,7 +175,7 @@ fn generate_pattern_constructor_field(
 ) -> StringTree {
   case field {
     python.LabelledField(label, pattern) ->
-      string_tree.from_strings([label, "="])
+      string_tree.from_strings([label |> internal.python_name, "="])
       |> string_tree.append_tree(generate_pattern(pattern))
     python.UnlabelledField(pattern) -> generate_pattern(pattern)
   }
