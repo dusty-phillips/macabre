@@ -200,6 +200,30 @@ def main():
   )
 }
 
+pub fn alternate_bitstring_pattern_test() {
+  "pub fn main() {
+    case <<1>> {
+      <<1>> | <<2>> -> 5
+    }
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"1\",))) is not None:
+                return 5
+            case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"2\",))) is not None:
+                return 5
+    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))",
+  )
+}
+
 pub fn case_block_test() {
   "pub fn main() {
     case 1 {
@@ -411,5 +435,117 @@ def main():
             case _:
                 return \"Somewhat odd\"
     return _fn_case_0(num)",
+  )
+}
+
+// Nullary constructors are represented at runtime by the constructor class
+// object itself, so a pattern matching one must be an equality match
+// (`case Idle:`) rather than a class pattern (`case Idle():`).
+pub fn nullary_constructor_pattern_test() {
+  "pub type State { Idle Active }
+
+  fn check(state: State) -> Bool {
+    case state {
+      Idle -> True
+      Active -> False
+    }
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Idle:
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class Active:
+    pass
+
+
+def check(state):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case Idle():
+                return True
+            case Active():
+                return False
+    return _fn_case_0(state)",
+  )
+}
+
+pub fn arm_binding_shadowing_reference_before_binding_test() {
+  "fn next(lexer: Int) -> Int {
+  case lexer {
+    _ if lexer > 0 -> {
+      let before = lexer
+      let #(lexer, name) = tuple(lexer, 1)
+      before + lexer
+    }
+    _ -> lexer
+  }
+}
+"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def next(lexer):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case _ if lexer > 0:
+                before = lexer
+                def _fn_match_0(_case_subject):
+                    match _case_subject:
+                        case (lexer, name):
+                            return (lexer, name,)
+                lexer_0, name = _fn_match_0(tuple(lexer, 1))
+                return before + lexer_0
+            case _:
+                return lexer
+    return _fn_case_0(lexer)",
+  )
+}
+
+// A pattern capture colliding with a module-qualified constructor pattern in
+// another arm must be renamed: Python match captures are scoped to the whole
+// function, so the capture would otherwise shadow the module binding used in
+// the other arm's pattern (e.g. glexer's `do_lex` matching
+// `Some((token.EndOfFile(), _))` while another arm captures `token`).
+pub fn pattern_capture_colliding_with_module_pattern_test() {
+  "import glexer/token
+
+  fn do_lex() {
+    case #(1, Some(2)) {
+      #(lexer, None) -> 0
+      #(_lexer, Some(token.EndOfFile())) -> 1
+      #(lexer, Some(token)) -> token
+    }
+  }
+"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+import glexer.token
+from glexer import token
+
+
+def do_lex():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case (lexer, None):
+                return 0
+            case (_lexer, Some(token.EndOfFile())):
+                return 1
+            case (lexer, Some(token_0)):
+                return token_0
+    return _fn_case_0((1, Some(2),))",
   )
 }

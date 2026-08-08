@@ -229,6 +229,54 @@ def main():
   )
 }
 
+pub fn case_clause_panic_test() {
+  "fn main() {
+  case 1 {
+    1 -> panic
+    _ -> 2
+  }
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 1:
+                raise GleamPanic(\"panic expression evaluated\")
+            case _:
+                return 2
+    return _fn_case_0(1)",
+  )
+}
+
+pub fn case_clause_todo_test() {
+  "fn main() {
+  case 1 {
+    1 -> todo
+    _ -> 2
+  }
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 1:
+                raise NotImplementedError(\"This has not yet been implemented\")
+            case _:
+                return 2
+    return _fn_case_0(1)",
+  )
+}
+
 pub fn string_todo_test() {
   "fn main() {
   todo as \"much is yet to be done\"
@@ -639,7 +687,7 @@ class Bar:
 
 
 def main():
-    foo = Bar(b=\"who\", a=1)",
+    foo = Bar(a=1, b=\"who\")",
   )
 }
 
@@ -770,5 +818,83 @@ pub fn const_test() {
 foo = 5
 
 ",
+  )
+}
+
+pub fn const_referencing_function_comes_after_functions_test() {
+  "fn identity(x: Int) -> Int {
+    x
+  }
+
+  const five = identity(5)"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def identity(x):
+    return x
+
+
+five = identity(5)
+
+",
+  )
+}
+
+pub fn string_escape_control_char_test() {
+  "fn main() {
+      \"\\u{1b}[\"
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return \"\\x1b[\"",
+  )
+}
+
+pub fn string_escape_quote_and_newline_test() {
+  "fn main() {
+      \"say \\\"hi\\\"\\n\"
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return \"say \\\"hi\\\"\\n\"",
+  )
+}
+
+pub fn nil_pattern_in_case_test() {
+  "fn main() {
+  let value = Ok(1)
+  case value {
+    Error(Nil) -> 0
+    Ok(x) -> x
+  }
+}"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    value = Ok(1)
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case Error(None):
+                return 0
+            case Ok(x):
+                return x
+    return _fn_case_0(value)",
   )
 }

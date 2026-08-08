@@ -294,3 +294,51 @@ def main():
     return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None), (\"Little\", None)]))",
   )
 }
+
+pub fn utf8_codepoint_test() {
+  "pub fn main() {
+      <<1_000_000:utf8_codepoint>>
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf8Codepoint\", None)]))",
+  )
+}
+
+pub fn utf16_codepoint_test() {
+  "pub fn main() {
+      <<1_000_000:utf16_codepoint>>
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf16Codepoint\", None)]))",
+  )
+}
+
+pub fn utf32_codepoint_test() {
+  "pub fn main() {
+      <<1_000_000:utf32_codepoint>>
+  }
+  "
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+def main():
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf32Codepoint\", None)]))",
+  )
+}

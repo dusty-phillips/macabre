@@ -197,3 +197,62 @@ class Bar:
 ",
   )
 }
+
+pub fn unlabelled_fields_test() {
+  "pub type Foo {
+    Foo(Int, String)
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    _0: int
+    _1: str
+
+
+",
+  )
+}
+
+pub fn mixed_labelled_unlabelled_fields_test() {
+  "pub type Foo {
+    Foo(a: Int, String)
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    a: int
+    _0: str
+
+
+",
+  )
+}
+
+pub fn function_type_field_test() {
+  "pub type Foo {
+    Foo(callback: fn(Int) -> Int)
+  }"
+  |> glance.module
+  |> should.be_ok
+  |> compiler.compile_module
+  |> should.equal(
+    "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Foo:
+    callback: typing.Callable[[int], int]
+
+
+",
+  )
+}
