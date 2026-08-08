@@ -1,0 +1,20 @@
+name = "macabre"
+version = "1.0.0"
+
+# This config file is used by macabre itself when compiling this package to
+# Python. The official `gleam.toml` holds the dependencies for building
+# macabre with the official Gleam tool for Erlang.
+
+[dependencies]
+macabre_stdlib = { git = "git@github.com:dusty-phillips/macabre_stdlib.git", ref = "main" }
+macabre_argv = { git = "git@github.com:dusty-phillips/macabre_argv.git", ref = "main" }
+macabre_simplifile = { git = "git@github.com:dusty-phillips/macabre_simplifile.git", ref = "main" }
+macabre_filepath = { git = "git@github.com:dusty-phillips/macabre_filepath.git", ref = "main" }
+macabre_shellout = { git = "git@github.com:dusty-phillips/macabre_shellout.git", ref = "main" }
+macabre_tom = { git = "git@github.com:dusty-phillips/macabre_tom.git", ref = "main" }
+macabre_glexer = { git = "git@github.com:dusty-phillips/macabre_glexer.git", ref = "main" }
+macabre_splitter = { git = "git@github.com:dusty-phillips/macabre_splitter.git", ref = "main" }
+glance = "7.0.0"
+glimpse = { git = "git@github.com:dusty-phillips/glimpse.git", ref = "main" }
+gleam_time = "1.8.0"
+gleam_yielder = "1.1.0"
