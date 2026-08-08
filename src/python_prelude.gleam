@@ -25,6 +25,13 @@ class Error:
 Nil = None
 
 
+class GleamTco:
+    __slots__ = [\"args\"]
+
+    def __init__(self, args: tuple):
+        self.args = args
+
+
 class GleamList(typing.Generic[GleamListElem]):
     __slots__ = [\"value\", \"tail\"]
     __match_args__ = (\"value\", \"tail\")
@@ -109,9 +116,12 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
             case 'int' | 'float':
                 unit = 1
                 bitsize = unit * size
-            case 'bitstring' | 'utf8' | 'utf16' | 'utf8':
+            case 'bitstring' | 'utf8' | 'utf16' | 'utf32':
                 unit = 8
-                bitsize = unit * size
+                # For string-like types the size is implied by the value,
+                # so bitsize is only needed when a size was given.
+                if size != None:
+                    bitsize = unit * size
 
     if bitsize != None and bitsize % 8:
         raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
@@ -152,6 +162,103 @@ def gleam_bitstring_segment_to_bytes(segment) -> bytes:
             
 
     raise Exception('Unexpected bitstring encountered')
+
+def gleam_match_bitstring(subject, *segments):
+    cursor = 0
+    bindings = []
+
+    for segment in segments:
+        kind, payload = segment[0], segment[1]
+        options = segment[2:]
+
+        size = None
+        unit = None
+        type = None
+        bitsize = None
+        endianness = 'big'
+        for option in options:
+            match option:
+                case ('SizeValue', size):
+                    size = size
+                case ('Unit', unit):
+                    unit = unit
+                case ('Little', _):
+                    endianness = 'little'
+                case ('Big', _):
+                    endianness = 'big'
+                case ('Native', _):
+                    endianness = sys.byteorder
+                case ('Float', _):
+                    type = 'float'
+                case ('Int', _):
+                    type = 'int'
+                case ('BitString', _):
+                    type = 'bitstring'
+                case ('Utf8', _):
+                    type = 'utf8'
+                case ('Utf16', _):
+                    type = 'utf16'
+                case ('Utf32', _):
+                    type = 'utf32'
+                case _:
+                    raise Exception(f'Unexpected bitstring option {option}')
+
+        if type == None:
+            type = 'int'
+
+        if type == 'bitstring':
+            value = subject[cursor:]
+            cursor = len(subject)
+        else:
+            if size == None:
+                match type:
+                    case 'int':
+                        size = 8
+                    case 'float':
+                        size = 64
+                    case _:
+                        raise Exception('bitstring pattern needs an explicit size')
+            if unit == None:
+                match type:
+                    case 'int' | 'float':
+                        unit = 1
+                    case 'utf8' | 'utf16' | 'utf32':
+                        unit = 8
+            bitsize = unit * size
+            if bitsize % 8:
+                raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
+            match type:
+                case 'int':
+                    value = int.from_bytes(
+                        subject[cursor:cursor + bitsize // 8], endianness)
+                case 'float':
+                    order = '>' if endianness == 'big' else '<'
+                    fmt = 'f' if bitsize == 32 else 'd'
+                    value = struct.unpack(
+                        f'{order}{fmt}', subject[cursor:cursor + bitsize // 8])[0]
+                case 'utf8':
+                    value = subject[cursor:cursor + bitsize // 8].decode('utf8')
+                case 'utf16':
+                    value = subject[cursor:cursor + bitsize // 8].decode(
+                        'utf-16-le' if endianness == 'little' else 'utf-16-be')
+                case 'utf32':
+                    value = subject[cursor:cursor + bitsize // 8].decode(
+                        'utf-32-le' if endianness == 'little' else 'utf-32-be')
+            cursor += bitsize // 8
+
+        match kind:
+            case 'variable':
+                bindings.append(value)
+            case 'wildcard':
+                pass
+            case 'int':
+                if value != int(payload):
+                    return None
+            case 'string':
+                if value != payload:
+                    return None
+
+    return tuple(bindings)
 "
 
 pub const prelude = "from gleam_builtins import *\n\n"
