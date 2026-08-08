@@ -50,6 +50,26 @@ class GleamList(typing.Generic[GleamListElem]):
 
         return \"GleamList([\" + \", \".join(strs) + \"])\"
 
+    def __eq__(self, other):
+        if not isinstance(other, GleamList):
+            return False
+        left = self
+        right = other
+        while left is not None and right is not None:
+            if left.value != right.value:
+                return False
+            left = left.tail
+            right = right.tail
+        return left is None and right is None
+
+    def __hash__(self):
+        result = 0
+        head = self
+        while head is not None:
+            result = result * 31 + hash(head.value)
+            head = head.tail
+        return result
+
 
 
 def to_gleam_list(elements: list[GleamListElem], tail: GleamList | None=None):

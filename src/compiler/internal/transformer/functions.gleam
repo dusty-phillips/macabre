@@ -16,10 +16,21 @@ type ParamFoldState {
   )
 }
 
+type ForwarderFoldState {
+  ForwarderFoldState(
+    discard_idx: Int,
+    reversed_params: transformer.ReversedList(python.FunctionParameter),
+  )
+}
+
 /// Builds a forwarding wrapper for an external function whose Python binding
 /// has a different name to the Gleam function, e.g.
 /// `@external(python, "argv_bindings", "load") fn do() { ... }`. Callers
 /// reference the Gleam name, so we emit `def do(): return load()`.
+///
+/// The wrapper's parameters use the Gleam parameter names (not the labels), as
+/// labelled calls to externals are emitted as keyword arguments keyed by those
+/// parameter names (see `external_keyword_arguments` in statements.gleam).
 pub fn transform_external_forwarder(
   function: glance.Function,
   binding_name: String,
@@ -27,8 +38,8 @@ pub fn transform_external_forwarder(
   let fold_result =
     list.fold(
       function.parameters,
-      ParamFoldState(0, [], []),
-      fold_function_parameter,
+      ForwarderFoldState(0, []),
+      fold_forwarder_parameter,
     )
   let parameters = fold_result.reversed_params |> list.reverse
   let args =
@@ -38,12 +49,38 @@ pub fn transform_external_forwarder(
   python.Function(
     name: function.name,
     parameters: parameters,
-    body: list.append(fold_result.reversed_binds |> list.reverse, [
+    body: [
       python.Return(python.Call(python.Variable(binding_name), args)),
-    ]),
+    ],
     docstring: option.None,
     comments: [],
   )
+}
+
+fn fold_forwarder_parameter(
+  state: ForwarderFoldState,
+  function_parameter: glance.FunctionParameter,
+) -> ForwarderFoldState {
+  case function_parameter {
+    glance.FunctionParameter(label: _, name: glance.Named(name), type_: _) ->
+      ForwarderFoldState(
+        ..state,
+        reversed_params: list.prepend(
+          state.reversed_params,
+          python.NameParam(name),
+        ),
+      )
+    glance.FunctionParameter(label: _, name: _, type_: _) -> {
+      let index = state.discard_idx
+      ForwarderFoldState(
+        discard_idx: index + 1,
+        reversed_params: list.prepend(
+          state.reversed_params,
+          python.DiscardParam(index),
+        ),
+      )
+    }
+  }
 }
 
 fn parameter_name(parameter: python.FunctionParameter) -> String {
