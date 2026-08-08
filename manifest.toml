@@ -19,7 +19,7 @@ packages = [
   { name = "gleam_yielder", version = "1.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleam_yielder", source = "hex", outer_checksum = "8E4E4ECFA7982859F430C57F549200C7749823C106759F4A19A78AEA6687717A" },
   { name = "gleeunit", version = "1.11.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleeunit", source = "hex", outer_checksum = "EC31ABA74256AEA531EDF8169931D775BBB384FED0A8A1BDC4DD9354E3E21826" },
   { name = "glexer", version = "2.5.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "splitter"], otp_app = "glexer", source = "hex", outer_checksum = "D423CF63B8D4F9654EF53D0AF4904B249EB0679BD41C63440170AC508C9CC65E" },
-  { name = "glimpse", version = "0.0.3", build_tools = ["gleam"], requirements = ["glance", "gleam_stdlib"], source = "git", repo = "git@github.com:dusty-phillips/glimpse.git", commit = "4a1195de95249e636acdb7803d16323109fff7ff" },
+  { name = "glimpse", version = "0.9.0", build_tools = ["gleam"], requirements = ["glance", "gleam_stdlib"], otp_app = "glimpse", source = "hex", outer_checksum = "F30D9D0EDD4C03938278506B75722CD26E3E81BC69003B2CDB9104658BC9C3D2" },
   { name = "pprint", version = "1.0.6", build_tools = ["gleam"], requirements = ["glam", "gleam_stdlib"], otp_app = "pprint", source = "hex", outer_checksum = "4E9B34AE03B2E81D60F230B9BAF1792BE1AC37AFB5564B8DEBEE56BAEC866B7D" },
   { name = "shellout", version = "1.8.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "shellout", source = "hex", outer_checksum = "C416356D45151F298108C9DB9CD1EDE0313F620B5EDBB5766CD7237659D87841" },
   { name = "simplifile", version = "2.7.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "A2727627B063E87351934C7F7F008F2D1FDB16F6DE0B8C79F9E46459CFC9C164" },
@@ -36,7 +36,7 @@ gleam_stdlib = { version = ">= 1.0.0 and < 2.0.0" }
 gleam_yielder = { version = ">= 1.1.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.11.0 and < 2.0.0" }
 glexer = { version = ">= 2.5.0 and < 3.0.0" }
-glimpse = { git = "git@github.com:dusty-phillips/glimpse.git", ref = "main" }
+glimpse = { version = ">= 0.9.0 and < 1.0.0" }
 pprint = { version = ">= 1.0.6 and < 2.0.0" }
 shellout = { version = ">= 1.8.0 and < 2.0.0" }
 simplifile = { version = ">= 2.7.0 and < 3.0.0" }

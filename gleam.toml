@@ -22,7 +22,7 @@ filepath = ">= 1.1.2 and < 2.0.0"
 glexer = ">= 2.5.0 and < 3.0.0"
 tom = ">= 2.1.0 and < 3.0.0"
 shellout = ">= 1.8.0 and < 2.0.0"
-glimpse = { git = "git@github.com:dusty-phillips/glimpse.git", ref = "main" }
+glimpse = ">= 0.9.0 and < 1.0.0"
 
 [dev-dependencies]
 pprint = ">= 1.0.6 and < 2.0.0"
