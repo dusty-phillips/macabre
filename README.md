@@ -2,27 +2,19 @@
 
 **macabre** : (adj) _tending to produce horror in a beholder_
 
-This is an ultra experimental compiler written in Gleam to compile Gleam source
+This is an experimental compiler written in Gleam to compile Gleam source
 code (using the [glance](https://hexdocs.pm/glance/) package) to Python.
 
-It covers a pretty decent swath of Gleam syntax, and I made a point of
-prioritizing the hardest syntax. There is a big pile of TODOs at the end of
-this file if you want to contribute.
-
-It is now self-hosted: macabre can compile its own source code to Python, and
-the Python-compiled compiler produces byte-identical output to the
-Erlang-compiled one. It also passes its own test suite (201 tests) and is
-idempotent — running the generated compiler on itself produces the same output
-every time.
+It covers all Gleam syntax and is now self-hosted: macabre can compile its own
+source code to Python, and the Python-compiled compiler produces byte-identical
+output to the Erlang-compiled one. It also passes its own test suite (201
+tests) and is idempotent — running the generated compiler on itself produces
+the same output every time.
 
 My original vision was to have fun while making this a self-hosted compiler.
 That's done now, so I've come up with a new vision: maybe something to do with
 supporting other compilation targets, such as Gleam's native Erlang and
-Javascript environments.
-
-Probability of achieving this vision: pretty low. This is a for-fun free
-time project for me. I'm currently on sabbatical so I have time for odd
-little projects like this.
+Javascript environments, or even WASM or Rust.
 
 ## Usage
 
@@ -53,7 +45,7 @@ The package folder should have a structure similar to a normal Gleam project:
 
 ```plain
 folder
-├── gleam.toml
+├── macabre.toml
 ├── build
 │   └── <generated stuff>
 └─ src
@@ -65,8 +57,9 @@ folder
     └── some_bindings.py
 ```
 
-The `gleam.toml` only supports two keys, name and dependencies. Dependencies
-can be git repositories, hex packages, or local paths:
+The `macabre.toml` (it falls back to `gleam.toml` if `macabre.toml` doesn't
+exist) only supports two keys, name and dependencies. Dependencies can be git
+repositories, hex packages, or local paths:
 
 ```toml
 name = "example"
@@ -117,7 +110,7 @@ python3 build/dev/python
 
 The standard Gleam libraries use Erlang and JavaScript externals, which macabre
 can't use. A set of ported libraries with Python bindings (`@external(python,
-...)`) live in the
+...)`) live in my
 [macabre_* repositories](https://github.com/repos?q=owner%3Adusty-phillips+macabre_):
 
 - [macabre_stdlib](https://github.com/dusty-phillips/macabre_stdlib) — the
@@ -131,7 +124,7 @@ can't use. A set of ported libraries with Python bindings (`@external(python,
 - [macabre_filepath](https://github.com/dusty-phillips/macabre_filepath)
 - [macabre_splitter](https://github.com/dusty-phillips/macabre_splitter)
 
-Macabre itself uses these ports — see `macabre.toml` in this repo.
+Macabre itself uses these forks — see `macabre.toml` in this repo.
 
 ## Development
 
@@ -180,8 +173,7 @@ Some tasks below are marked easy if you want to get started.
 
 - non-byte-aligned bitstrings are not supported yet
 - (EASY) internal/errors.format_token needs help
-- Code is very not commented
-- (EASY) Should be putting public types, functions, and constants in `__all__`
+- (EASY) Should be putting pubic types, functions, and constants in `__all__`
 
 ### Low Pri
 
@@ -192,3 +184,10 @@ Some tasks below are marked easy if you want to get started.
   are installed. (shellout is already available)
 - See if there are ways to leverage the
   [gleam_package_interface](https://github.com/gleam-lang/package-interface)
+
+## AI Implementation notes
+
+Most of the initial prototype was handcoded. I ran out of time and despaired of
+completing the project so on a whim I handed it to Deepseek V4 flash and... it
+seems to have worked. It's more or less vibe coded with careful oversight so it
+should be treated more like a prototype than good code
