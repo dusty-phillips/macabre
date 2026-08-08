@@ -7,8 +7,10 @@ import filepath
 import filesystem
 import gleam/dict
 import gleam/io
+import gleam/list
 import gleam/result.{try}
 import gleam/set
+import gleam/string
 
 pub fn main() {
   case argv.load().arguments {
@@ -19,7 +21,11 @@ pub fn main() {
 }
 
 pub fn usage(message: String) -> Nil {
-  io.println("Usage: macabre <filename.gleam>\n\n" <> message)
+  io.println(
+    "Usage: macabre <some_package_folder>\n"
+    <> "Reads the package's macabre.toml if present, else its gleam.toml.\n\n"
+    <> message,
+  )
 }
 
 pub fn build(directory: String) -> Nil {
@@ -61,12 +67,24 @@ pub fn write_package(
     )
   })
   |> try(fn(_) {
+    let module_names = dict.keys(package.modules)
     dict.fold(package.modules, Ok(Nil), fn(state, name, module) {
       try(state, fn(_) {
-        build_directory
-        |> filepath.join(name)
-        |> filesystem.replace_extension()
-        |> filesystem.write(module, _)
+        let has_submodules =
+          list.any(module_names, fn(other) {
+            other != name && string.starts_with(other, name <> "/")
+          })
+        let target = case has_submodules {
+          True ->
+            build_directory
+            |> filepath.join(name)
+            |> filepath.join("__init__.py")
+          False ->
+            build_directory
+            |> filepath.join(name)
+            |> filesystem.replace_extension()
+        }
+        filesystem.write(module, target)
       })
     })
   })

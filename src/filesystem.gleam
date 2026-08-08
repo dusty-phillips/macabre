@@ -5,10 +5,19 @@ import filepath
 import gleam/io
 import gleam/list
 import gleam/result
+import gleam/string
 import python_prelude
 import simplifile
 
 pub fn write(contents: String, filename: String) -> Result(Nil, errors.Error) {
+  use _ <- result.try(
+    filename
+    |> filepath.directory_name
+    |> simplifile.create_directory_all
+    |> result.map_error(fn(error) {
+      errors.MkdirError(filepath.directory_name(filename), error)
+    }),
+  )
   simplifile.write(filename, contents)
   |> result.map_error(errors.FileWriteError(filename, _))
 }
@@ -82,8 +91,21 @@ pub fn create_directory(path) -> Result(Nil, errors.Error) {
 }
 
 pub fn copy_dir(src: String, dest: String) -> Result(Nil, errors.Error) {
-  simplifile.copy_directory(src, dest)
-  |> result.map_error(errors.CopyFileError(src, dest, _))
+  use files <- result.try(
+    simplifile.get_files(src)
+    |> result.map_error(errors.FileOrDirectoryNotFound(src, _)),
+  )
+  list.try_fold(files, Nil, fn(_, file) {
+    let relative =
+      file
+      |> string.remove_prefix(src)
+      |> string.remove_prefix("/")
+    let target = filepath.join(dest, relative)
+    let target_dir = filepath.directory_name(target)
+    simplifile.create_directory_all(target_dir)
+    |> result.try(fn(_) { simplifile.copy_file(file, target) })
+    |> result.map_error(errors.CopyFileError(file, target, _))
+  })
 }
 
 pub fn copy_externals(

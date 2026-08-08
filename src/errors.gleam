@@ -14,6 +14,8 @@ pub type Error {
   GlanceParseError(error: glance.Error, module: String, contents: String)
   GitCloneError(name: String, error: #(Int, String))
   GitCheckoutError(name: String, git_ref: String, error: #(Int, String))
+  HexDownloadError(name: String, version: String, error: #(Int, String))
+  HexExtractError(name: String, version: String, error: #(Int, String))
   MkdirError(path: String, error: simplifile.FileError)
   TomlFieldError(path: String, error: tom.GetError)
   TomlParseError(path: String, error: tom.ParseError)
@@ -28,6 +30,10 @@ pub fn format_error(error: Error) -> String {
     GitCloneError(name, _) -> "Unable to clone " <> name
     GitCheckoutError(name, git_ref, _) ->
       "Unable to checkout " <> git_ref <> " in " <> name
+    HexDownloadError(name, version, _) ->
+      "Unable to download " <> name <> " version " <> version
+    HexExtractError(name, version, _) ->
+      "Unable to extract " <> name <> " version " <> version
     TomlParseError(filename, _) -> "Invalid toml file " <> filename
     TomlFieldError(filename, tom.NotFound(key)) ->
       "Missing toml field in " <> filename <> ": " <> string.join(key, ",")
