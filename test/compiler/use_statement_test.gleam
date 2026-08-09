@@ -139,8 +139,8 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_1 = to_gleam_list([expression], values)
-                    return values_1
+                    values_0 = to_gleam_list([expression], values)
+                    return values_0
                 case _:
                     return values
         return _fn_case_0(expression)
@@ -182,14 +182,14 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_1 = to_gleam_list([expression], values)
+                    values_0 = to_gleam_list([expression], values)
                     def _fn_case_0(_case_subject):
                         match _case_subject:
                             case (Some(updated), _, _):
                                 return updated
                             case _:
-                                return values_1
-                    return _fn_case_0(handle_operator(Some(1), to_gleam_list([]), values_1))
+                                return values_0
+                    return _fn_case_0(handle_operator(Some(1), to_gleam_list([]), values_0))
                 case _:
                     return values
         return _fn_case_0(expression)

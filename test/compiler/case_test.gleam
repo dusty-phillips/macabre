@@ -523,3 +523,79 @@ from glexer import token
 
 "
 }
+
+// A case pattern capture in one arm must not collide with another arm's
+// reference to the enclosing scope, even when that reference is renamed by the
+// enclosing scope after the collision check. Here `tokens` is rebound by each
+// `use` (so the subject is `tokens_0_0` by the case), and the first arm's
+// `..tokens` capture must get a fresh name rather than reusing `tokens_0_0`.
+pub fn case_arm_capture_renamed_away_from_enclosing_subject_test() {
+  let assert Ok(module) =
+    "pub type Kind {
+    Let
+    LetAssert(Option(String))
+  }
+
+  fn assignment(kind: Kind, tokens: List(Int), start: Int) {
+    use #(pattern, tokens) <- result.try(Ok(#(1, tokens)))
+    use #(annotation, tokens) <- result.try(Ok(#(Nil, tokens)))
+    use _, tokens <- result.try(Ok(#(Nil, tokens)))
+    use #(value, tokens) <- result.try(Ok(#(0, tokens)))
+    use #(new_kind, tokens, end) <- result.try(case kind, tokens {
+      LetAssert(None), [0, ..tokens] -> Ok(#(LetAssert(Some(\"x\")), tokens, start + 1))
+      LetAssert(_), _ | Let, _ -> Ok(#(kind, tokens, start))
+    })
+    #(new_kind, tokens, end)
+  }
+  "
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
+
+@dataclasses.dataclass(frozen=True)
+class Let:
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class LetAssert:
+    _0: Option[str]
+
+
+def assignment(kind, tokens, start):
+    def _fn_def_0(use_capture_0):
+        def _fn_match_0(_case_subject):
+            match _case_subject:
+                case (pattern, tokens):
+                    return (pattern, tokens,)
+        pattern, tokens = _fn_match_0(use_capture_0)
+        def _fn_def_0(use_capture_0):
+            def _fn_match_0(_case_subject):
+                match _case_subject:
+                    case (annotation, tokens):
+                        return (annotation, tokens,)
+            annotation, tokens_0 = _fn_match_0(use_capture_0)
+            def _fn_def_0(_, tokens_0):
+                def _fn_def_0(use_capture_0):
+                    def _fn_match_0(_case_subject):
+                        match _case_subject:
+                            case (value, tokens):
+                                return (value, tokens,)
+                    value, tokens_0_0 = _fn_match_0(use_capture_0)
+                    def _fn_case_1(_case_subject):
+                        match _case_subject:
+                            case (LetAssert(None), GleamList(0, tokens_0_0_0)):
+                                return Ok((LetAssert(Some(\"x\")), tokens_0_0_0, start + 1,))
+                            case (LetAssert(_), _) | (Let(), _):
+                                return Ok((kind, tokens_0_0, start,))
+                    def _fn_def_0(use_capture_0):
+                        def _fn_match_0(_case_subject):
+                            match _case_subject:
+                                case (new_kind, tokens, end):
+                                    return (new_kind, tokens, end,)
+                        new_kind, tokens_1, end = _fn_match_0(use_capture_0)
+                        return (new_kind, tokens_1, end,)
+                    return result.try_(_fn_case_1((kind, tokens_0_0,)), _fn_def_0)
+                return result.try_(Ok((0, tokens_0,)), _fn_def_0)
+            return result.try_(Ok((None, tokens_0,)), _fn_def_0)
+        return result.try_(Ok((None, tokens,)), _fn_def_0)
+    return result.try_(Ok((1, tokens,)), _fn_def_0)"
+}

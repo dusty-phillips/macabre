@@ -1258,22 +1258,38 @@ fn resolve_match_cases(
     cases
     |> list.map(case_binds)
     |> list.flatten
+  // `nested_resolve_case` renames the case bodies through the renames dicts
+  // when it resolves them, so a reference's FINAL name is what matters for
+  // collision detection: a capture renamed to a fresh name here must not
+  // collide with a reference that the enclosing renames will later rename to
+  // that same fresh name. The precedence matches `active_renames_for`.
+  let effective_rename = fn(name) {
+    case dict.has_key(own_cross, name) {
+      True -> result.unwrap(dict.get(own_cross, name), name)
+      False ->
+        case dict.has_key(cross_renames, name) {
+          True -> result.unwrap(dict.get(cross_renames, name), name)
+          False -> result.unwrap(dict.get(renames, name), name)
+        }
+    }
+  }
   let all_refs =
     cases
     |> list.map(fn(match_case) { case_refs(match_case, set.new()) })
     |> list.flatten
+  let final_refs = list.map(all_refs, effective_rename)
   let used =
     set.from_list(all_binds)
-    |> set.union(set.from_list(all_refs))
+    |> set.union(set.from_list(final_refs))
     |> set.union(set.from_list(dict.values(renames)))
     |> set.union(set.from_list(dict.values(cross_renames)))
+    |> set.union(set.from_list(dict.values(own_cross)))
   let collisions =
     all_binds
     |> list.filter(fn(name) {
-      list.any(all_refs, fn(referenced) { referenced == name })
+      list.any(final_refs, fn(referenced) { referenced == name })
     })
     |> list.unique
-
   let #(new_cross, pool) =
     list.fold(collisions, #(dict.new(), pool), fn(acc, name) {
       let #(renames, pool) = acc
