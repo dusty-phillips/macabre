@@ -1863,11 +1863,17 @@ fn marker_swallowing_callee(callee: python.Expression) -> Bool {
       module <> "." <> function_name
     _ -> ""
   }
-  name == "list.any" || name == "list.all" || name == "list.map"
-  || name == "list.filter" || name == "list.find"
-  || name == "list.fold" || name == "list.fold_right"
-  || name == "list.index_fold" || name == "list.try_fold"
-  || name == "list.try_map" || name == "list.flat_map"
+  name == "list.any"
+  || name == "list.all"
+  || name == "list.map"
+  || name == "list.filter"
+  || name == "list.find"
+  || name == "list.fold"
+  || name == "list.fold_right"
+  || name == "list.index_fold"
+  || name == "list.try_fold"
+  || name == "list.try_map"
+  || name == "list.flat_map"
 }
 
 fn is_tail_call(expression: python.Expression, function_name: String) -> Bool {

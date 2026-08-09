@@ -249,8 +249,7 @@ fn load_package_dependencies(
             LocalPackage(path) ->
               case filepath.is_absolute(path) {
                 True -> package
-                False ->
-                  LocalPackage(filepath.join(package_root, path))
+                False -> LocalPackage(filepath.join(package_root, path))
               }
             other -> other
           }

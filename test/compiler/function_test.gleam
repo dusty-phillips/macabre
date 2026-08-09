@@ -8,7 +8,8 @@ pub fn external_python_test() {
     "@external(python, \"mylib\", \"println\")
   fn println() -> nil"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 from mylib import println\n\n\n"
 }
@@ -18,7 +19,8 @@ pub fn skip_external_javascript_test() {
     "@external(javascript, \"mylib\", \"println\")
 fn println() -> nil"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def println():
     pass"
@@ -29,7 +31,8 @@ pub fn skip_external_erlang_test() {
     "@external(erlang, \"mylib\", \"println\")
 fn println() -> nil"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def println():
     pass"
@@ -37,7 +40,8 @@ def println():
 
 pub fn empty_body_no_external_test() {
   let assert Ok(module) = "fn println() -> nil" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def println():
     pass"
@@ -45,7 +49,8 @@ def println():
 
 pub fn function_with_string_param_test() {
   let assert Ok(module) = "fn println(arg: String) -> nil {}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def println(arg):
     pass"
@@ -54,7 +59,8 @@ def println(arg):
 pub fn function_with_two_string_params_test() {
   let assert Ok(module) =
     "fn println(arg: String, other: String) -> nil {}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def println(arg, other):
     pass"
@@ -67,7 +73,8 @@ pub fn two_functions_test() {
 fn func2() -> nil {}
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def func1():
     pass
@@ -83,7 +90,8 @@ pub fn function_with_return_value_test() {
   \"hello world\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def greet():
     return \"hello world\""
@@ -95,7 +103,8 @@ pub fn function_with_discard_params_test() {
   \"hello world\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def greet(_, _1, _foo):
     return \"hello world\""
@@ -109,7 +118,8 @@ pub fn fn_with_discard_params_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0(_, _1, _foo):
@@ -123,7 +133,8 @@ pub fn labelled_param_same_as_name_test() {
     labelled
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def add(labelled):
     return labelled"
@@ -135,7 +146,8 @@ pub fn labelled_param_different_name_test() {
     a
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def add(labelled):
     a = labelled
@@ -152,7 +164,8 @@ pub fn labelled_param_call_test() {
     add(labelled: 1)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def add(labelled):
     return labelled
@@ -179,7 +192,8 @@ pub fn external_called_with_labels_emits_positional_test() {
   assert compiler.compile_module_with_externals(module, dict.new(), dict.new(), [
       "replace",
     ])
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def replace(builder, pattern, substitute):
     return bindings_do_replace(builder, pattern, substitute)
@@ -218,7 +232,8 @@ pub fn external_reordered_arguments_emits_keywords_test() {
       dict.new(),
       ["write_bits"],
     )
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def to_bits(input):
     return input
@@ -258,7 +273,8 @@ pub fn non_external_call_with_colliding_external_name_test() {
       dict.new(),
       ["append"],
     )
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def append(first, second):
     return bindings_do_append(first, second)
@@ -288,7 +304,8 @@ pub fn shorthand_call_field_test() {
     add(labelled:)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def add(labelled):
     return labelled
@@ -309,7 +326,8 @@ pub fn keyword_named_parameter_test() {
     read(from: \"one\", in: \"two\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def read(from_, in_):
     return from_ + in_

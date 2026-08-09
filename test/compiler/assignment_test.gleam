@@ -8,7 +8,8 @@ pub fn simple_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     a = \"hello world\""
@@ -22,7 +23,8 @@ pub fn mulitple_simple_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     a = \"hello world\"
@@ -36,7 +38,8 @@ pub fn tuple_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):
@@ -53,7 +56,8 @@ pub fn let_assert_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):
@@ -72,7 +76,8 @@ pub fn let_assert_custom_message_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):

@@ -11,7 +11,8 @@ pub fn multiple_subjects_bitstring_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -35,7 +36,8 @@ pub fn multiple_subjects_concatenate_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -54,7 +56,8 @@ pub fn concatenate_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):
@@ -77,7 +80,8 @@ pub fn escaped_prefix_concat_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -102,7 +106,8 @@ pub fn concatenate_pattern_with_empty_rest_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -123,7 +128,8 @@ pub fn concatenate_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -142,7 +148,8 @@ pub fn bitstring_pattern_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -164,7 +171,8 @@ fn main() {
 }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Box:
@@ -186,7 +194,8 @@ pub fn bitstring_pattern_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):

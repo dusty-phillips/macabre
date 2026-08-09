@@ -6,7 +6,8 @@ pub fn no_variant_custom_type_test() {
     "pub type Foo {
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 "
 }
@@ -17,7 +18,8 @@ pub fn single_variant_custom_type_test() {
   Bar(a: Int)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -34,7 +36,8 @@ pub fn multi_variant_custom_type_test() {
   Baz(a: String)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -54,7 +57,8 @@ pub fn single_variant_with_no_fields_test() {
   Bar
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -71,7 +75,8 @@ pub fn multi_variant_with_no_fields_test() {
   Baz
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -91,7 +96,8 @@ pub fn tuple_type_test() {
     Foo(point: #(Int, Int))
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Foo:
@@ -107,7 +113,8 @@ pub fn variant_generic_test() {
     Foo(item: elem)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
@@ -125,7 +132,8 @@ pub fn multi_variant_generic_test() {
     Baz(elem: elem)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
@@ -150,7 +158,8 @@ pub fn generic_field_type_test() {
     Bar(foo: Foo(String))
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
@@ -172,7 +181,8 @@ pub fn unlabelled_fields_test() {
     Foo(Int, String)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Foo:
@@ -189,7 +199,8 @@ pub fn mixed_labelled_unlabelled_fields_test() {
     Foo(a: Int, String)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Foo:
@@ -206,7 +217,8 @@ pub fn function_type_field_test() {
     Foo(callback: fn(Int) -> Int)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Foo:

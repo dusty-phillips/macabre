@@ -7,7 +7,8 @@ pub fn string_expression_test() {
       \"bar\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return \"bar\""
@@ -19,7 +20,8 @@ pub fn int_expression_test() {
       42
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 42"
@@ -31,7 +33,8 @@ pub fn float_expression_test() {
       12.5
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 12.5"
@@ -43,7 +46,8 @@ pub fn tuple_expression_test() {
   #(42, 12.5, \"foo\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return (42, 12.5, \"foo\",)"
@@ -55,7 +59,8 @@ pub fn empty_list_expression_test() {
   []
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return to_gleam_list([])"
@@ -67,7 +72,8 @@ pub fn list_expression_with_contents_test() {
   [1, 2, 3]
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return to_gleam_list([1, 2, 3])"
@@ -79,7 +85,8 @@ pub fn list_expression_with_tail_test() {
   [1, 2, ..[3, 4]]
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return to_gleam_list([1, 2], to_gleam_list([3, 4]))"
@@ -91,7 +98,8 @@ pub fn true_expression_test() {
       True
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return True"
@@ -103,7 +111,8 @@ pub fn false_expression_test() {
       False
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return False"
@@ -115,7 +124,8 @@ pub fn variable_expression_test() {
   println(a)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return println(a)"
@@ -128,7 +138,8 @@ pub fn negate_int_test() {
   let b = -a
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     a = -1
@@ -141,7 +152,8 @@ pub fn negate_bool_test() {
   let b = !True
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     b = not True"
@@ -153,7 +165,8 @@ pub fn empty_panic_test() {
   panic
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     raise GleamPanic(\"panic expression evaluated\")"
@@ -165,7 +178,8 @@ pub fn string_panic_test() {
   panic as \"my custom panic\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     raise GleamPanic(\"my custom panic\")"
@@ -177,7 +191,8 @@ pub fn empty_todo_test() {
   todo
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     raise NotImplementedError(\"This has not yet been implemented\")"
@@ -192,7 +207,8 @@ pub fn case_clause_panic_test() {
   }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -213,7 +229,8 @@ pub fn case_clause_todo_test() {
   }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -231,7 +248,8 @@ pub fn string_todo_test() {
   todo as \"much is yet to be done\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     raise NotImplementedError(\"much is yet to be done\")"
@@ -243,7 +261,8 @@ pub fn tuple_index_test() {
   #(42, 12.5, \"foo\").1
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return (42, 12.5, \"foo\",)[1]"
@@ -255,7 +274,8 @@ pub fn field_access_test() {
     foo.b
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return foo.b"
@@ -267,7 +287,8 @@ pub fn binop_int_add_test() {
     40 + 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40 + 2"
@@ -279,7 +300,8 @@ pub fn binop_float_add_test() {
     40.2 +. 2.5
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40.2 + 2.5"
@@ -291,7 +313,8 @@ pub fn binop_concat_add_test() {
     \"hello \" <> \"world\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return \"hello \" + \"world\""
@@ -303,7 +326,8 @@ pub fn binop_int_sub_test() {
     40 - 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40 - 2"
@@ -315,7 +339,8 @@ pub fn binop_float_sub_test() {
     40.2 -. 2.5
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40.2 - 2.5"
@@ -327,7 +352,8 @@ pub fn binop_int_div_test() {
     40 / 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40 // 2"
@@ -339,7 +365,8 @@ pub fn binop_float_div_test() {
     40.2 /. 2.5
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 40.2 / 2.5"
@@ -351,7 +378,8 @@ pub fn binop_int_modulo_test() {
     5 % 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5 % 2"
@@ -363,7 +391,8 @@ pub fn equality_test() {
     5 == 5
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5 == 5"
@@ -375,7 +404,8 @@ pub fn inequality_test() {
     5 != 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5 != 2"
@@ -387,7 +417,8 @@ pub fn lt_int_test() {
     5 < 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5 < 2"
@@ -399,7 +430,8 @@ pub fn lt_float_test() {
     5.0 <. 2.0
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5.0 < 2.0"
@@ -411,7 +443,8 @@ pub fn lt_eq_int_test() {
     5 <= 2
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5 <= 2"
@@ -423,7 +456,8 @@ pub fn lt_eq_float_test() {
     5.0 <=. 2.0
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return 5.0 <= 2.0"
@@ -435,7 +469,8 @@ pub fn logical_or_test() {
     True || False
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return True or False"
@@ -447,7 +482,8 @@ pub fn logical_and_test() {
     True && False
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return True and False"
@@ -459,7 +495,8 @@ pub fn simple_pipe_test() {
     \"foo\" |> println
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return println(\"foo\")"
@@ -471,7 +508,8 @@ pub fn capture_pipe_test() {
     \"foo\" |> println(\"a\", _, \"b\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return (lambda fn_capture: println(\"a\", fn_capture, \"b\"))(\"foo\")"
@@ -483,7 +521,8 @@ pub fn simple_call_expression_test() {
       foo(\"bar\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return foo(\"bar\")"
@@ -495,7 +534,8 @@ pub fn labelled_argument_call_expression_test() {
       foo(\"bar\", baz: \"baz\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return foo(\"bar\", baz=\"baz\")"
@@ -508,7 +548,8 @@ pub fn fn_capture_test() {
       x(\"c\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     x = (lambda fn_capture: foo(\"a\", fn_capture, \"b\"))
@@ -526,7 +567,8 @@ pub fn record_update_test() {
     let bar = Bar(..foo, b: \"you\")
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -549,7 +591,8 @@ pub fn construct_record_with_label_test() {
     let foo = Bar(b: \"who\", a: 1)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
@@ -567,7 +610,8 @@ pub fn simple_fn_test() {
     let foo = fn(a, b) {}
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0(a, b):
@@ -581,7 +625,8 @@ pub fn multiple_fn_test() {
     let foo = #(fn(a, b) {}, fn(c, d) {})
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0(a, b):
@@ -599,7 +644,8 @@ pub fn nested_fn_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0(a, b):
@@ -615,7 +661,8 @@ pub fn simple_block_test() {
     let foo = {1}
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_block_0():
@@ -630,7 +677,8 @@ pub fn multiple_block_test() {
     let bar = {2}
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_block_0():
@@ -649,7 +697,8 @@ pub fn nested_block_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_block_0():
@@ -661,7 +710,8 @@ def main():
 
 pub fn const_test() {
   let assert Ok(module) = "const foo = 5" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 foo = 5
 
@@ -676,7 +726,8 @@ pub fn const_referencing_function_comes_after_functions_test() {
 
   const five = identity(5)"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def identity(x):
     return x
@@ -693,7 +744,8 @@ pub fn string_escape_control_char_test() {
       \"\\u{1b}[\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return \"\\x1b[\""
@@ -705,7 +757,8 @@ pub fn string_escape_quote_and_newline_test() {
       \"say \\\"hi\\\"\\n\"
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return \"say \\\"hi\\\"\\n\""
@@ -721,7 +774,8 @@ pub fn nil_pattern_in_case_test() {
   }
 }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     value = Ok(1)

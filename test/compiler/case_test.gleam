@@ -10,7 +10,8 @@ pub fn single_int_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -29,7 +30,8 @@ pub fn single_float_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -48,7 +50,8 @@ pub fn single_string_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -67,7 +70,8 @@ pub fn variable_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -86,7 +90,8 @@ pub fn tuple_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -105,7 +110,8 @@ pub fn pattern_assignment_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -124,7 +130,8 @@ pub fn grouped_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -143,7 +150,8 @@ pub fn alternate_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -162,7 +170,8 @@ pub fn alternate_grouped_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -181,7 +190,8 @@ pub fn alternate_bitstring_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -206,7 +216,8 @@ pub fn case_block_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -227,7 +238,8 @@ pub fn case_empty_list_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -246,7 +258,8 @@ pub fn case_single_element_list_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -265,7 +278,8 @@ pub fn case_multi_element_list_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -286,7 +300,8 @@ pub fn case_empty_rest_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -305,7 +320,8 @@ pub fn single_element_with_rest_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -324,7 +340,8 @@ pub fn multi_element_with_rest_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -343,7 +360,8 @@ pub fn unnamed_rest_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -364,7 +382,8 @@ pub fn case_guard_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -394,7 +413,8 @@ pub fn nullary_constructor_pattern_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
@@ -429,7 +449,8 @@ pub fn arm_binding_shadowing_reference_before_binding_test() {
 }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def next(lexer):
     def _fn_case_0(_case_subject):
@@ -465,7 +486,8 @@ pub fn pattern_capture_colliding_with_module_pattern_test() {
   }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def do_lex():
     def _fn_case_0(_case_subject):
@@ -504,7 +526,8 @@ fn comment(kind: Int) -> #(String, Int) {
 }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def comment(kind):
     def _fn_case_0(_case_subject):
@@ -549,7 +572,8 @@ pub fn case_arm_capture_renamed_away_from_enclosing_subject_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Let:

@@ -8,7 +8,8 @@ pub fn single_byte_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((16, []))"
@@ -21,7 +22,8 @@ pub fn multiple_bytes_case_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((16, []), (42, []), (255, []))"
@@ -34,7 +36,8 @@ pub fn two_byte_integers_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((62_000, [(\"SizeValue\", 16)]), (63_000, [(\"SizeValue\", 16)]))"
@@ -48,7 +51,8 @@ pub fn size_expression_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     x = 16
@@ -62,7 +66,8 @@ pub fn little_endian_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Little\", None)]))"
@@ -75,7 +80,8 @@ pub fn big_endian_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Big\", None)]))"
@@ -88,7 +94,8 @@ pub fn native_endian_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Native\", None)]))"
@@ -101,7 +108,8 @@ pub fn size_unit_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((64_003, [(\"SizeValue\", 2), (\"Unit\", 8)]))"
@@ -114,7 +122,8 @@ pub fn float_default_double_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((64.888889, [(\"Float\", None)]))"
@@ -127,7 +136,8 @@ pub fn float_explicit_double_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 64), (\"Float\", None)]))"
@@ -140,7 +150,8 @@ pub fn float_explicit_single_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))"
@@ -153,7 +164,8 @@ pub fn float_single_little_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))"
@@ -166,7 +178,8 @@ pub fn explicit_int_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((42, [(\"Int\", None)]))"
@@ -179,7 +192,8 @@ pub fn bitstring_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))"
@@ -192,7 +206,8 @@ pub fn u8_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf8\", None)]))"
@@ -205,7 +220,8 @@ pub fn u16_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf16\", None)]))"
@@ -218,7 +234,8 @@ pub fn u32_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None)]))"
@@ -231,7 +248,8 @@ pub fn u32_little_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None), (\"Little\", None)]))"
@@ -244,7 +262,8 @@ pub fn utf8_codepoint_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf8Codepoint\", None)]))"
@@ -257,7 +276,8 @@ pub fn utf16_codepoint_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf16Codepoint\", None)]))"
@@ -270,7 +290,8 @@ pub fn utf32_codepoint_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf32Codepoint\", None)]))"

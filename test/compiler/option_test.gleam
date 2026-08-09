@@ -13,7 +13,8 @@ pub fn option_none_value_and_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_case_0(_case_subject):
@@ -46,7 +47,8 @@ pub fn option_none_variant_no_class_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     value = None
@@ -80,7 +82,8 @@ pub fn option_none_module_qualified_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     value = None

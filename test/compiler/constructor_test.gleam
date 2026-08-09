@@ -13,7 +13,8 @@ fn f() {
 }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Wrap:
@@ -37,7 +38,8 @@ fn f() {
 }
 "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
@@ -65,7 +67,8 @@ fn f() {
 "
     |> glance.module
   assert compiler.compile_module_with_arities(module, dict.new(), arities)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def f():
     mapper = option.Some
@@ -91,7 +94,8 @@ fn f() {
 "
     |> glance.module
   assert compiler.compile_module_with_arities(module, dict.new(), arities)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def f():
     ordering = order.Lt()
@@ -123,7 +127,8 @@ pub fn mixed_positional_and_labelled_arguments_test() {
   "
     |> glance.module
   assert compiler.compile_module_with_arities(module, dict.new(), arities)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Thing:
@@ -152,7 +157,8 @@ fn f() {
 "
     |> glance.module
   assert compiler.compile_module_with_arities(module, dict.new(), arities)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def f():
     ordering = o.Lt()

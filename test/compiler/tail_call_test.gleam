@@ -24,7 +24,8 @@ pub fn tail_call_through_use_callback_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def split(tokens):
     def _fn_case_0(_case_subject):
@@ -67,7 +68,8 @@ pub fn single_parameter_tail_call_test() {
     countdown(10)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def countdown(n):
     while True:
@@ -102,7 +104,8 @@ pub fn multiple_parameter_tail_call_test() {
     drop_until(3, [])
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def drop_until(n, acc):
     while True:
@@ -137,7 +140,8 @@ pub fn non_tail_call_not_optimized_test() {
     factorial(5)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def factorial(n):
     def _fn_case_0(_case_subject):
@@ -175,7 +179,8 @@ pub fn recursion_inside_fold_callback_not_tco_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def walk(items, depth):
     def _fn_case_0(_case_subject):

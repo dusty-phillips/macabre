@@ -15,7 +15,8 @@ pub fn use_call_no_params_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def use_thing(func):
     return func(\"thing\")
@@ -39,7 +40,8 @@ pub fn use_call_with_params_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def use_thing(x, y, func):
     return x + y + func(\"thing\")
@@ -64,7 +66,8 @@ pub fn use_variable_no_params_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def use_thing(func):
     return func(\"thing\")
@@ -89,7 +92,8 @@ pub fn use_tuple_pattern_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def use_thing(func):
     return func((1, 2,))
@@ -128,7 +132,8 @@ pub fn case_arm_assignment_shadowing_enclosing_scope_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def expression_unit():
     return Ok(1)
@@ -171,7 +176,8 @@ pub fn case_arm_assignment_shadowing_nested_match_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def expression_unit():
     return Ok(1)
@@ -213,7 +219,8 @@ pub fn use_callback_relabelled_to_last_parameter_test() {
   "
     |> glance.module
   assert compiler.compile_module_with_signatures(module, signatures)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0():
@@ -239,7 +246,8 @@ pub fn main() {
 "
     |> glance.module
   assert compiler.compile_module_with_signatures(module, signatures)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0():
@@ -271,7 +279,8 @@ pub fn use_callback_with_unlabelled_arguments_test() {
 "
     |> glance.module
   assert compiler.compile_module_with_signatures(module, signatures)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     def _fn_def_0():
@@ -304,7 +313,8 @@ pub fn use_callback_rebinding_case_pattern_bind_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def do_thing(x):
     def _fn_case_0(_case_subject):
@@ -363,7 +373,8 @@ pub fn use_callback_rebinding_nested_case_pattern_bind_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def do_thing(x):
     def _fn_case_0(_case_subject):
@@ -432,7 +443,8 @@ pub fn use_callback_rebinding_enclosing_bind_test() {
   }
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def update(x):
     return Ok(x)

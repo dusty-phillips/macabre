@@ -5,7 +5,8 @@ import gleam/option
 
 pub fn qualified_import_no_namespace_test() {
   let assert Ok(module) = "import my_cool_lib" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my_cool_lib
 
@@ -15,7 +16,8 @@ import my_cool_lib
 
 pub fn qualified_aliased_import_no_namespace_test() {
   let assert Ok(module) = "import my_cool_lib as thing" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my_cool_lib as thing
 
@@ -25,7 +27,8 @@ import my_cool_lib as thing
 
 pub fn qualified_import_namespaces_test() {
   let assert Ok(module) = "import my/cool/lib" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my.cool.lib
 from my.cool import lib
@@ -36,7 +39,8 @@ from my.cool import lib
 
 pub fn qualified_aliased_import_namespaces_test() {
   let assert Ok(module) = "import my/cool/lib as thing" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my.cool.lib
 from my.cool import lib as thing
@@ -47,7 +51,8 @@ from my.cool import lib as thing
 
 pub fn unqualified_import_test() {
   let assert Ok(module) = "import my_cool_lib.{hello}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my_cool_lib
 from my_cool_lib import hello
@@ -58,7 +63,8 @@ from my_cool_lib import hello
 
 pub fn unqualified_import_namespace_test() {
   let assert Ok(module) = "import my/cool/lib.{hello}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my.cool.lib
 from my.cool import lib
@@ -71,7 +77,8 @@ from my.cool.lib import hello
 pub fn unqualified_import_aliased_test() {
   let assert Ok(module) =
     "import my/cool/lib.{hello as foo, world as bar}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import my.cool.lib
 from my.cool import lib
@@ -88,7 +95,8 @@ pub fn aliased_modules_with_quals_test() {
   import something.{hello as baz, continent} as nothing
   "
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import something as nothing
 from something import hello as baz
@@ -105,7 +113,8 @@ from my.cool.lib import world
 pub fn type_import_test() {
   let assert Ok(module) =
     "import gleam/string_tree.{type StringTree}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import gleam.string_tree
 from gleam import string_tree
@@ -116,7 +125,8 @@ from gleam import string_tree
 
 pub fn type_and_value_import_test() {
   let assert Ok(module) = "import gleam/list.{type List, map}" |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import gleam.list
 from gleam import list
@@ -131,7 +141,8 @@ pub fn import_with_attribute_test() {
     "@internal
   import gleam/option"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 import gleam.option
 from gleam import option
@@ -152,7 +163,8 @@ pub fn parameter_shadowing_imported_module_test() {
     project.build_src_dir(project.name)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def load(project_0):
     return project.build_src_dir(project_0.name)
@@ -185,7 +197,8 @@ pub fn module_function_value_with_shadowing_parameter_test() {
   }"
     |> glance.module
   assert compiler.compile_module_with_signatures(module, signatures)
-    == "from gleam_builtins import *
+    == "from __future__ import annotations
+from gleam_builtins import *
 
 def count(list_0):
     return list.fold(list_0, 0, list.append)
@@ -214,7 +227,8 @@ pub fn module_binding_colliding_with_function_test() {
     token(1, token.Name(\"x\"), \"\", 0)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def token_0(lexer, tok, source, offset):
     return tok
@@ -246,7 +260,8 @@ pub fn module_binding_colliding_with_public_function_test() {
     token(1, token.Name(\"x\"), \"\", 0)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def token(lexer, tok, source, offset):
     return tok
@@ -277,7 +292,8 @@ pub fn module_binding_colliding_parameter_shadowing_test() {
     token + 1
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def token_0(lexer, tok, source, offset):
     return tok
@@ -306,7 +322,8 @@ pub fn module_binding_colliding_with_constant_test() {
     token
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def main():
     return token_0
@@ -340,7 +357,8 @@ pub fn module_binding_colliding_with_function_pattern_test() {
     }
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from gleam_builtins import *
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
 
 def token_0(lexer, tok, source, offset):
     return tok

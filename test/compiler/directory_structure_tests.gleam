@@ -422,7 +422,8 @@ pub fn other() -> Thing {
     project_files.build_dir
     |> filepath.join("collision_sample.py")
     |> simplifile.read
-  assert output_listing == "from gleam_builtins import *
+  assert output_listing == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Thing:
@@ -497,7 +498,8 @@ pub fn main() {}",
     |> filepath.join("arity_collision.py")
     |> simplifile.read
 
-  assert output_listing == "from gleam_builtins import *
+  assert output_listing == "from __future__ import annotations
+from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Normal:
