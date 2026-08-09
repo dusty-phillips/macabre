@@ -9,6 +9,7 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/set
 import gleam/string
 import glimpse
 
@@ -130,6 +131,12 @@ pub fn compile_package(
         )
       }),
     external_import_files: package.external_import_files,
+    main_modules: package.package.modules
+      |> dict.filter(fn(_name, module) {
+        module.module.functions |> has_main_function |> result.is_ok
+      })
+      |> dict.keys
+      |> set.from_list,
   )
 }
 

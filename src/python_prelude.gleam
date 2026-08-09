@@ -296,3 +296,8 @@ pub fn dunder_main(module: String) -> String {
 if __name__ == \"__main__\":
     main()"
 }
+
+// Appended to any compiled module that defines a top-level `main` function, so
+// it can be run directly as a script (e.g. `python3 build/dev/python/foo_test.py`).
+pub const ifmain = "if __name__ == \"__main__\":
+    main()"

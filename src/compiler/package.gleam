@@ -35,6 +35,10 @@ pub type CompiledPackage {
     has_main: Bool,
     modules: dict.Dict(String, String),
     external_import_files: set.Set(String),
+    /// The names of modules that define a top-level `main` function; these get
+    /// an `if __name__ == "__main__"` block appended when written, so they can
+    /// be run directly as scripts.
+    main_modules: set.Set(String),
   )
 }
 

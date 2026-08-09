@@ -438,8 +438,8 @@ def main():
 
 import collision_other
 
-
-"
+if __name__ == \"__main__\":
+    main()"
 }
 
 // A module's own nullary constructor must not be resolved against another
@@ -519,8 +519,8 @@ def main():
 
 import arity_other
 
-
-"
+if __name__ == \"__main__\":
+    main()"
 }
 
 // The project's own test/ and dev/ directories are compiled, while a
