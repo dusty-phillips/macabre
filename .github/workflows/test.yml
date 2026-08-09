@@ -21,3 +21,30 @@ jobs:
       - run: gleam deps download
       - run: gleam test
       - run: gleam format --check src test
+
+  # The compiler must be able to compile itself: build the escript and use it
+  # to compile a fresh copy of the repo to Python, then run macabre's own test
+  # suite through that output. This catches bugs that only appear when the
+  # compiler is exercised by the compiled compiler.
+  self-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "26.0.2"
+          gleam-version: "1.4.1"
+          rebar3-version: "3"
+      # The macabre.toml git deps use ssh:// URLs; rewriting them to https
+      # lets an unauthenticated runner clone the public macabre_* forks.
+      - run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - run: gleam deps download
+      - run: gleam export escript
+      # Copy the repo (minus the gleam build artifacts) to a fresh location:
+      # running macabre on itself in-place would wipe the build it is using.
+      - run: |
+          mkdir -p /tmp/macabre-self
+          rsync -a --exclude build --exclude .git --exclude macabre ./ /tmp/macabre-self/
+      - run: ./macabre /tmp/macabre-self
+      - run: ./macabre test /tmp/macabre-self
+
