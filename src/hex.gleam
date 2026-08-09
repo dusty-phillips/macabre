@@ -11,6 +11,20 @@ pub fn fetch(
   version: String,
 ) -> Result(Nil, errors.Error) {
   let package_dir = filepath.join(package_directory, name)
+  // An already-downloaded package is reused as-is; hex packages are versioned
+  // so they never change.
+  case simplifile.is_directory(package_dir) {
+    Ok(True) -> Ok(Nil)
+    _ -> fetch_fresh(package_dir, package_directory, name, version)
+  }
+}
+
+fn fetch_fresh(
+  package_dir: String,
+  package_directory: String,
+  name: String,
+  version: String,
+) -> Result(Nil, errors.Error) {
   let tarball_name = name <> "-" <> version <> ".tar"
   let tarball_url = "https://repo.hex.pm/tarballs/" <> tarball_name
   use _ <- result.try(

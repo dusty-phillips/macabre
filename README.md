@@ -99,12 +99,14 @@ versions from it. Hex packages are downloaded as tarballs from repo.hex.pm.
 The compiler expects `git` to be installed (for git deps) and `curl` and `tar`
 (for hex tarballs).
 
-> [!WARNING} It currently downloads everything from scratch every time you
-> invoke it, so don't try this on a metered connection!
+Cloned dependencies are kept in `build/packages` and reused across runs: git
+clones are updated to their requested ref, and hex packages (which are
+versioned and immutable) are reused as-is. Only the copied sources and
+generated output are rebuilt each time.
 
 Macabre copies the `src/` folder of each package into the build directory and
-then builds all dependencies from scratch (every single time). Your source
-files are also copied into this folder.
+then builds all dependencies. Your source files are also copied into this
+folder.
 
 Your main module will always be `<repo_name>.gleam` where `<repo_name>` is whatever
 you put in the `name` in `gleam.toml`.

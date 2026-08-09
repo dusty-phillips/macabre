@@ -352,9 +352,12 @@ fn module_names_in(dir: String) -> List(String) {
 }
 
 pub fn clean(project: Project) -> Result(Nil, errors.Error) {
-  project
-  |> build_dir
-  |> filesystem.delete
+  // Rebuild the sources and output from scratch, but keep the cloned
+  // dependencies in build/packages so they aren't re-downloaded every run.
+  // (git clones are updated to their ref, hex packages are versioned and
+  // immutable.)
+  use _ <- result.try(project |> build_src_dir |> filesystem.delete)
+  project |> build_dev_dir |> filesystem.delete
 }
 
 fn load_dependency_list(

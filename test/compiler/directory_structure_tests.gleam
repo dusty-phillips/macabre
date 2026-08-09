@@ -733,3 +733,37 @@ mid_pkg = { path = \"" <> mid_dir <> "\" }",
   let assert Ok(files) = simplifile.read_directory(project_files.build_dir)
   assert list.contains(files, "consumer.py")
 }
+
+// clean() removes the regenerated parts of the build (sources and output) but
+// keeps the cloned dependencies in build/packages, so a repeat build doesn't
+// re-download them.
+pub fn clean_keeps_packages_dir_test() {
+  use project_files <- init_folders()
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "macabre.toml"),
+      contents: "name = \"clean_test\"",
+    )
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+
+  let packages_dir =
+    gleam_project |> project.build_dir |> filepath.join("packages")
+  let src_dir = gleam_project |> project.build_dir |> filepath.join("src")
+  let dev_dir = gleam_project |> project.build_dir |> filepath.join("dev")
+
+  let assert Ok(_) = simplifile.create_directory_all(packages_dir)
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(packages_dir, "some_dep.gleam"),
+      contents: "pub fn x() -> Int { 1 }",
+    )
+  let assert Ok(_) = simplifile.create_directory_all(src_dir)
+  let assert Ok(_) = simplifile.create_directory_all(dev_dir)
+
+  let assert Ok(_) = project.clean(gleam_project)
+
+  // The package is kept, the regenerated dirs are gone.
+  assert simplifile.is_directory(packages_dir) == Ok(True)
+  assert simplifile.is_directory(src_dir) == Ok(False)
+  assert simplifile.is_directory(dev_dir) == Ok(False)
+}
