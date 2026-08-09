@@ -150,6 +150,9 @@ fn generate_type(type_: python.Type) -> StringTree {
     python.NamedType(name: "Int", module: option.None, generic_parameters: []) ->
       string_tree.from_string("int")
 
+    python.NamedType(name: "Bool", module: option.None, generic_parameters: []) ->
+      string_tree.from_string("bool")
+
     python.NamedType(name: name, module:, generic_parameters:) -> {
       let params = case generic_parameters {
         [] -> string_tree.new()

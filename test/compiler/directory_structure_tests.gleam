@@ -5,6 +5,7 @@ import filepath
 import gleam/dict
 import gleam/list
 import gleam/option
+import gleam/result
 import gleam/set
 import gleam/string
 import macabre
@@ -139,7 +140,8 @@ pub fn package_compile_test_with_nested_folders_test() {
     project_files.build_dir
     |> filepath.join("foo")
     |> simplifile.read_directory
-  assert build_foo_listing == ["bindings.py", "bar.py"]
+    |> result.map(fn(items) { list.sort(items, string.compare) })
+  assert build_foo_listing == ["bar.py", "bindings.py"]
 }
 
 pub fn git_dependency_parsing_test() {
@@ -363,6 +365,7 @@ pub fn foo() -> Int {
     project_files.build_dir
     |> filepath.join("foo")
     |> simplifile.read_directory
+    |> result.map(fn(items) { list.sort(items, string.compare) })
   assert dir_listing == ["__init__.py", "bar.py"]
 }
 
