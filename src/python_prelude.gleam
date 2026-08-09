@@ -291,8 +291,7 @@ def gleam_match_bitstring(subject, *segments):
     return tuple(bindings)
 "
 
-pub const prelude =
-  "from __future__ import annotations\nfrom gleam_builtins import *\n\n"
+pub const prelude = "from __future__ import annotations\nfrom gleam_builtins import *\n\n"
 
 pub fn dunder_main(module: String) -> String {
   "from " <> module <> " import main
