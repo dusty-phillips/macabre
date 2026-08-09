@@ -152,3 +152,50 @@ def factorial(n):
 def main():
     return factorial(5)"
 }
+
+// Recursion nested inside a callback that consumes the callback's result with
+// its own match protocol (list.fold) must NOT be rewritten to a GleamTco: the
+// fold's own trampoline would swallow the marker. This was the failure behind
+// the self-hosted macabre silently failing to compile projects with test/dev
+// entries (load_module_recursively recurses through a list.fold callback).
+pub fn recursion_inside_fold_callback_not_tco_test() {
+  let assert Ok(module) =
+    "import gleam/list
+  import gleam/result
+
+  fn walk(items: List(String), depth: Int) -> Result(Int, Nil) {
+    case items {
+      [] -> Ok(depth)
+      [item, ..rest] ->
+        list.fold(rest, Ok(depth), fn(state, next) {
+          use d <- result.try(state)
+          walk([next], d + 1)
+        })
+    }
+  }
+  "
+    |> glance.module
+  assert compiler.compile_module(module) == "from gleam_builtins import *
+
+def walk(items, depth):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case None:
+                return Ok(depth)
+            case GleamList(item, rest):
+                def _fn_def_0(state, next):
+                    def _fn_def_0(d):
+                        return walk(to_gleam_list([next]), d + 1)
+                    return result.try_(state, _fn_def_0)
+                return list.fold(rest, Ok(depth), _fn_def_0)
+    return _fn_case_0(items)
+
+
+import gleam.result
+from gleam import result
+import gleam.list
+from gleam import list
+
+
+"
+}

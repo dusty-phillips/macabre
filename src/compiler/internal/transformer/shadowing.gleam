@@ -1812,9 +1812,8 @@ fn match_cases_has_tail_call(
 // the enclosing driver: that requires the callee to hand the callback's value
 // through unchanged (e.g. `result.try`, `result.map`, a local `do` helper).
 // Functions that consume the callback's result with their own match protocol
-// (`list.any`, `list.map`, `list.fold`) would swallow the marker, so the
-// helpers that recurse through them (`statement_has_tail_call`,
-// `rewrite_statements_tail`) are written with direct recursion instead.
+// (`list.any`, `list.map`, `list.fold`) would swallow the marker, so a
+// function passed to one of those callees is not a tail driver.
 fn function_is_tail_driver(
   name: String,
   statements: List(python.Statement),
@@ -1833,20 +1832,42 @@ fn expression_passes_function(
 ) -> Bool {
   case expression {
     python.Call(python.Variable(callee), _) if callee == name -> True
-    python.Call(_, arguments) ->
-      list.any(arguments, fn(field) {
-        case field {
-          python.UnlabelledField(python.Variable(arg_name))
-            if arg_name == name
-          -> True
-          python.LabelledField(_, python.Variable(arg_name))
-            if arg_name == name
-          -> True
-          _ -> False
-        }
-      })
+    python.Call(callee, arguments) ->
+      case marker_swallowing_callee(callee) {
+        True -> False
+        False ->
+          list.any(arguments, fn(field) {
+            case field {
+              python.UnlabelledField(python.Variable(arg_name))
+                if arg_name == name
+              -> True
+              python.LabelledField(_, python.Variable(arg_name))
+                if arg_name == name
+              -> True
+              _ -> False
+            }
+          })
+      }
     _ -> False
   }
+}
+
+// Callees whose compiled form runs the callback through its own match/trampoline
+// protocol, so a `GleamTco` marker returned by the callback never reaches the
+// enclosing driver. A nested function passed to one of these is not a tail
+// driver and its recursion must not be rewritten.
+fn marker_swallowing_callee(callee: python.Expression) -> Bool {
+  let name = case callee {
+    python.Variable(name) -> name
+    python.FieldAccess(python.ModuleRef(module), function_name) ->
+      module <> "." <> function_name
+    _ -> ""
+  }
+  name == "list.any" || name == "list.all" || name == "list.map"
+  || name == "list.filter" || name == "list.find"
+  || name == "list.fold" || name == "list.fold_right"
+  || name == "list.index_fold" || name == "list.try_fold"
+  || name == "list.try_map" || name == "list.flat_map"
 }
 
 fn is_tail_call(expression: python.Expression, function_name: String) -> Bool {
