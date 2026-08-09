@@ -285,6 +285,9 @@ def gleam_match_bitstring(subject, *segments):
                 if value != payload:
                     return None
 
+    if cursor != len(subject):
+        return None
+
     return tuple(bindings)
 "
 
