@@ -49,7 +49,9 @@ fn load_and_compile(
   {
     use gleam_project <- try(project.load(directory))
     use _ <- try(project.clean(gleam_project))
-    use _ <- try(project.clone_packages(gleam_project))
+    // clone_packages returns the project with its packages expanded to the
+    // transitive closure, so the copy step below copies every dependency.
+    use gleam_project <- try(project.clone_packages(gleam_project))
     use _ <- try(project.copy_package_srcs(gleam_project))
     use _ <- try(project.copy_project_srcs(gleam_project))
     use _ <- try(project.copy_project_test_srcs(gleam_project))

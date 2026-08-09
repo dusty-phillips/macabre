@@ -14,6 +14,7 @@ import gleam/dict
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/set
 import gleam/string
 import hex
 import simplifile
@@ -136,32 +137,152 @@ pub fn package_src_dir(
   package_name: String,
   package: Package,
 ) -> String {
-  let package_root = case package {
+  package_root(project, package_name, package) |> filepath.join("src")
+}
+
+/// The root directory of a package: where its own config file and `src/`
+/// directory live. For a git package with a sub-directory `path`, that is the
+/// root; otherwise it is the clone/fetch/local directory itself.
+pub fn package_root(
+  project: Project,
+  package_name: String,
+  package: Package,
+) -> String {
+  case package {
     GitPackage(path: option.Some(subdir), ..) ->
       package_dir(project, package_name) |> filepath.join(subdir)
     GitPackage(..) -> package_dir(project, package_name)
     HexPackage(..) -> package_dir(project, package_name)
     LocalPackage(path) -> path
   }
-  package_root |> filepath.join("src")
 }
 
-pub fn clone_packages(project: Project) -> Result(Nil, errors.Error) {
+pub fn clone_packages(project: Project) -> Result(Project, errors.Error) {
   let package_directory = packages_dir(project)
   use _ <- result.try(
     simplifile.create_directory_all(package_directory)
     |> result.map_error(errors.MkdirError(package_directory, _)),
   )
-  project.packages
-  |> dict.to_list
-  |> list.fold(Ok(Nil), fn(state, tuple) {
-    use _ <- result.try(state)
-    let #(name, package) = tuple
-    case package {
-      GitPackage(git_url:, git_ref:, path: _) ->
-        git.clone(name, git_url, git_ref, package_directory)
-      HexPackage(version) -> hex.fetch(package_directory, name, version)
-      LocalPackage(_) -> Ok(Nil)
+  // Clone the direct dependencies, then discover each one's own dependencies
+  // by reading its config file, and clone those too. Returns the project with
+  // the fully expanded package set.
+  clone_and_discover(
+    project,
+    package_directory,
+    dict.keys(project.packages),
+    set.new(),
+  )
+}
+
+fn clone_and_discover(
+  project: Project,
+  package_directory: String,
+  worklist: List(String),
+  cloned: set.Set(String),
+) -> Result(Project, errors.Error) {
+  case worklist {
+    [] -> Ok(project)
+    [name, ..rest] ->
+      case set.contains(cloned, name) {
+        True -> clone_and_discover(project, package_directory, rest, cloned)
+        False -> {
+          let cloned = set.insert(cloned, name)
+          case dict.get(project.packages, name) {
+            Error(_) ->
+              clone_and_discover(project, package_directory, rest, cloned)
+            Ok(package) -> {
+              use _ <- result.try(clone_one(package_directory, name, package))
+              case
+                load_package_dependencies(package_root(project, name, package))
+              {
+                Ok(deps) -> {
+                  let #(project, new_names) = add_new_deps(project, deps)
+                  clone_and_discover(
+                    project,
+                    package_directory,
+                    list.append(rest, new_names),
+                    cloned,
+                  )
+                }
+                Error(_) ->
+                  clone_and_discover(project, package_directory, rest, cloned)
+              }
+            }
+          }
+        }
+      }
+  }
+}
+
+fn clone_one(
+  package_directory: String,
+  name: String,
+  package: Package,
+) -> Result(Nil, errors.Error) {
+  case package {
+    GitPackage(git_url:, git_ref:, path: _) ->
+      git.clone(name, git_url, git_ref, package_directory)
+    HexPackage(version) -> hex.fetch(package_directory, name, version)
+    LocalPackage(_) -> Ok(Nil)
+  }
+}
+
+/// The dependencies of a package, read from its own config file. Only git and
+/// local deps are followed: a dependency's config lists hex deps as version
+/// constraints that macabre can't fetch, and in the macabre ecosystem those are
+/// replaced by the `macabre_*` git forks anyway. A local dep's path is
+/// relative to the declaring package's root, so it is resolved against it.
+fn load_package_dependencies(
+  package_root: String,
+) -> Result(dict.Dict(String, Package), errors.Error) {
+  case find_project_config(package_root) {
+    Error(_) -> Ok(dict.new())
+    Ok(#(toml_path, contents)) -> {
+      use parsed_toml <- result.try(
+        tom.parse(contents)
+        |> result.map_error(errors.TomlParseError(toml_path, _)),
+      )
+      parse_gleam_dependencies(parsed_toml)
+      |> result.map(fn(deps) {
+        dict.map_values(deps, fn(_name, package) {
+          case package {
+            LocalPackage(path) ->
+              case filepath.is_absolute(path) {
+                True -> package
+                False ->
+                  LocalPackage(filepath.join(package_root, path))
+              }
+            other -> other
+          }
+        })
+        |> dict.filter(fn(_name, package) {
+          case package {
+            GitPackage(..) -> True
+            LocalPackage(_) -> True
+            HexPackage(_) -> False
+          }
+        })
+      })
+      |> result.map_error(errors.TomlFieldError(toml_path, _))
+    }
+  }
+}
+
+fn add_new_deps(
+  project: Project,
+  deps: dict.Dict(String, Package),
+) -> #(Project, List(String)) {
+  dict.fold(deps, #(project, []), fn(acc, name, package) {
+    let #(project, new_names) = acc
+    case dict.has_key(project.packages, name) {
+      True -> acc
+      False -> #(
+        Project(
+          ..project,
+          packages: dict.insert(project.packages, name, package),
+        ),
+        [name, ..new_names],
+      )
     }
   })
 }
@@ -336,13 +457,20 @@ fn parse_dependency(
         Ok(version) -> Ok(HexPackage(version))
         Error(_) -> {
           use table <- result.try(tom.get_table(dependencies, [key]))
-          use git_url <- result.try(tom.get_string(table, ["git"]))
-          use git_ref <- result.try(tom.get_string(table, ["ref"]))
-          let path = case tom.get_string(table, ["path"]) {
-            Ok(path) -> option.Some(path)
-            Error(_) -> option.None
+          case tom.get_string(table, ["git"]) {
+            Ok(git_url) -> {
+              use git_ref <- result.try(tom.get_string(table, ["ref"]))
+              let path = case tom.get_string(table, ["path"]) {
+                Ok(path) -> option.Some(path)
+                Error(_) -> option.None
+              }
+              Ok(GitPackage(git_url, git_ref, path))
+            }
+            Error(_) -> {
+              use path <- result.try(tom.get_string(table, ["path"]))
+              Ok(LocalPackage(path))
+            }
           }
-          Ok(GitPackage(git_url, git_ref, path))
         }
       }
     }

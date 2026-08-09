@@ -642,3 +642,89 @@ pub fn main() -> Int {
   assert !list.contains(copied, "dep_pkg_test.gleam")
   assert !list.contains(copied, "dep_dev.gleam")
 }
+
+// A dependency's own dependencies are resolved and cloned too: macabre reads
+// each package's config file, so only direct dependencies need to be listed.
+pub fn transitive_dependency_resolution_test() {
+  use project_files <- init_folders()
+
+  // A leaf dependency, depended on only by the middle package.
+  let leaf_dir = filepath.join(project_files.base_dir, "leaf_pkg")
+  let assert Ok(_) =
+    simplifile.create_directory_all(filepath.join(leaf_dir, "src"))
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(filepath.join(leaf_dir, "src"), "leaf_pkg.gleam"),
+      contents: "pub fn leaf_value() -> Int {
+  7
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(leaf_dir, "macabre.toml"),
+      contents: "name = \"leaf_pkg\"",
+    )
+
+  // A middle package that depends on the leaf package.
+  let mid_dir = filepath.join(project_files.base_dir, "mid_pkg")
+  let assert Ok(_) =
+    simplifile.create_directory_all(filepath.join(mid_dir, "src"))
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(filepath.join(mid_dir, "src"), "mid_pkg.gleam"),
+      contents: "import leaf_pkg
+
+pub fn mid_value() -> Int {
+  leaf_pkg.leaf_value()
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(mid_dir, "macabre.toml"),
+      contents: "name = \"mid_pkg\"
+
+[dependencies]
+leaf_pkg = { path = \"" <> leaf_dir <> "\" }",
+    )
+
+  // The top-level project only lists the middle package.
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "consumer.gleam"),
+      contents: "import mid_pkg
+
+pub fn main() -> Int {
+  mid_pkg.mid_value()
+}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "macabre.toml"),
+      contents: "name = \"consumer\"
+
+[dependencies]
+mid_pkg = { path = \"" <> mid_dir <> "\" }",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+  let assert Ok(expanded) = project.clone_packages(gleam_project)
+
+  // Both the direct and the transitive dependency were discovered.
+  assert dict.has_key(expanded.packages, "mid_pkg")
+  assert dict.has_key(expanded.packages, "leaf_pkg")
+
+  let assert Ok(_) = project.copy_package_srcs(expanded)
+  let assert Ok(_) = project.copy_project_srcs(expanded)
+
+  let assert Ok(copied) =
+    simplifile.read_directory(project_files.package_src_dir)
+  assert list.contains(copied, "leaf_pkg.gleam")
+  assert list.contains(copied, "mid_pkg.gleam")
+
+  // And the whole thing compiles.
+  let assert Ok(gleam_package) = package.load(expanded)
+  let compiled_package = compiler.compile_package(gleam_package)
+  let assert Ok(_) = macabre.write_package(compiled_package)
+  let assert Ok(files) = simplifile.read_directory(project_files.build_dir)
+  assert list.contains(files, "consumer.py")
+}

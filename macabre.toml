@@ -15,10 +15,7 @@ macabre_tom = { git = "git@github.com:dusty-phillips/macabre_tom.git", ref = "ma
 macabre_glexer = { git = "git@github.com:dusty-phillips/macabre_glexer.git", ref = "main" }
 macabre_splitter = { git = "git@github.com:dusty-phillips/macabre_splitter.git", ref = "main" }
 macabre_gleeunit = { git = "git@github.com:dusty-phillips/macabre_gleeunit.git", ref = "main" }
-macabre_envoy = { git = "git@github.com:dusty-phillips/macabre_envoy.git", ref = "main" }
-macabre_exception = { git = "git@github.com:dusty-phillips/macabre_exception.git", ref = "main" }
 macabre_temporary = { git = "git@github.com:dusty-phillips/macabre_temporary.git", ref = "main" }
-macabre_gleam_crypto = { git = "git@github.com:dusty-phillips/macabre_gleam_crypto.git", ref = "main" }
 glance = "7.0.0"
 glimpse = "0.9.0"
 gleam_time = "1.8.0"
