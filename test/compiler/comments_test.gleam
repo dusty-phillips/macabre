@@ -62,7 +62,7 @@ pub type Shape {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: Float\n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n\n\n\n\n\n__all__ = [\"Circle\", \"Square\"]\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: float\n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n\n\n\n\n\n__all__ = [\"Circle\", \"Square\"]\n"
 }
 
 pub fn empty_body_docstring_test() {
