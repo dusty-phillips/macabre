@@ -96,6 +96,7 @@ pub type Statement {
   SimpleAssignment(name: String, value: Expression)
   MultipleAssignment(names: List(String), value: Expression)
   While(condition: Expression, body: List(Statement))
+  If(condition: Expression, body: List(Statement))
 }
 
 pub type FunctionParameter {

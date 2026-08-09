@@ -114,6 +114,12 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
       |> string_tree.append_tree(expressions.generate_expression(condition))
       |> string_tree.append(":\n")
       |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
+    python.If(condition, body) ->
+      string_tree.new()
+      |> string_tree.append("if ")
+      |> string_tree.append_tree(expressions.generate_expression(condition))
+      |> string_tree.append(":\n")
+      |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
     python.FunctionDef(function) -> generate_function(function)
   }
 }

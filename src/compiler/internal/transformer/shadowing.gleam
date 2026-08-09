@@ -373,6 +373,18 @@ fn rename_module_statement(
         pool,
       )
     }
+    python.If(condition, body) -> {
+      let #(renamed_body, pool) =
+        rename_module_shadowed(body, renaming, used, pool)
+      #(
+        python.If(
+          rename_expression(condition, renaming, set.new()),
+          renamed_body,
+        ),
+        renaming,
+        pool,
+      )
+    }
   }
 }
 
@@ -431,7 +443,8 @@ fn top_level_binds(statement: python.Statement) -> List(String) {
     | python.Return(_)
     | python.FunctionDef(_)
     | python.Match(_, _)
-    | python.While(_, _) -> []
+    | python.While(_, _)
+    | python.If(_, _) -> []
   }
 }
 
@@ -504,7 +517,8 @@ fn rename_binding_targets(
     | python.Return(_)
     | python.FunctionDef(_)
     | python.Match(_, _)
-    | python.While(_, _) -> #(statement, renames, own_cross, pool)
+    | python.While(_, _)
+    | python.If(_, _) -> #(statement, renames, own_cross, pool)
   }
 }
 
@@ -869,6 +883,7 @@ fn statement_binds(statement: python.Statement) -> List(String) {
     python.FunctionDef(_) -> []
     python.Match(_, _) -> []
     python.While(_, body) -> list.flatten(list.map(body, statement_binds))
+    python.If(_, body) -> list.flatten(list.map(body, statement_binds))
   }
 }
 
@@ -887,6 +902,9 @@ fn statement_refs(
       |> list.flatten
     python.Match(subject, _cases) -> expression_refs(subject, in_scope)
     python.While(condition, body) ->
+      expression_refs(condition, in_scope)
+      |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
+    python.If(condition, body) ->
       expression_refs(condition, in_scope)
       |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
   }
@@ -918,6 +936,9 @@ fn deep_statement_refs(
         ),
       )
     python.While(condition, body) ->
+      expression_refs(condition, in_scope)
+      |> list.append(body_refs_in_order(body, in_scope))
+    python.If(condition, body) ->
       expression_refs(condition, in_scope)
       |> list.append(body_refs_in_order(body, in_scope))
   }
@@ -954,6 +975,7 @@ fn all_nested_binds(statement: python.Statement) -> List(String) {
         }),
       )
     python.While(_, body) -> list.flatten(list.map(body, all_nested_binds))
+    python.If(_, body) -> list.flatten(list.map(body, all_nested_binds))
     _ -> top_level_binds(statement)
   }
 }
@@ -980,6 +1002,7 @@ fn all_case_binds(statement: python.Statement) -> List(String) {
         }),
       )
     python.While(_, body) -> list.flatten(list.map(body, all_case_binds))
+    python.If(_, body) -> list.flatten(list.map(body, all_case_binds))
     _ -> []
   }
 }
@@ -1085,6 +1108,26 @@ fn resolve_nested_binds(
         )
       #(
         python.While(
+          condition: rename_expression(condition, renames, scope),
+          body: body,
+        ),
+        pool,
+      )
+    }
+    python.If(condition, body) -> {
+      let #(body, pool) =
+        nested_resolve_fold(
+          body,
+          renames,
+          cross_renames,
+          own_cross,
+          scope,
+          cross_scope,
+          bound,
+          pool,
+        )
+      #(
+        python.If(
           condition: rename_expression(condition, renames, scope),
           body: body,
         ),
@@ -1444,6 +1487,22 @@ fn rename_statement(
         })
       #(
         python.While(
+          rename_expression(condition, renames, in_scope),
+          list.reverse(body),
+        ),
+        pool,
+      )
+    }
+    python.If(condition, body) -> {
+      let #(body, pool) =
+        list.fold(body, #([], pool), fn(acc, statement) {
+          let #(out, pool) = acc
+          let #(renamed, pool) =
+            rename_statement(statement, renames, in_scope, pool)
+          #([renamed, ..out], pool)
+        })
+      #(
+        python.If(
           rename_expression(condition, renames, in_scope),
           list.reverse(body),
         ),

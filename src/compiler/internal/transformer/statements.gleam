@@ -105,13 +105,40 @@ fn transform_statement(
 
     glance.Use(..) -> panic as "Use statements should have been desugared by now"
 
-    glance.Assert(_, expression, _) -> {
-      let result = transform_expression(transform_context, expression)
+    glance.Assert(_, expression, message) -> {
+      let message_result = case message {
+        option.Some(message_expression) -> {
+          let result =
+            transform_expression(transform_context, message_expression)
+          internal.OptionalExpressionReturn(
+            result.context,
+            result.statements,
+            option.Some(result.expression),
+          )
+        }
+        option.None ->
+          internal.OptionalExpressionReturn(
+            transform_context,
+            [],
+            option.Some(python.String("assertion failed")),
+          )
+      }
+      let result = transform_expression(message_result.context, expression)
       internal.StatementReturn(
         context: result.context,
-        statements: list.append(result.statements, [
-          python.Expression(result.expression),
-        ]),
+        statements: list.append(
+          list.append(message_result.statements, result.statements),
+          [
+            python.If(condition: python.Not(result.expression), body: [
+              python.Expression(
+                python.Panic(option.unwrap(
+                  message_result.expression,
+                  python.String("assertion failed"),
+                )),
+              ),
+            ]),
+          ],
+        ),
       )
     }
   }
