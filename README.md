@@ -103,13 +103,45 @@ a `main` function in it, then the compiler will generate a
 The project's own `test/` and `dev/` directories are compiled too (a
 dependency's are not — only its `src/` is used). A test or dev module whose
 dependencies aren't available in the build is skipped rather than failing the
-whole build, so e.g. macabre's own test suite, which needs a Python `gleeunit`
-port that doesn't exist yet, is not compiled when macabre builds itself.
+whole build, so e.g. macabre's own test modules that need `temporary` or
+`pprint` are not compiled when macabre builds itself.
 
 Use this command to invoke it:
 
 ```shell
 python3 build/dev/python
+```
+
+## Running tests
+
+With the
+[macabre_gleeunit](https://github.com/dusty-phillips/macabre_gleeunit)
+port of gleeunit in your `macabre.toml` dependencies, a test suite is compiled
+alongside your project. Add a test entry that calls `gleeunit.main()`:
+
+```gleam
+// test/yourapp_test.gleam
+import gleeunit
+
+pub fn main() {
+  gleeunit.main()
+}
+```
+
+Compile the project and run its tests in one step:
+
+```shell
+macabre yourapp test
+```
+
+This builds the project (including its `test/` directory) and runs the
+compiled `<yourapp>_test` module with Python. The exit status is 0 when all
+tests pass and 1 otherwise. Any module with a `main` function is written with
+its own `if __name__ == "__main__"` block, so the test entry can also be run
+directly:
+
+```shell
+python3 build/dev/python/yourapp_test.py
 ```
 
 ## Pythonic libraries that work with macabre
@@ -129,6 +161,8 @@ can't use. A set of ported libraries with Python bindings (`@external(python,
 - [macabre_glexer](https://github.com/dusty-phillips/macabre_glexer)
 - [macabre_filepath](https://github.com/dusty-phillips/macabre_filepath)
 - [macabre_splitter](https://github.com/dusty-phillips/macabre_splitter)
+- [macabre_gleeunit](https://github.com/dusty-phillips/macabre_gleeunit) — a
+  port of gleeunit with a Python test runner
 
 Macabre itself uses these forks — see `macabre.toml` in this repo.
 
