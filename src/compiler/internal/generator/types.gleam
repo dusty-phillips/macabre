@@ -156,6 +156,10 @@ fn generate_type(type_: python.Type) -> StringTree {
     python.NamedType(name: "Float", module: option.None, generic_parameters: []) ->
       string_tree.from_string("float")
 
+    // The BitArray builtin is encoded as a Python bytes object.
+    python.NamedType(name: "BitArray", module: option.None, generic_parameters: []) ->
+      string_tree.from_string("bytes")
+
     python.NamedType(name: name, module:, generic_parameters:) -> {
       let params = case generic_parameters {
         [] -> string_tree.new()
