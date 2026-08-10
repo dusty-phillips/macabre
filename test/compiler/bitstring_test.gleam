@@ -12,7 +12,11 @@ pub fn single_byte_case_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((16, []))"
+    return gleam_bitstring_segments_to_bytes((16, []))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn multiple_bytes_case_test() {
@@ -26,7 +30,11 @@ pub fn multiple_bytes_case_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((16, []), (42, []), (255, []))"
+    return gleam_bitstring_segments_to_bytes((16, []), (42, []), (255, []))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn two_byte_integers_test() {
@@ -40,7 +48,11 @@ pub fn two_byte_integers_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((62_000, [(\"SizeValue\", 16)]), (63_000, [(\"SizeValue\", 16)]))"
+    return gleam_bitstring_segments_to_bytes((62_000, [(\"SizeValue\", 16)]), (63_000, [(\"SizeValue\", 16)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn size_expression_test() {
@@ -56,7 +68,11 @@ from gleam_builtins import *
 
 def main():
     x = 16
-    return gleam_bitstring_segments_to_bytes((62_000, [(\"SizeValue\", x)]))"
+    return gleam_bitstring_segments_to_bytes((62_000, [(\"SizeValue\", x)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn little_endian_test() {
@@ -70,7 +86,11 @@ pub fn little_endian_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Little\", None)]))"
+    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Little\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn big_endian_test() {
@@ -84,7 +104,11 @@ pub fn big_endian_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Big\", None)]))"
+    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Big\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn native_endian_test() {
@@ -98,7 +122,11 @@ pub fn native_endian_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Native\", None)]))"
+    return gleam_bitstring_segments_to_bytes((4_666_000, [(\"SizeValue\", 32), (\"Native\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn size_unit_test() {
@@ -112,7 +140,11 @@ pub fn size_unit_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((64_003, [(\"SizeValue\", 2), (\"Unit\", 8)]))"
+    return gleam_bitstring_segments_to_bytes((64_003, [(\"SizeValue\", 2), (\"Unit\", 8)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn float_default_double_test() {
@@ -126,7 +158,11 @@ pub fn float_default_double_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((64.888889, [(\"Float\", None)]))"
+    return gleam_bitstring_segments_to_bytes((64.888889, [(\"Float\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn float_explicit_double_test() {
@@ -140,7 +176,11 @@ pub fn float_explicit_double_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 64), (\"Float\", None)]))"
+    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 64), (\"Float\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn float_explicit_single_test() {
@@ -154,7 +194,11 @@ pub fn float_explicit_single_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))"
+    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn float_single_little_test() {
@@ -168,7 +212,11 @@ pub fn float_single_little_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))"
+    return gleam_bitstring_segments_to_bytes((64.888889, [(\"SizeValue\", 32), (\"Float\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn explicit_int_test() {
@@ -182,7 +230,11 @@ pub fn explicit_int_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((42, [(\"Int\", None)]))"
+    return gleam_bitstring_segments_to_bytes((42, [(\"Int\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn bitstring_test() {
@@ -196,7 +248,11 @@ pub fn bitstring_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))"
+    return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn u8_test() {
@@ -210,7 +266,11 @@ pub fn u8_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf8\", None)]))"
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf8\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn u16_test() {
@@ -224,7 +284,11 @@ pub fn u16_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf16\", None)]))"
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf16\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn u32_test() {
@@ -238,7 +302,11 @@ pub fn u32_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None)]))"
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn u32_little_test() {
@@ -252,7 +320,11 @@ pub fn u32_little_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None), (\"Little\", None)]))"
+    return gleam_bitstring_segments_to_bytes((\"hello\", [(\"Utf32\", None), (\"Little\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn utf8_codepoint_test() {
@@ -266,7 +338,11 @@ pub fn utf8_codepoint_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf8Codepoint\", None)]))"
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf8Codepoint\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn utf16_codepoint_test() {
@@ -280,7 +356,11 @@ pub fn utf16_codepoint_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf16Codepoint\", None)]))"
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf16Codepoint\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn utf32_codepoint_test() {
@@ -294,5 +374,9 @@ pub fn utf32_codepoint_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf32Codepoint\", None)]))"
+    return gleam_bitstring_segments_to_bytes((1_000_000, [(\"Utf32Codepoint\", None)]))
+
+
+__all__ = [\"main\"]
+"
 }

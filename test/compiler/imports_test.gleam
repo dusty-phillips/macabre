@@ -275,6 +275,10 @@ import glexer.token
 from glexer import token as token_module
 
 
+
+
+
+__all__ = [\"token\"]
 "
 }
 

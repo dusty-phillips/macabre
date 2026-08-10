@@ -25,7 +25,11 @@ def use_thing(func):
 def main():
     def _fn_def_0(_):
         return \"hi\"
-    return use_thing(_fn_def_0)"
+    return use_thing(_fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn use_call_with_params_test() {
@@ -50,7 +54,11 @@ def use_thing(x, y, func):
 def main():
     def _fn_def_0(x):
         return \"hi\"
-    return use_thing(\"one\", \"two\", _fn_def_0)"
+    return use_thing(\"one\", \"two\", _fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn use_variable_no_params_test() {
@@ -77,7 +85,11 @@ def main():
     f = use_thing
     def _fn_def_0(_):
         return \"hi\"
-    return f(_fn_def_0)"
+    return f(_fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn use_tuple_pattern_test() {
@@ -107,7 +119,11 @@ def main():
                     return (a, b,)
         a, b = _fn_match_0(use_capture_0)
         return \"hi\"
-    return use_thing(_fn_def_0)"
+    return use_thing(_fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 // An assignment inside a case arm of a use callback that shadows an enclosing
@@ -225,7 +241,11 @@ from gleam_builtins import *
 def main():
     def _fn_def_0():
         return \"done\"
-    return guard(when=True, return_=\"\", otherwise=_fn_def_0)"
+    return guard(when=True, return_=\"\", otherwise=_fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn use_callback_relabelled_cross_module_test() {
@@ -259,6 +279,10 @@ import gleam.bool
 from gleam import bool
 
 
+
+
+
+__all__ = [\"main\"]
 "
 }
 
@@ -285,7 +309,11 @@ from gleam_builtins import *
 def main():
     def _fn_def_0():
         return \"done\"
-    return list.try_fold(contents, to_gleam_list([]), _fn_def_0)"
+    return list.try_fold(contents, to_gleam_list([]), _fn_def_0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 // A use callback destructuring a name that the enclosing case's pattern bound
@@ -340,7 +368,11 @@ def parse(tokens):
                 return do_thing(tokens_0, _fn_def_0)
             case _:
                 return Ok((None, tokens,))
-    return _fn_case_0(tokens)"
+    return _fn_case_0(tokens)
+
+
+__all__ = [\"parse\"]
+"
 }
 
 // Same scenario when the use callback sits inside a nested case within the
@@ -413,7 +445,11 @@ def fields(tokens):
                                 return Ok((t, tokens,))
                             return do_thing(tokens, _fn_def_1)
                 return _fn_case_0(tokens)
-    return _fn_case_0(tokens)"
+    return _fn_case_0(tokens)
+
+
+__all__ = [\"fields\"]
+"
 }
 
 // A use callback rebinding a name that its own right hand side references
@@ -471,5 +507,9 @@ def rebind(key, val):
                     return prop
         prop_0 = _fn_case_0(slot)
         return with_seq(prop_0, slot)
-    return update(slot, _fn_def_0)"
+    return update(slot, _fn_def_0)
+
+
+__all__ = [\"rebind\"]
+"
 }

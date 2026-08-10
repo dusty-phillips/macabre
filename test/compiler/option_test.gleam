@@ -31,6 +31,10 @@ from gleam import option
 from gleam.option import Some
 
 
+
+
+
+__all__ = [\"main\"]
 "
 }
 
@@ -66,6 +70,10 @@ from gleam import option
 from gleam.option import Some
 
 
+
+
+
+__all__ = [\"main\"]
 "
 }
 
@@ -100,5 +108,9 @@ import gleam.option
 from gleam import option
 
 
+
+
+
+__all__ = [\"main\"]
 "
 }

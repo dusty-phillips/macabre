@@ -10,6 +10,10 @@ pub fn transform_custom_type(
     name: custom_type.name,
     parameters: custom_type.parameters,
     variants: list.map(custom_type.variants, transform_type_variant),
+    public: case custom_type.publicity {
+      glance.Public -> True
+      glance.Private -> False
+    },
     docstring: option.None,
     comments: [],
   )

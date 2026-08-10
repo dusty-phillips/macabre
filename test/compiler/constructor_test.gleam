@@ -22,7 +22,11 @@ class Wrap:
 
 
 def f():
-    return use_thing(Wrap)"
+    return use_thing(Wrap)
+
+
+__all__ = [\"Wrap\"]
+"
 }
 
 pub fn nullary_value_emitted_as_instance_test() {
@@ -52,7 +56,11 @@ class Active:
 
 def f():
     state = Idle()
-    return state"
+    return state
+
+
+__all__ = [\"Idle\", \"Active\"]
+"
 }
 
 pub fn module_qualified_non_nullary_function_value_test() {
@@ -139,7 +147,11 @@ class Thing:
 
 def main():
     t = Thing(label=\"a\", location=1, item=\"x\")
-    return t"
+    return t
+
+
+__all__ = [\"main\", \"Thing\"]
+"
 }
 
 // A nullary constructor of an ALIASED import must also emit as an instance:

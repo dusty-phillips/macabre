@@ -124,7 +124,11 @@ from gleam_builtins import *
 def main():
     def _fn_def_0(_, _1, _foo):
         return \"hello world\"
-    greet = _fn_def_0"
+    greet = _fn_def_0
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn labelled_param_same_as_name_test() {

@@ -219,6 +219,10 @@ fn transform_function_or_external(
           module_bindings,
           external_functions,
           external_qualified,
+          case function.definition.publicity {
+            glance.Public -> True
+            glance.Private -> False
+          },
         )
       python.Module(..module, functions: [
         python.Function(

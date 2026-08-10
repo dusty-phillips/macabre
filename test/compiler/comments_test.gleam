@@ -33,7 +33,7 @@ pub fn foo() -> Int {
 const answer = 42
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n# A regular top comment.\n# A note about foo.\n\"\"\"This module does things.\nOn two lines.\"\"\"\n\ndef foo():\n    \"\"\"Docs for foo.\"\"\"\n    return 1\n\n\n# Docs for a constant.\nanswer = 42\n\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n# A regular top comment.\n# A note about foo.\n\"\"\"This module does things.\nOn two lines.\"\"\"\n\ndef foo():\n    \"\"\"Docs for foo.\"\"\"\n    return 1\n\n\n# Docs for a constant.\nanswer = 42\n\n\n\n\n__all__ = [\"foo\"]\n"
 }
 
 pub fn custom_type_doc_test() {
@@ -47,7 +47,7 @@ pub type Person {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Person:\n    \"\"\"A type with docs.\"\"\"\n    name: str\n    age: int\n\n\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Person:\n    \"\"\"A type with docs.\"\"\"\n    name: str\n    age: int\n\n\n\n\n\n__all__ = [\"Person\"]\n"
 }
 
 pub fn multi_variant_type_doc_test() {
@@ -62,7 +62,7 @@ pub type Shape {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: Float\n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n\n\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: Float\n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n\n\n\n\n\n__all__ = [\"Circle\", \"Square\"]\n"
 }
 
 pub fn empty_body_docstring_test() {
@@ -74,7 +74,7 @@ pub fn empty_body_docstring_test() {
 pub fn doc_only() -> Nil {}
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\ndef doc_only():\n    \"\"\"Only docs, no body.\"\"\""
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\ndef doc_only():\n    \"\"\"Only docs, no body.\"\"\"\n\n\n__all__ = [\"doc_only\"]\n"
 }
 
 pub fn interior_comments_dropped_test() {
@@ -92,7 +92,7 @@ pub fn bar() -> Int {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    return 1\n\n\n# Between functions.\ndef bar():\n    \"\"\"Docs for bar.\"\"\"\n    return 2"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    return 1\n\n\n# Between functions.\ndef bar():\n    \"\"\"Docs for bar.\"\"\"\n    return 2\n\n\n__all__ = [\"foo\", \"bar\"]\n"
 }
 
 pub fn comments_only_header_test() {
@@ -104,7 +104,7 @@ pub fn comments_only_header_test() {
 pub fn main() -> Nil {}
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n# Copyright 2026 Someone.\n# All rights reserved.\n\ndef main():\n    pass"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n# Copyright 2026 Someone.\n# All rights reserved.\n\ndef main():\n    pass\n\n\n__all__ = [\"main\"]\n"
 }
 
 pub fn multi_line_doc_test() {
@@ -117,7 +117,7 @@ pub fn foo() -> Int {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    \"\"\"Line one.\n    Line two.\"\"\"\n    return 1"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    \"\"\"Line one.\n    Line two.\"\"\"\n    return 1\n\n\n__all__ = [\"foo\"]\n"
 }
 
 pub fn docstring_backslash_escape_test() {
@@ -129,7 +129,7 @@ pub fn foo() -> Int {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    \"\"\"Uses \\\\uXXXX escapes.\"\"\"\n    return 1"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    \"\"\"Uses \\\\uXXXX escapes.\"\"\"\n    return 1\n\n\n__all__ = [\"foo\"]\n"
 }
 
 pub fn no_comments_regression_test() {
@@ -140,5 +140,5 @@ pub fn foo() -> Int {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    return 1"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\ndef foo():\n    return 1\n\n\n__all__ = [\"foo\"]\n"
 }

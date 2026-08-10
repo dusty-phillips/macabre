@@ -23,7 +23,11 @@ def main():
                 return x
             case (_, _):
                 return 0
-    return _fn_case_0((gleam_bitstring_segments_to_bytes((1, [])), gleam_bitstring_segments_to_bytes((2, [])),))"
+    return _fn_case_0((gleam_bitstring_segments_to_bytes((1, [])), gleam_bitstring_segments_to_bytes((2, [])),))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn multiple_subjects_concatenate_test() {
@@ -46,7 +50,11 @@ def main():
                 return rest
             case (_, _):
                 return \"\"
-    return _fn_case_0((\"hello world\", \"foo\",))"
+    return _fn_case_0((\"hello world\", \"foo\",))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn concatenate_assignment_test() {
@@ -64,7 +72,11 @@ def main():
         match _case_subject:
             case _ if _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
                 return rest
-    rest = _fn_match_0(\"hello world\")"
+    rest = _fn_match_0(\"hello world\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 // Escaped prefixes (e.g. `"\n" <> rest`) are stored by glance in their raw
@@ -90,7 +102,11 @@ def main():
                 return rest
             case _:
                 return \"\"
-    return _fn_case_0(\"\\nworld\")"
+    return _fn_case_0(\"\\nworld\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 // A concatenation pattern whose remainder is the empty string must still
@@ -116,7 +132,11 @@ def main():
                 return rest
             case _:
                 return \"\"
-    return _fn_case_0(\"x\")"
+    return _fn_case_0(\"x\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn concatenate_case_test() {
@@ -136,7 +156,11 @@ def main():
         match _case_subject:
             case _ if (prefix := \"hello\") and _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
                 return prefix
-    return _fn_case_0(\"hello world\")"
+    return _fn_case_0(\"hello world\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn bitstring_pattern_case_test() {
@@ -157,7 +181,11 @@ def main():
             case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"variable\", \"x\",))) is not None:
                 x = _bitstring_binds[0]
                 return x
-    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))"
+    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn shorthand_pattern_field_test() {
@@ -184,7 +212,11 @@ def main():
         match _case_subject:
             case Box(value=value):
                 return value
-    value = _fn_match_0(Box(5))"
+    value = _fn_match_0(Box(5))
+
+
+__all__ = [\"Box\"]
+"
 }
 
 pub fn bitstring_pattern_assignment_test() {
@@ -203,5 +235,9 @@ def main():
             case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"variable\", \"x\", (\"SizeValue\", 8,),), (\"variable\", \"y\", (\"SizeValue\", 8,),))) is not None:
                 x, y = _bitstring_binds
                 return (x, y,)
-    x, y = _fn_match_0(gleam_bitstring_segments_to_bytes((1, [(\"SizeValue\", 8)]), (2, [(\"SizeValue\", 8)])))"
+    x, y = _fn_match_0(gleam_bitstring_segments_to_bytes((1, [(\"SizeValue\", 8)]), (2, [(\"SizeValue\", 8)])))
+
+
+__all__ = [\"main\"]
+"
 }

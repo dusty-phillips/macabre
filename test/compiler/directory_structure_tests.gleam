@@ -442,6 +442,12 @@ def main():
 
 import collision_other
 
+
+
+
+
+__all__ = [\"make\", \"main\", \"Thing\"]
+
 if __name__ == \"__main__\":
     main()"
 }
@@ -523,6 +529,12 @@ def main():
 
 
 import arity_other
+
+
+
+
+
+__all__ = [\"make\", \"main\", \"Normal\", \"Doc\", \"Module\"]
 
 if __name__ == \"__main__\":
     main()"

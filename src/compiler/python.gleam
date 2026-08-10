@@ -32,6 +32,7 @@ pub type Constant {
   Constant(
     name: String,
     value: Expression,
+    public: Bool,
     docstring: option.Option(String),
     comments: List(String),
   )
@@ -129,6 +130,7 @@ pub type CustomType {
     name: String,
     parameters: List(String),
     variants: List(Variant),
+    public: Bool,
     docstring: option.Option(String),
     comments: List(String),
   )
@@ -166,6 +168,7 @@ pub type Function {
     name: String,
     parameters: List(FunctionParameter),
     body: List(Statement),
+    public: Bool,
     docstring: option.Option(String),
     comments: List(String),
   )

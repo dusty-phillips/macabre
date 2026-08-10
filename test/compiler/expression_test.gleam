@@ -578,7 +578,11 @@ class Bar:
 
 def main():
     foo = Bar(1, \"who\")
-    bar = dataclasses.replace(foo, b=\"you\")"
+    bar = dataclasses.replace(foo, b=\"you\")
+
+
+__all__ = [\"main\", \"Bar\"]
+"
 }
 
 pub fn construct_record_with_label_test() {
@@ -601,7 +605,11 @@ class Bar:
 
 
 def main():
-    foo = Bar(a=1, b=\"who\")"
+    foo = Bar(a=1, b=\"who\")
+
+
+__all__ = [\"main\", \"Bar\"]
+"
 }
 
 pub fn simple_fn_test() {
@@ -616,7 +624,11 @@ from gleam_builtins import *
 def main():
     def _fn_def_0(a, b):
         pass
-    foo = _fn_def_0"
+    foo = _fn_def_0
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn multiple_fn_test() {
@@ -633,7 +645,11 @@ def main():
         pass
     def _fn_def_1(c, d):
         pass
-    foo = (_fn_def_0, _fn_def_1,)"
+    foo = (_fn_def_0, _fn_def_1,)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn nested_fn_test() {
@@ -652,7 +668,11 @@ def main():
         def _fn_def_0(c, d):
             pass
         bar = _fn_def_0
-    foo = _fn_def_0"
+    foo = _fn_def_0
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn simple_block_test() {
@@ -667,7 +687,11 @@ from gleam_builtins import *
 def main():
     def _fn_block_0():
         return 1
-    foo = _fn_block_0()"
+    foo = _fn_block_0()
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn multiple_block_test() {
@@ -686,7 +710,11 @@ def main():
     foo = _fn_block_0()
     def _fn_block_1():
         return 2
-    bar = _fn_block_1()"
+    bar = _fn_block_1()
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn nested_block_test() {
@@ -705,7 +733,11 @@ def main():
         def _fn_block_0():
             return 1
         return _fn_block_0()
-    foo = _fn_block_0()"
+    foo = _fn_block_0()
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn const_test() {

@@ -26,6 +26,10 @@ class Bar:
     a: int
 
 
+
+
+
+__all__ = [\"Bar\"]
 "
 }
 
@@ -48,6 +52,10 @@ class Baz:
     a: str
 
 
+
+
+
+__all__ = [\"Bar\", \"Baz\"]
 "
 }
 
@@ -65,6 +73,10 @@ class Bar:
     pass
 
 
+
+
+
+__all__ = [\"Bar\"]
 "
 }
 
@@ -87,6 +99,10 @@ class Baz:
     pass
 
 
+
+
+
+__all__ = [\"Bar\", \"Baz\"]
 "
 }
 
@@ -104,6 +120,10 @@ class Foo:
     point: typing.Tuple[int, int]
 
 
+
+
+
+__all__ = [\"Foo\"]
 "
 }
 
@@ -122,6 +142,10 @@ class Foo:
     item: ELEM
 
 
+
+
+
+__all__ = [\"Foo\"]
 "
 }
 
@@ -145,6 +169,10 @@ class Baz:
     elem: ELEM
 
 
+
+
+
+__all__ = [\"Bar\", \"Baz\"]
 "
 }
 
@@ -172,6 +200,10 @@ class Bar:
     foo: Foo[str]
 
 
+
+
+
+__all__ = [\"Foo\", \"Bar\"]
 "
 }
 
@@ -190,6 +222,10 @@ class Foo:
     _1: str
 
 
+
+
+
+__all__ = [\"Foo\"]
 "
 }
 
@@ -208,6 +244,10 @@ class Foo:
     _0: str
 
 
+
+
+
+__all__ = [\"Foo\"]
 "
 }
 
@@ -225,5 +265,9 @@ class Foo:
     callback: typing.Callable[[int], int]
 
 
+
+
+
+__all__ = [\"Foo\"]
 "
 }

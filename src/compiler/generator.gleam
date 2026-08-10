@@ -3,7 +3,8 @@ import compiler/internal/generator/imports
 import compiler/internal/generator/statements
 import compiler/internal/generator/types
 import compiler/python
-import gleam/string_tree
+import gleam/list
+import gleam/string_tree.{type StringTree}
 import python_prelude
 
 pub fn generate(module: python.Module) -> String {
@@ -55,5 +56,55 @@ pub fn generate(module: python.Module) -> String {
       },
     ),
   )
+  |> string_tree.append_tree(generate_all(module))
   |> string_tree.to_string
+}
+
+// The public API of the module, for `from module import *`. Gleam's public
+// functions, constants, and type constructors map to Python functions,
+// module-level values, and variant classes respectively.
+fn generate_all(module: python.Module) -> StringTree {
+  let names =
+    list.filter_map(module.functions, fn(function) {
+      case function.public {
+        True -> Ok(internal.python_name(function.name))
+        False -> Error(Nil)
+      }
+    })
+    |> list.append(
+      list.filter_map(module.constants, fn(constant) {
+        case constant.public {
+          True -> Ok(internal.python_name(constant.name))
+          False -> Error(Nil)
+        }
+      }),
+    )
+    |> list.append(
+      list.flat_map(module.custom_types, fn(custom_type) {
+        case custom_type.public {
+          True ->
+            list.map(custom_type.variants, fn(variant) {
+              internal.python_name(variant.name)
+            })
+          False -> []
+        }
+      }),
+    )
+    |> list.unique
+  case names {
+    [] -> string_tree.new()
+    _ ->
+      string_tree.new()
+      |> string_tree.append("\n\n\n__all__ = [")
+      |> string_tree.append_tree(
+        names
+        |> list.map(fn(name) {
+          string_tree.from_string("\"")
+          |> string_tree.append(name)
+          |> string_tree.append("\"")
+        })
+        |> internal.generate_plural(fn(tree) { tree }, ", "),
+      )
+      |> string_tree.append("]\n")
+  }
 }

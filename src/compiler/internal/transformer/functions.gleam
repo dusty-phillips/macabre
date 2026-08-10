@@ -52,6 +52,10 @@ pub fn transform_external_forwarder(
     body: [
       python.Return(python.Call(python.Variable(binding_name), args)),
     ],
+    public: case function.publicity {
+      glance.Public -> True
+      glance.Private -> False
+    },
     docstring: option.None,
     comments: [],
   )
@@ -102,6 +106,7 @@ pub fn transform_top_level_function(
   module_bindings: option.Option(dict.Dict(String, String)),
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
+  public: Bool,
 ) -> python.Function {
   let fold_result =
     list.fold(
@@ -157,6 +162,7 @@ pub fn transform_top_level_function(
     name: function.name,
     parameters: parameters,
     body: body |> shadowing.resolve_tail_calls(function.name, parameters),
+    public: public,
     docstring: option.None,
     comments: [],
   )

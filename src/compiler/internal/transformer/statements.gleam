@@ -60,11 +60,19 @@ pub fn transform_constant(
     python.Constant(
       name: constant.definition.name,
       value: transform_expression(context, constant.definition.value).expression,
+      public: is_public(constant.definition.publicity),
       docstring: docstring,
       comments: comments,
     ),
     ..module.constants
   ])
+}
+
+fn is_public(publicity: glance.Publicity) -> Bool {
+  case publicity {
+    glance.Public -> True
+    glance.Private -> False
+  }
 }
 
 fn transform_statement(
@@ -232,6 +240,7 @@ fn transform_destructuring_assignment(
               cases: cases,
             ),
           ],
+          False,
           option.None,
           [],
         )
@@ -1091,7 +1100,14 @@ fn transform_fn(
       fresh_pool,
     )
   let function =
-    python.Function(function_name, parameters, body_statements, option.None, [])
+    python.Function(
+      function_name,
+      parameters,
+      body_statements,
+      False,
+      option.None,
+      [],
+    )
 
   internal.ExpressionReturn(
     context: internal.TransformerContext(
@@ -1159,7 +1175,7 @@ fn transform_block(
       context.fresh_pool,
     )
   let function =
-    python.Function(function_name, [], body_statements, option.None, [])
+    python.Function(function_name, [], body_statements, False, option.None, [])
   internal.ExpressionReturn(
     context: internal.TransformerContext(
       ..context,
@@ -1201,6 +1217,7 @@ fn transform_case(
       [
         python.Match(subject: python.Variable("_case_subject"), cases: cases),
       ],
+      False,
       option.None,
       [],
     )

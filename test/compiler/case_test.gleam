@@ -18,7 +18,11 @@ def main():
         match _case_subject:
             case 1:
                 return \"one\"
-    return _fn_case_0(1)"
+    return _fn_case_0(1)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn single_float_case_test() {
@@ -38,7 +42,11 @@ def main():
         match _case_subject:
             case 1.0:
                 return \"one\"
-    return _fn_case_0(1.0)"
+    return _fn_case_0(1.0)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn single_string_case_test() {
@@ -58,7 +66,11 @@ def main():
         match _case_subject:
             case \"hello\":
                 return \"one\"
-    return _fn_case_0(\"hello\")"
+    return _fn_case_0(\"hello\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn variable_case_test() {
@@ -78,7 +90,11 @@ def main():
         match _case_subject:
             case greet:
                 return greet + \" world\"
-    return _fn_case_0(\"hello\")"
+    return _fn_case_0(\"hello\")
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn tuple_case_test() {
@@ -98,7 +114,11 @@ def main():
         match _case_subject:
             case (1, 2):
                 return \"one\"
-    return _fn_case_0((1, 2,))"
+    return _fn_case_0((1, 2,))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn pattern_assignment_test() {
@@ -118,7 +138,11 @@ def main():
         match _case_subject:
             case 1 as x:
                 return 2 + x
-    return _fn_case_0(1)"
+    return _fn_case_0(1)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn grouped_pattern_test() {
@@ -138,7 +162,11 @@ def main():
         match _case_subject:
             case (1, x):
                 return x + 50
-    return _fn_case_0((1, 2,))"
+    return _fn_case_0((1, 2,))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn alternate_pattern_test() {
@@ -158,7 +186,11 @@ def main():
         match _case_subject:
             case 1 | 2:
                 return 5
-    return _fn_case_0(1)"
+    return _fn_case_0(1)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn alternate_grouped_pattern_test() {
@@ -178,7 +210,11 @@ def main():
         match _case_subject:
             case (1, 2) | (2, 3):
                 return 5
-    return _fn_case_0((1, 2,))"
+    return _fn_case_0((1, 2,))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn alternate_bitstring_pattern_test() {
@@ -200,7 +236,11 @@ def main():
                 return 5
             case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"2\",))) is not None:
                 return 5
-    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))"
+    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn case_block_test() {
@@ -226,7 +266,11 @@ def main():
                 x = 1
                 y = 2
                 return x + y
-    return _fn_case_0(1)"
+    return _fn_case_0(1)
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn case_empty_list_test() {
@@ -246,7 +290,11 @@ def main():
         match _case_subject:
             case None:
                 return 1
-    return _fn_case_0(to_gleam_list([]))"
+    return _fn_case_0(to_gleam_list([]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn case_single_element_list_test() {
@@ -266,7 +314,11 @@ def main():
         match _case_subject:
             case GleamList(1, None):
                 return 1
-    return _fn_case_0(to_gleam_list([1]))"
+    return _fn_case_0(to_gleam_list([1]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn case_multi_element_list_test() {
@@ -286,7 +338,11 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, GleamList(3, None))):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))"
+    return _fn_case_0(to_gleam_list([1, 2, 3]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 // The gleam formatter doesn't permit this scenario, but it is encountered
@@ -308,7 +364,11 @@ def main():
         match _case_subject:
             case rest:
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))"
+    return _fn_case_0(to_gleam_list([1, 2, 3]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn single_element_with_rest_case_test() {
@@ -328,7 +388,11 @@ def main():
         match _case_subject:
             case GleamList(1, rest):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))"
+    return _fn_case_0(to_gleam_list([1, 2, 3]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn multi_element_with_rest_case_test() {
@@ -348,7 +412,11 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, rest)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))"
+    return _fn_case_0(to_gleam_list([1, 2, 3]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn unnamed_rest_test() {
@@ -368,7 +436,11 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, _)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))"
+    return _fn_case_0(to_gleam_list([1, 2, 3]))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn case_guard_test() {
@@ -396,7 +468,11 @@ def main():
                 return \"Positively even\"
             case _:
                 return \"Somewhat odd\"
-    return _fn_case_0(num)"
+    return _fn_case_0(num)
+
+
+__all__ = [\"main\"]
+"
 }
 
 // Nullary constructors are represented at runtime by the constructor class
@@ -432,7 +508,11 @@ def check(state):
                 return True
             case Active():
                 return False
-    return _fn_case_0(state)"
+    return _fn_case_0(state)
+
+
+__all__ = [\"Idle\", \"Active\"]
+"
 }
 
 pub fn arm_binding_shadowing_reference_before_binding_test() {
@@ -621,5 +701,9 @@ def assignment(kind, tokens, start):
                 return result.try_(Ok((0, tokens_0,)), _fn_def_0)
             return result.try_(Ok((None, tokens_0,)), _fn_def_0)
         return result.try_(Ok((None, tokens,)), _fn_def_0)
-    return result.try_(Ok((1, tokens,)), _fn_def_0)"
+    return result.try_(Ok((1, tokens,)), _fn_def_0)
+
+
+__all__ = [\"Let\", \"LetAssert\"]
+"
 }

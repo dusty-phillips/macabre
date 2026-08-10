@@ -12,7 +12,11 @@ pub fn simple_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    a = \"hello world\""
+    a = \"hello world\"
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn mulitple_simple_assignment_test() {
@@ -28,7 +32,11 @@ from gleam_builtins import *
 
 def main():
     a = \"hello world\"
-    b = 42"
+    b = 42
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn tuple_assignment_test() {
@@ -46,7 +54,11 @@ def main():
         match _case_subject:
             case (a, b):
                 return (a, b,)
-    a, b = _fn_match_0((\"one\", \"two\",))"
+    a, b = _fn_match_0((\"one\", \"two\",))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn let_assert_assignment_test() {
@@ -66,7 +78,11 @@ def main():
                 return x
             case _:
                 raise GleamPanic(\"assertion failed\")
-    x = _fn_match_0(Some(1))"
+    x = _fn_match_0(Some(1))
+
+
+__all__ = [\"main\"]
+"
 }
 
 pub fn let_assert_custom_message_test() {
@@ -86,5 +102,9 @@ def main():
                 return x
             case _:
                 raise GleamPanic(\"expected Some\")
-    x = _fn_match_0(Some(1))"
+    x = _fn_match_0(Some(1))
+
+
+__all__ = [\"main\"]
+"
 }
