@@ -32,7 +32,7 @@ def split(tokens):
         match _case_subject:
             case GleamList(head, rest):
                 return Ok((head, rest,))
-            case None:
+            case EmptyGleamList():
                 return Error(None)
     return _fn_case_0(tokens)
 
@@ -42,7 +42,7 @@ def process(acc, tokens):
         def _fn_def_0(first, rest):
             def _fn_case_0(_case_subject):
                 match _case_subject:
-                    case None:
+                    case EmptyGleamList():
                         return acc
                     case _:
                         return GleamTco((to_gleam_list([first], acc), rest,))
@@ -185,7 +185,7 @@ from gleam_builtins import *
 def walk(items, depth):
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case None:
+            case EmptyGleamList():
                 return Ok(depth)
             case GleamList(item, rest):
                 def _fn_def_0(state, next):

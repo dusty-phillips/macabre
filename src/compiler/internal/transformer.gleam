@@ -1,7 +1,10 @@
 import compiler/python
+import gleam/bit_array
 import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 
 pub type FunctionSignatures =
   dict.Dict(String, List(#(option.Option(String), String)))
@@ -19,6 +22,9 @@ pub type TransformerContext {
     next_block_id: Int,
     next_case_id: Int,
     next_discard_id: Int,
+    // Counter for the temporaries an `assert` statement binds its subject
+    // (and any sub-expressions it must reference in its panic payload) to.
+    next_assert_id: Int,
     function_signatures: option.Option(FunctionSignatures),
     module_aliases: List(String),
     module_reserved: List(String),
@@ -26,11 +32,24 @@ pub type TransformerContext {
     module_bindings: option.Option(dict.Dict(String, String)),
     external_functions: option.Option(List(String)),
     external_qualified: option.Option(List(String)),
+    // Names bound in the current scope (function parameters, `let`
+    // bindings, case patterns, fn literal parameters). A call to a bare
+    // name that is locally bound is a call to that local value, never to a
+    // module-level function, so argument reordering for labelled calls must
+    // not consult the module function's signature.
+    local_bindings: List(String),
     // A shared per-base-name counter used to mint fresh names across all
     // shadowing passes. Keeping one pool means a name like `state` is
     // renamed `state_0`, `state_1`, `state_2`... and no two passes can
     // independently choose the same fresh name.
     fresh_pool: dict.Dict(String, Int),
+    // Metadata about the source location being compiled, used to build
+    // runtime panic payloads (gleam_error maps). Empty strings when unknown
+    // (e.g. compiling a module in isolation in the test suite).
+    module_name: String,
+    function_name: String,
+    file_path: String,
+    module_source: String,
   )
 }
 
@@ -40,6 +59,7 @@ pub fn empty_context() -> TransformerContext {
     next_block_id: 0,
     next_case_id: 0,
     next_discard_id: 0,
+    next_assert_id: 0,
     function_signatures: option.None,
     module_aliases: [],
     module_reserved: [],
@@ -47,8 +67,36 @@ pub fn empty_context() -> TransformerContext {
     module_bindings: option.None,
     external_functions: option.None,
     external_qualified: option.None,
+    local_bindings: [],
     fresh_pool: dict.new(),
+    module_name: "",
+    function_name: "",
+    file_path: "",
+    module_source: "",
   )
+}
+
+// The 1-based line number of a byte offset within the module source. Falls
+// back to 0 when the source is unknown.
+pub fn line_of(module_source: String, offset: Int) -> Int {
+  case module_source == "" {
+    True -> 0
+    False -> {
+      let #(count, _) =
+        module_source
+        |> string.split("\n")
+        |> list.fold(#(0, 0), fn(state, line) {
+          let #(count, position) = state
+          let next_position =
+            position + bit_array.byte_size(bit_array.from_string(line)) + 1
+          case position <= offset {
+            True -> #(count + 1, next_position)
+            False -> #(count, next_position)
+          }
+        })
+      count
+    }
+  }
 }
 
 // The name a module binding is emitted under. If a top-level function or

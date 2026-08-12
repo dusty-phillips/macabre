@@ -66,6 +66,7 @@ pub type Expression {
   AssignmentExpression(name: String, value: Expression)
   IsNotNone(expression: Expression)
   BitString(List(BitStringSegment))
+  Dict(List(#(String, Expression)))
 }
 
 pub type BitStringSegment {

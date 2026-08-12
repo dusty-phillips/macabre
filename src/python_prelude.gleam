@@ -44,146 +44,226 @@ class GleamList(typing.Generic[GleamListElem]):
         strs = []
         head = self
 
-        while head is not None:
+        while isinstance(head, GleamList):
             strs.append(str(head.value))
             head = head.tail
 
         return \"GleamList([\" + \", \".join(strs) + \"])\"
 
     def __eq__(self, other):
-        if not isinstance(other, GleamList):
-            return False
         left = self
         right = other
-        while left is not None and right is not None:
+        while isinstance(left, GleamList) and isinstance(right, GleamList):
             if left.value != right.value:
                 return False
             left = left.tail
             right = right.tail
-        return left is None and right is None
+        return isinstance(left, EmptyGleamList) and isinstance(right, EmptyGleamList)
 
     def __hash__(self):
         result = 0
         head = self
-        while head is not None:
+        while isinstance(head, GleamList):
             result = result * 31 + hash(head.value)
             head = head.tail
         return result
 
 
+class EmptyGleamList:
+    __slots__ = []
+
+    def __str__(self):
+        return \"GleamList([])\"
+
+    def __eq__(self, other):
+        return isinstance(other, EmptyGleamList)
+
+    def __hash__(self):
+        return 0
+
+
 
 def to_gleam_list(elements: list[GleamListElem], tail: GleamList | None=None):
-    head = tail
+    head = tail if tail is not None else EmptyGleamList()
     for element in reversed(elements):
         head = GleamList(element, head)
     return head
 
 def gleam_bitstring_segments_to_bytes(*segments):
-    result = bytearray()
+    total_bits = 0
+    parts = []
     for segment in segments:
-        result.extend(gleam_bitstring_segment_to_bytes(segment))
-    return bytes(result)
-    
+        value, options = segment
 
-def gleam_bitstring_segment_to_bytes(segment) -> bytes:
-    value, options = segment
+        size = None
+        unit = None
+        type = None
+        bitsize = None
+        endianness = 'big'
+        for option in options:
+            match option:
+                case ('SizeValue', size):
+                    size = size
+                case ('Unit', unit):
+                    unit = unit
+                case ('Little', None):
+                    endianness = 'little'
+                case ('Big', None):
+                    endianness = 'big'
+                case ('Native', None):
+                    endianness = sys.byteorder
+                case ('Float', None):
+                    type = 'float'
+                case ('Int', None):
+                    type = 'int'
+                case ('BitString', None):
+                    type = 'bitstring'
+                case ('Utf8', None):
+                    type = 'utf8'
+                case ('Utf16', None):
+                    type = 'utf16'
+                case ('Utf32', None):
+                    type = 'utf32'
+                case _:
+                    raise Exception(f'Unexpected bitstring option {option}')
 
-    size = None
-    unit = None
-    type = None
-    bitsize = None
-    endianness = 'big'
-    for option in options:
-        match option:
-            case ('SizeValue', size):
-                size = size
-            case ('Unit', unit):
-                unit = unit
-            case ('Little', None):
-                endianness = 'little'
-            case ('Big', None):
-                endianness = 'big'
-            case ('Native', None):
-                endianness = sys.byteorder
-            case ('Float', None):
-                type = 'float'
-            case ('Int', None):
-                type = 'int'
-            case ('BitString', None):
-                type = 'bitstring'
-            case ('Utf8', None):
-                type = 'utf8'
-            case ('Utf16', None):
-                type = 'utf16'
-            case ('Utf32', None):
-                type = 'utf32'
-            case _:
-                raise Exception(f'Unexpected bitstring option {option}')
+        # Defaults from https://www.erlang.org/doc/system/bit_syntax.html
+        if type == None:
+            type = 'int'
 
-    # Defaults from https://www.erlang.org/doc/system/bit_syntax.html
-    if type == None:
-        type = 'int'
+        if size == None:
+            match type:
+                case 'int':
+                    size = 8
+                case 'float':
+                    size = 64
 
-    if size == None:
-        match type:
-            case 'int':
-                size = 8
-            case 'float':
-                size = 64
+        if unit == None:
+            match type:
+                case 'int' | 'float':
+                    unit = 1
+                case 'bitstring' | 'utf8' | 'utf16' | 'utf32':
+                    unit = 8
 
-    if unit == None:
-        match type:
-            case 'int' | 'float':
-                unit = 1
-                bitsize = unit * size
-            case 'bitstring' | 'utf8' | 'utf16' | 'utf32':
-                unit = 8
-                # For string-like types the size is implied by the value,
-                # so bitsize is only needed when a size was given.
-                if size != None:
-                    bitsize = unit * size
-
-    if bitsize != None and bitsize % 8:
-        raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
-
-    match type:
-        case 'int':
-            return value.to_bytes(bitsize // 8, endianness, signed=value < 0)
-        case 'float':
-            match endianness: 
-                case 'big':
-                    order = '>'
-                case 'little':
-                    order = '<'
+        segment_bits = []
+        if type == 'int':
+            bitsize = unit * size
+            if endianness == 'little':
+                value_bytes = value.to_bytes(max(1, (bitsize + 7) // 8), 'little', signed=value < 0)
+                byte_count = len(value_bytes)
+                segment_bits = _bits_of(value_bytes, len(value_bytes) * 8)
+                if bitsize % 8 == 0:
+                    segment_bits = segment_bits[:bitsize]
+                else:
+                    segment_bits = segment_bits[:8 * (byte_count - 1)] + segment_bits[len(segment_bits) - (bitsize % 8):]
+            else:
+                value_bytes = value.to_bytes(max(1, (bitsize + 7) // 8), 'big', signed=value < 0)
+                segment_bits = _bits_of(value_bytes, len(value_bytes) * 8)
+                if len(segment_bits) > bitsize:
+                    segment_bits = segment_bits[len(segment_bits) - bitsize:]
+        elif type == 'float':
+            bitsize = unit * size
+            if endianness == 'little':
+                order = '<'
+            else:
+                order = '>'
             match bitsize:
                 case 32:
                     fmt = 'f'
-                case  64:
+                case 64:
                     fmt = 'd'
                 case _:
                     raise Exception('bitstring floats must be 32 or 64 bits')
-            return struct.pack(f'{order}{fmt}', value)
-        case 'bitstring':
-            return value
-        case 'utf8':
-            return value.encode('utf8')
-        case 'utf16':
-            match endianness:
-                case 'little':
-                    return value.encode('utf-16-le')
-                case 'big':
-                    return value.encode('utf-16-be')
-        case 'utf32':
-            match endianness:
-                case 'little':
-                    return value.encode('utf-32-le')
-                case 'big':
-                    return value.encode('utf-32-be')
-            
+            segment_bits = _bits_of(struct.pack(f'{order}{fmt}', value), bitsize)
+        elif type == 'bitstring':
+            if isinstance(value, GleamBitArray):
+                segment_bits = _bits_of(value.data, value.bits)
+            else:
+                segment_bits = _bits_of(value, len(value) * 8)
+            if size != None and size * unit < len(segment_bits):
+                segment_bits = segment_bits[: size * unit]
+        else:
+            match type:
+                case 'utf8':
+                    value_bytes = value.encode('utf8')
+                case 'utf16':
+                    if endianness == 'little':
+                        value_bytes = value.encode('utf-16-le')
+                    else:
+                        value_bytes = value.encode('utf-16-be')
+                case 'utf32':
+                    if endianness == 'little':
+                        value_bytes = value.encode('utf-32-le')
+                    else:
+                        value_bytes = value.encode('utf-32-be')
+            segment_bits = _bits_of(value_bytes, len(value_bytes) * 8)
+            if size != None and size * unit < len(segment_bits):
+                segment_bits = segment_bits[: size * unit]
 
-    raise Exception('Unexpected bitstring encountered')
+        parts.append(segment_bits)
+        total_bits += len(segment_bits)
+
+    result = _pack_bits(parts, total_bits)
+    if total_bits % 8 == 0:
+        return bytes(result)
+    return GleamBitArray(bytes(result), total_bits)
+
+
+def _bits_of(data: bytes, count: int) -> list:
+    bits = []
+    for byte in data:
+        for shift in range(7, -1, -1):
+            bits.append((byte >> shift) & 1)
+    if count < len(bits):
+        return bits[:count]
+    return bits
+
+
+def _pack_bits(parts: list, total_bits: int) -> bytearray:
+    result = bytearray((total_bits + 7) // 8)
+    bit_index = 0
+    for bits in parts:
+        for bit in bits:
+            if bit:
+                result[bit_index // 8] |= 1 << (7 - (bit_index % 8))
+            bit_index += 1
+    return result
+
+
+def gleam_bitstring_segment_to_bytes(segment) -> bytes:
+    return gleam_bitstring_segments_to_bytes(segment)
+
+
+class GleamBitArray:
+    __slots__ = ['data', 'bits']
+
+    def __init__(self, data: bytes, bits: int):
+        self.data = data
+        self.bits = bits
+
+    def __str__(self):
+        return f'GleamBitArray({self.data!r}, {self.bits})'
+
+    def __eq__(self, other):
+        if isinstance(other, bytes):
+            return self.bits == len(other) * 8 and self.data == other
+        if isinstance(other, GleamBitArray):
+            return self.bits == other.bits and self.data == other.data
+        return False
+
+    def __hash__(self):
+        return hash((self.data, self.bits))
+
+    def __len__(self):
+        return len(self.data)
 
 def gleam_match_bitstring(subject, *segments):
+    if isinstance(subject, GleamBitArray):
+        total_bits = subject.bits
+        subject_bytes = subject.data
+    else:
+        total_bits = len(subject) * 8
+        subject_bytes = subject
     cursor = 0
     bindings = []
 
@@ -227,8 +307,8 @@ def gleam_match_bitstring(subject, *segments):
             type = 'int'
 
         if type == 'bitstring':
-            value = subject[cursor:]
-            cursor = len(subject)
+            value = _bitstring_slice(subject_bytes, cursor, total_bits - cursor)
+            cursor = total_bits
         else:
             if size == None:
                 match type:
@@ -245,33 +325,30 @@ def gleam_match_bitstring(subject, *segments):
                     case 'utf8' | 'utf16' | 'utf32':
                         unit = 8
             bitsize = unit * size
-            if bitsize % 8:
-                raise Exception(f'Python bitstrings must be byte aligned, but got {bitsize}')
-            # A segment that needs more bytes than remain cannot match: the
-            # subject is exhausted (the pattern extends past the end). Without
-            # this check `int.from_bytes(b'')` yields a phantom 0 and the
-            # pattern falsely matches, which can send scanners into an
-            # infinite loop.
-            if cursor + bitsize // 8 > len(subject):
+            # A segment that needs more bits than remain cannot match: the
+            # subject is exhausted (the pattern extends past the end).
+            if cursor + bitsize > total_bits:
                 return None
+            start_byte = cursor // 8
+            start_bit = cursor % 8
+            end_byte = (cursor + bitsize + 7) // 8
+            data = subject_bytes[start_byte:end_byte]
             match type:
                 case 'int':
-                    value = int.from_bytes(
-                        subject[cursor:cursor + bitsize // 8], endianness)
+                    value = _bits_to_int(data, start_bit, bitsize, endianness)
                 case 'float':
-                    order = '>' if endianness == 'big' else '<'
-                    fmt = 'f' if bitsize == 32 else 'd'
-                    value = struct.unpack(
-                        f'{order}{fmt}', subject[cursor:cursor + bitsize // 8])[0]
+                    value = _bits_to_float(data, start_bit, bitsize, endianness)
                 case 'utf8':
-                    value = subject[cursor:cursor + bitsize // 8].decode('utf8')
+                    value = _bits_to_utf8(data, start_bit, bitsize, 'utf-8')
                 case 'utf16':
-                    value = subject[cursor:cursor + bitsize // 8].decode(
+                    value = _bits_to_utf8(
+                        data, start_bit, bitsize,
                         'utf-16-le' if endianness == 'little' else 'utf-16-be')
                 case 'utf32':
-                    value = subject[cursor:cursor + bitsize // 8].decode(
+                    value = _bits_to_utf8(
+                        data, start_bit, bitsize,
                         'utf-32-le' if endianness == 'little' else 'utf-32-be')
-            cursor += bitsize // 8
+            cursor += bitsize
 
         match kind:
             case 'variable':
@@ -285,10 +362,57 @@ def gleam_match_bitstring(subject, *segments):
                 if value != payload:
                     return None
 
-    if cursor != len(subject):
+    if cursor != total_bits:
         return None
 
     return tuple(bindings)
+
+
+def _bitstring_slice(data: bytes, start_bit: int, count: int) -> bytes | GleamBitArray:
+    if count % 8 == 0:
+        return _bits_to_bytes(data, start_bit, count)
+    return GleamBitArray(_bits_to_bytes(data, start_bit, count), count)
+
+
+def _bits_to_bytes(data: bytes, start_bit: int, count: int) -> bytes:
+    result = bytearray((count + 7) // 8)
+    for i in range(count):
+        byte_index = (start_bit + i) // 8
+        bit_index = 7 - ((start_bit + i) % 8)
+        if byte_index < len(data) and (data[byte_index] >> bit_index) & 1:
+            result[i // 8] |= 1 << (7 - (i % 8))
+    return bytes(result)
+
+
+def _bits_to_int(data: bytes, start_bit: int, count: int, endianness: str) -> int:
+    byte_count = (count + 7) // 8
+    if start_bit == 0 and count % 8 == 0:
+        value = int.from_bytes(data[:byte_count], endianness)
+    elif endianness == 'little':
+        extracted = _bits_to_bytes(data, start_bit, count)
+        if count % 8 == 0:
+            value = int.from_bytes(extracted, 'little')
+        else:
+            partial = extracted[-1] >> (8 - (count % 8))
+            value = int.from_bytes(extracted[:-1], 'little')
+            value |= partial << (8 * (len(extracted) - 1))
+    else:
+        extracted = _bits_to_bytes(data, start_bit, count)
+        value = int.from_bytes(extracted, 'big')
+        value >>= byte_count * 8 - count
+    return value
+
+
+def _bits_to_float(data: bytes, start_bit: int, count: int, endianness: str) -> float:
+    byte_count = count // 8
+    value_bytes = _bits_to_bytes(data, start_bit, count)
+    order = '<' if endianness == 'little' else '>'
+    fmt = 'f' if count == 32 else 'd'
+    return struct.unpack(f'{order}{fmt}', value_bytes)[0]
+
+
+def _bits_to_utf8(data: bytes, start_bit: int, count: int, encoding: str) -> str:
+    return _bits_to_bytes(data, start_bit, count).decode(encoding)
 "
 
 pub const prelude = "from __future__ import annotations\nfrom gleam_builtins import *\n\n"

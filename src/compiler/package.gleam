@@ -26,6 +26,7 @@ pub type GleamPackage {
     package: glimpse.Package,
     external_import_files: set.Set(String),
     comments: dict.Dict(String, List(comments.Comment)),
+    module_sources: dict.Dict(String, String),
   )
 }
 
@@ -54,7 +55,26 @@ pub fn load(
     glimpse_package,
     python_externals(glimpse_package),
     extract_comments(gleam_project, glimpse_package),
+    extract_module_sources(gleam_project, glimpse_package),
   ))
+}
+
+// The raw source of each loaded module, used to compute line numbers for
+// runtime panic payloads. Re-read here because glimpse discards the source
+// after parsing.
+fn extract_module_sources(
+  gleam_project: project.Project,
+  package: glimpse.Package,
+) -> dict.Dict(String, String) {
+  dict.fold(package.modules, dict.new(), fn(acc, module_name, _module) {
+    let path =
+      filepath.join(
+        project.build_src_dir(gleam_project),
+        module_name <> ".gleam",
+      )
+    let module_source = filesystem.read(path) |> result.unwrap("")
+    dict.insert(acc, module_name, module_source)
+  })
 }
 
 // The comments for each loaded module, lexed from its source file with

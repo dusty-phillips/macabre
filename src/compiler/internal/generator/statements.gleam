@@ -274,7 +274,7 @@ fn scrub_discards(pattern: python.Pattern) -> python.Pattern {
 /// closing parenns forward
 fn generate_pattern_list(elements, rest) -> StringTree {
   case elements, rest {
-    [], option.None -> string_tree.from_string("None")
+    [], option.None -> string_tree.from_string("EmptyGleamList()")
     [], option.Some(pattern) -> generate_pattern(pattern)
     [head, ..others], rest ->
       string_tree.from_string("GleamList(")

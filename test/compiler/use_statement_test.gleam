@@ -241,7 +241,7 @@ from gleam_builtins import *
 def main():
     def _fn_def_0():
         return \"done\"
-    return guard(when=True, return_=\"\", otherwise=_fn_def_0)
+    return guard(True, \"\", _fn_def_0)
 
 
 __all__ = [\"main\"]
@@ -272,7 +272,7 @@ from gleam_builtins import *
 def main():
     def _fn_def_0():
         return \"done\"
-    return bool.guard(when=True, return_=\"\", otherwise=_fn_def_0)
+    return bool.guard(True, \"\", _fn_def_0)
 
 
 import gleam.bool
@@ -347,7 +347,7 @@ from gleam_builtins import *
 def do_thing(x):
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case None:
+            case EmptyGleamList():
                 return Ok((0, x,))
             case _:
                 return Ok((1, x,))
@@ -411,7 +411,7 @@ from gleam_builtins import *
 def do_thing(x):
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case None:
+            case EmptyGleamList():
                 return Ok((0, x,))
             case _:
                 return Ok((1, x,))
@@ -433,7 +433,7 @@ def fields(tokens):
             case _:
                 def _fn_case_0(_case_subject):
                     match _case_subject:
-                        case None:
+                        case EmptyGleamList():
                             return Error(None)
                         case _:
                             def _fn_def_1(use_capture_0):

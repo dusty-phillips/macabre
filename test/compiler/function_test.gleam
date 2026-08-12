@@ -23,7 +23,7 @@ fn println() -> nil"
 from gleam_builtins import *
 
 def println():
-    pass"
+    raise NotImplementedError(\"The function println has no python binding (its @external annotations target other platforms)\")"
 }
 
 pub fn skip_external_erlang_test() {
@@ -35,7 +35,7 @@ fn println() -> nil"
 from gleam_builtins import *
 
 def println():
-    pass"
+    raise NotImplementedError(\"The function println has no python binding (its @external annotations target other platforms)\")"
 }
 
 pub fn empty_body_no_external_test() {

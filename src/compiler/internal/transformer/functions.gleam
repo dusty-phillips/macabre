@@ -35,13 +35,7 @@ pub fn transform_external_forwarder(
   function: glance.Function,
   binding_name: String,
 ) -> python.Function {
-  let fold_result =
-    list.fold(
-      function.parameters,
-      ForwarderFoldState(0, []),
-      fold_forwarder_parameter,
-    )
-  let parameters = fold_result.reversed_params |> list.reverse
+  let parameters = external_forwarder_parameters(function)
   let args =
     list.map(parameters, fn(parameter) {
       python.UnlabelledField(python.Variable(parameter_name(parameter)))
@@ -59,6 +53,22 @@ pub fn transform_external_forwarder(
     docstring: option.None,
     comments: [],
   )
+}
+
+// The Python parameter names for a function's parameters, in declaration
+// order. Uses the Gleam parameter names (not labels), matching how the
+// external forwarder and the compiled function signature name their
+// parameters, so labelled calls resolve correctly.
+pub fn external_forwarder_parameters(
+  function: glance.Function,
+) -> List(python.FunctionParameter) {
+  let fold_result =
+    list.fold(
+      function.parameters,
+      ForwarderFoldState(0, []),
+      fold_forwarder_parameter,
+    )
+  fold_result.reversed_params |> list.reverse
 }
 
 fn fold_forwarder_parameter(
@@ -107,6 +117,9 @@ pub fn transform_top_level_function(
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
   public: Bool,
+  module_name: String,
+  file_path: String,
+  module_source: String,
 ) -> python.Function {
   let fold_result =
     list.fold(
@@ -123,6 +136,16 @@ pub fn transform_top_level_function(
       external_functions: external_functions,
       external_qualified: external_qualified,
       module_bindings: module_bindings,
+      local_bindings: list.filter_map(function.parameters, fn(parameter) {
+        case parameter {
+          glance.FunctionParameter(name: glance.Named(name), ..) -> Ok(name)
+          _ -> Error(Nil)
+        }
+      }),
+      module_name: module_name,
+      function_name: function.name,
+      file_path: file_path,
+      module_source: module_source,
     )
   let parameters = fold_result.reversed_params |> list.reverse
   let parameter_names =

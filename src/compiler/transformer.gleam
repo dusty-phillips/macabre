@@ -13,6 +13,42 @@ import gleam/option
 import gleam/result
 import gleam/string
 
+// macabre only compiles for the python target. A top-level definition with a
+// `@target(...)` attribute is kept only when that attribute lists `python`;
+// definitions without a `@target` attribute are kept unconditionally.
+fn keep_for_python(definition: glance.Definition(a)) -> Bool {
+  case definition {
+    glance.Definition(attributes, _) -> attributes |> target_includes_python
+  }
+}
+
+fn target_includes_python(attributes: List(glance.Attribute)) -> Bool {
+  let targets =
+    list.filter(attributes, fn(attribute) {
+      case attribute {
+        glance.Attribute("target", _) -> True
+        _ -> False
+      }
+    })
+    |> list.map(fn(attribute) {
+      case attribute {
+        glance.Attribute(_, arguments) -> arguments
+      }
+    })
+  case targets {
+    [] -> True
+    _ ->
+      list.any(targets, fn(arguments) {
+        list.any(arguments, fn(argument) {
+          case argument {
+            glance.Variable(_, "python") -> True
+            _ -> False
+          }
+        })
+      })
+  }
+}
+
 pub fn transform(input: glance.Module) -> python.Module {
   transform_with_signatures(input, option.None, option.None, [], [])
 }
@@ -42,10 +78,46 @@ pub fn transform_with_comments(
   external_qualified: List(String),
   module_comments: List(comments.Comment),
 ) -> python.Module {
+  transform_module_with_metadata(
+    input,
+    function_signatures,
+    constructor_arities,
+    external_functions,
+    external_qualified,
+    module_comments,
+    "",
+    "",
+    "",
+  )
+}
+
+pub fn transform_module_with_metadata(
+  input: glance.Module,
+  function_signatures: option.Option(internal.FunctionSignatures),
+  constructor_arities: option.Option(dict.Dict(String, List(String))),
+  external_functions: List(String),
+  external_qualified: List(String),
+  module_comments: List(comments.Comment),
+  module_name: String,
+  file_path: String,
+  module_source: String,
+) -> python.Module {
   // Private top-level values colliding with submodule import bindings are
   // renamed first, so the emitted `def` does not clobber the parent package
   // attribute that other modules import the submodule from.
   let input = module_renames.rename_private_value_collisions(input)
+  // Definitions gated behind a `@target(...)` attribute that does not list
+  // `python` are dropped: macabre only compiles for the python target, and
+  // erlang/javascript-targeted code must never leak into python output.
+  let input =
+    glance.Module(
+      ..input,
+      imports: list.filter(input.imports, keep_for_python),
+      constants: list.filter(input.constants, keep_for_python),
+      functions: list.filter(input.functions, keep_for_python),
+      custom_types: list.filter(input.custom_types, keep_for_python),
+      type_aliases: list.filter(input.type_aliases, keep_for_python),
+    )
   let module_aliases =
     list.flat_map(input.imports, fn(import_) {
       case import_ {
@@ -87,6 +159,9 @@ pub fn transform_with_comments(
         option.Some(external_functions),
         option.Some(external_qualified),
         comments_by_start,
+        module_name,
+        file_path,
+        module_source,
       )
     })
     |> list.fold(input.custom_types, _, fn(module, custom_type) {
@@ -205,38 +280,141 @@ fn transform_function_or_external(
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
   comments_by_start: dict.Dict(Int, List(comments.Comment)),
+  module_name: String,
+  file_path: String,
+  module_source: String,
 ) -> python.Module {
   case list.filter_map(function.attributes, maybe_extract_external) {
-    [] -> {
-      let definition_comments =
-        comments_for(comments_by_start, function.definition.location.start)
-      let python_function =
-        functions.transform_top_level_function(
-          function.definition,
-          function_signatures,
-          module_aliases,
-          constructor_arities,
-          module_bindings,
-          external_functions,
-          external_qualified,
-          case function.definition.publicity {
-            glance.Public -> True
-            glance.Private -> False
-          },
-        )
-      python.Module(..module, functions: [
-        python.Function(
-          ..python_function,
-          docstring: comments.docstring(definition_comments),
-          comments: comments.comment_lines(definition_comments),
-        ),
-        ..module.functions
-      ])
-    }
+    [] ->
+      // A function annotated `@external(erlang, ...)`/`@external(javascript,
+      // ...)` with no `@external(python, ...)` and no body has no python
+      // implementation. Compiling it as a normal function would emit a silent
+      // `def f(): pass`, hiding the missing binding until a confusing runtime
+      // error; instead emit a function that raises loudly when called. A
+      // function that *does* have a body keeps it: that is Gleam's standard
+      // fallback implementation for other targets.
+      case has_external_attribute(function.attributes) {
+        True ->
+          case function.definition.body {
+            [] ->
+              emit_missing_external_stub(module, function, comments_by_start)
+            _ ->
+              compile_normal_function(
+                module,
+                function,
+                function_signatures,
+                module_aliases,
+                constructor_arities,
+                module_bindings,
+                external_functions,
+                external_qualified,
+                comments_by_start,
+                module_name,
+                file_path,
+                module_source,
+              )
+          }
+        False ->
+          compile_normal_function(
+            module,
+            function,
+            function_signatures,
+            module_aliases,
+            constructor_arities,
+            module_bindings,
+            external_functions,
+            external_qualified,
+            comments_by_start,
+            module_name,
+            file_path,
+            module_source,
+          )
+      }
     [python_import] ->
       transform_python_external(module, function, python_import)
     _ -> panic as "Did not expect more than one external for one function"
   }
+}
+
+fn compile_normal_function(
+  module: python.Module,
+  function: glance.Definition(glance.Function),
+  function_signatures: option.Option(internal.FunctionSignatures),
+  module_aliases: List(String),
+  constructor_arities: option.Option(dict.Dict(String, List(String))),
+  module_bindings: option.Option(dict.Dict(String, String)),
+  external_functions: option.Option(List(String)),
+  external_qualified: option.Option(List(String)),
+  comments_by_start: dict.Dict(Int, List(comments.Comment)),
+  module_name: String,
+  file_path: String,
+  module_source: String,
+) -> python.Module {
+  let definition_comments =
+    comments_for(comments_by_start, function.definition.location.start)
+  let python_function =
+    functions.transform_top_level_function(
+      function.definition,
+      function_signatures,
+      module_aliases,
+      constructor_arities,
+      module_bindings,
+      external_functions,
+      external_qualified,
+      case function.definition.publicity {
+        glance.Public -> True
+        glance.Private -> False
+      },
+      module_name,
+      file_path,
+      module_source,
+    )
+  python.Module(..module, functions: [
+    python.Function(
+      ..python_function,
+      docstring: comments.docstring(definition_comments),
+      comments: comments.comment_lines(definition_comments),
+    ),
+    ..module.functions
+  ])
+}
+
+fn has_external_attribute(attributes: List(glance.Attribute)) -> Bool {
+  list.any(attributes, fn(attribute) {
+    case attribute {
+      glance.Attribute("external", _) -> True
+      _ -> False
+    }
+  })
+}
+
+// Emits a stub function whose body raises a loud, descriptive runtime error
+// when called, instead of silently compiling to `def f(): pass`.
+fn emit_missing_external_stub(
+  module: python.Module,
+  function: glance.Definition(glance.Function),
+  comments_by_start: dict.Dict(Int, List(comments.Comment)),
+) -> python.Module {
+  let definition_comments =
+    comments_for(comments_by_start, function.definition.location.start)
+  let message =
+    "The function "
+    <> function.definition.name
+    <> " has no python binding (its @external annotations target other"
+    <> " platforms)"
+  let stub =
+    python.Function(
+      name: function.definition.name,
+      parameters: functions.external_forwarder_parameters(function.definition),
+      body: [python.Expression(python.Todo(python.String(message)))],
+      public: case function.definition.publicity {
+        glance.Public -> True
+        glance.Private -> False
+      },
+      docstring: comments.docstring(definition_comments),
+      comments: comments.comment_lines(definition_comments),
+    )
+  python.Module(..module, functions: [stub, ..module.functions])
 }
 
 fn transform_python_external(

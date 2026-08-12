@@ -144,7 +144,22 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
       |> string_tree.append(" is not None")
 
     python.BitString(segments) -> generate_bitstring(segments)
+
+    python.Dict(entries) ->
+      string_tree.from_string("{")
+      |> string_tree.append_tree(internal.generate_plural(
+        entries,
+        generate_dict_entry,
+        ", ",
+      ))
+      |> string_tree.append("}")
   }
+}
+
+fn generate_dict_entry(entry: #(String, python.Expression)) -> StringTree {
+  let #(key, value) = entry
+  string_tree.from_string("\"" <> key <> "\": ")
+  |> string_tree.append_tree(generate_expression(value))
 }
 
 fn generate_record_update_fields(

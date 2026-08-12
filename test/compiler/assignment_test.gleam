@@ -77,7 +77,7 @@ def main():
             case Some(x):
                 return x
             case _:
-                raise GleamPanic(\"assertion failed\")
+                raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"Pattern match failed, no pattern matched the value.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
     x = _fn_match_0(Some(1))
 
 
@@ -101,7 +101,7 @@ def main():
             case Some(x):
                 return x
             case _:
-                raise GleamPanic(\"expected Some\")
+                raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"expected Some\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
     x = _fn_match_0(Some(1))
 
 

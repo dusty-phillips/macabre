@@ -97,23 +97,34 @@ fn transform_statement(
     ) -> {
       let result = transform_expression(transform_context, value)
       internal.StatementReturn(
-        context: result.context,
+        context: internal.TransformerContext(
+          ..result.context,
+          local_bindings: list.append(result.context.local_bindings, [
+            variable,
+          ]),
+        ),
         statements: list.append(result.statements, [
           python.SimpleAssignment(variable, result.expression),
         ]),
       )
     }
-    glance.Assignment(kind: kind, pattern: pattern, value: value, ..) ->
+    glance.Assignment(
+      location: location,
+      kind: kind,
+      pattern: pattern,
+      value: value,
+      ..,
+    ) ->
       transform_destructuring_assignment(
         transform_context,
+        location,
         kind,
         pattern,
         value,
       )
-
     glance.Use(..) -> panic as "Use statements should have been desugared by now"
 
-    glance.Assert(_, expression, message) -> {
+    glance.Assert(assert_location, expression, message) -> {
       let message_result = case message {
         option.Some(message_expression) -> {
           let result =
@@ -125,28 +136,13 @@ fn transform_statement(
           )
         }
         option.None ->
-          internal.OptionalExpressionReturn(
-            transform_context,
-            [],
-            option.Some(python.String("assertion failed")),
-          )
+          internal.OptionalExpressionReturn(transform_context, [], option.None)
       }
-      let result = transform_expression(message_result.context, expression)
-      internal.StatementReturn(
-        context: result.context,
-        statements: list.append(
-          list.append(message_result.statements, result.statements),
-          [
-            python.If(condition: python.Not(result.expression), body: [
-              python.Expression(
-                python.Panic(option.unwrap(
-                  message_result.expression,
-                  python.String("assertion failed"),
-                )),
-              ),
-            ]),
-          ],
-        ),
+      transform_assert_statement(
+        message_result.context,
+        assert_location,
+        expression,
+        message_result,
       )
     }
   }
@@ -158,6 +154,7 @@ fn transform_statement(
 // for `let assert`), and assign the result.
 fn transform_destructuring_assignment(
   context: internal.TransformerContext,
+  location: glance.Span,
   kind: glance.AssignmentKind,
   pattern: glance.Pattern,
   value: glance.Expression,
@@ -178,13 +175,13 @@ fn transform_destructuring_assignment(
       |> option.unwrap(internal.OptionalExpressionReturn(
         context,
         [],
-        option.Some(python.String("assertion failed")),
+        option.None,
       ))
   }
   let value_result = transform_expression(message_result.context, value)
 
-  let #(statements, fresh_pool) = case binds {
-    [] ->
+  let #(statements, fresh_pool) = case binds, kind {
+    [], glance.Let ->
       // A pattern that binds nothing, e.g. `let _ = foo`. Just evaluate the
       // expression.
       #(
@@ -194,7 +191,7 @@ fn transform_destructuring_assignment(
         ),
         value_result.context.fresh_pool,
       )
-    _ -> {
+    _, _ -> {
       let pattern_result = case
         patterns.transform_alternative_patterns(
           [[pattern]],
@@ -206,6 +203,7 @@ fn transform_destructuring_assignment(
         _ -> panic as "Expected a single pattern in destructuring assignment"
       }
       let return_value = case binds {
+        [] -> python.Nil
         [single] -> python.Variable(single)
         multiple -> python.Tuple(list.map(multiple, python.Variable))
       }
@@ -221,9 +219,17 @@ fn transform_destructuring_assignment(
           matched_case,
           python.MatchCase(python.PatternWildcard, option.None, [
             python.Expression(
-              python.Panic(option.unwrap(
-                message_result.expression,
-                python.String("assertion failed"),
+              python.Panic(let_assert_payload(
+                message_result.context,
+                location,
+                pattern,
+                value,
+                option.unwrap(
+                  message_result.expression,
+                  python.String(
+                    "Pattern match failed, no pattern matched the value.",
+                  ),
+                ),
               )),
             ),
           ]),
@@ -249,6 +255,7 @@ fn transform_destructuring_assignment(
           python.UnlabelledField(value_result.expression),
         ])
       let assignment = case binds {
+        [] -> [python.Expression(call)]
         [single] -> [python.SimpleAssignment(single, call)]
         multiple -> [python.MultipleAssignment(multiple, call)]
       }
@@ -268,11 +275,660 @@ fn transform_destructuring_assignment(
   internal.StatementReturn(
     context: internal.TransformerContext(
       ..value_result.context,
+      local_bindings: list.append(value_result.context.local_bindings, binds),
       next_case_id: value_result.context.next_case_id + 1,
       fresh_pool: fresh_pool,
     ),
     statements: statements,
   )
+}
+
+// The base dict shared by every runtime panic payload:
+//   {"gleam_error": <kind>, "message": <msg>, "file": <f>, "module": <m>,
+//    "function": <fn>, "line": <n>, ...kind-specific entries}
+fn panic_payload(
+  context: internal.TransformerContext,
+  kind: String,
+  message: python.Expression,
+  location: glance.Span,
+  extra: List(#(String, python.Expression)),
+) -> python.Expression {
+  python.Dict([
+    #("gleam_error", python.String(kind)),
+    #("message", message),
+    #("file", python.String(context.file_path)),
+    #("module", python.String(context.module_name)),
+    #("function", python.String(context.function_name)),
+    #(
+      "line",
+      python.Number(
+        int.to_string(internal.line_of(context.module_source, location.start)),
+      ),
+    ),
+    ..extra
+  ])
+}
+
+// The sub-expression dict used for assert operands:
+//   {"start": <s>, "end": <e>, "kind": "literal"|"expression"|"unevaluated",
+//    "value": <static literal | runtime temp>}
+fn asserted_operand_payload(
+  expression: glance.Expression,
+  temp: String,
+) -> python.Expression {
+  case compile_time_literal(expression) {
+    option.Some(literal) ->
+      python.Dict([
+        #("start", python.Number(int.to_string(expression.location.start))),
+        #("end", python.Number(int.to_string(expression.location.end))),
+        #("kind", python.String("literal")),
+        #("value", literal),
+      ])
+    option.None ->
+      python.Dict([
+        #("start", python.Number(int.to_string(expression.location.start))),
+        #("end", python.Number(int.to_string(expression.location.end))),
+        #("kind", python.String("expression")),
+        #("value", python.Variable(temp)),
+      ])
+  }
+}
+
+fn unevaluated_operand_payload(
+  expression: glance.Expression,
+) -> python.Expression {
+  python.Dict([
+    #("start", python.Number(int.to_string(expression.location.start))),
+    #("end", python.Number(int.to_string(expression.location.end))),
+    #("kind", python.String("unevaluated")),
+  ])
+}
+
+// Whether a glance expression is a compile-time literal. These get `kind:
+// "literal"` with their static value in assert payloads; everything else gets
+// `kind: "expression"` with its runtime value.
+fn compile_time_literal(
+  expression: glance.Expression,
+) -> option.Option(python.Expression) {
+  case expression {
+    glance.Int(_, value) -> option.Some(python.Number(value))
+    glance.Float(_, value) -> option.Some(python.Number(value))
+    glance.String(_, value) -> option.Some(python.String(value))
+    glance.Variable(_, "True") -> option.Some(python.Bool("True"))
+    glance.Variable(_, "False") -> option.Some(python.Bool("False"))
+    _ -> option.None
+  }
+}
+
+fn transform_assert_statement(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  subject: glance.Expression,
+  message_result: internal.OptionalExpressionReturn,
+) -> internal.StatementReturn {
+  let message =
+    option.unwrap(message_result.expression, python.String("Assertion failed."))
+  case subject {
+    glance.BinaryOperator(_, glance.And, left, right) ->
+      transform_assert_binary_and(
+        context,
+        location,
+        left,
+        right,
+        message,
+        message_result.statements,
+      )
+    glance.BinaryOperator(_, glance.Or, left, right) ->
+      transform_assert_binary_or(
+        context,
+        location,
+        left,
+        right,
+        message,
+        message_result.statements,
+      )
+    glance.BinaryOperator(_, glance.Pipe, _, _) ->
+      transform_assert_expression(
+        context,
+        location,
+        subject,
+        message,
+        message_result.statements,
+      )
+    glance.BinaryOperator(_, operator, left, right) ->
+      transform_assert_binary_operator(
+        context,
+        location,
+        operator,
+        left,
+        right,
+        message,
+        message_result.statements,
+      )
+    glance.Call(_, _, _) ->
+      transform_assert_function_call(
+        context,
+        location,
+        subject,
+        message,
+        message_result.statements,
+      )
+    _ ->
+      transform_assert_expression(
+        context,
+        location,
+        subject,
+        message,
+        message_result.statements,
+      )
+  }
+}
+
+// `assert x` where x is a plain expression: kind "expression".
+fn transform_assert_expression(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  subject: glance.Expression,
+  message: python.Expression,
+  message_statements: List(python.Statement),
+) -> internal.StatementReturn {
+  let subject_result = transform_expression(context, subject)
+  let temp = "_assert_" <> int.to_string(subject_result.context.next_assert_id)
+  let #(condition, bound_statements) = case compile_time_literal(subject) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(temp), [
+      python.SimpleAssignment(temp, subject_result.expression),
+    ])
+  }
+  let payload =
+    panic_payload(subject_result.context, "assert", message, location, [
+      #("kind", python.String("expression")),
+      #("expression", asserted_operand_payload(subject, temp)),
+      #("start", python.Number(int.to_string(location.start))),
+      #("end", python.Number(int.to_string(subject.location.end))),
+      #(
+        "expression_start",
+        python.Number(int.to_string(subject.location.start)),
+      ),
+    ])
+  internal.StatementReturn(
+    context: internal.TransformerContext(
+      ..subject_result.context,
+      next_assert_id: subject_result.context.next_assert_id + 1,
+    ),
+    statements: list.append(
+      list.append(message_statements, subject_result.statements),
+      list.append(bound_statements, [
+        python.If(condition: python.Not(condition), body: [
+          python.Expression(python.Panic(payload)),
+        ]),
+      ]),
+    ),
+  )
+}
+
+// `assert a && b`: two error branches matching the erlang nested case. When
+// `a` is falsy the right side was never evaluated (kind "unevaluated" with
+// spans only); when `b` is falsy both runtime values are reported.
+fn transform_assert_binary_and(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  left: glance.Expression,
+  right: glance.Expression,
+  message: python.Expression,
+  message_statements: List(python.Statement),
+) -> internal.StatementReturn {
+  let left_result = transform_expression(context, left)
+  let left_temp =
+    "_assert_" <> int.to_string(left_result.context.next_assert_id)
+  let #(left_condition, left_binds) = case compile_time_literal(left) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(left_temp), [
+      python.SimpleAssignment(left_temp, left_result.expression),
+    ])
+  }
+  let left_context =
+    internal.TransformerContext(
+      ..left_result.context,
+      next_assert_id: left_result.context.next_assert_id + 1,
+    )
+  let left_payload =
+    panic_payload(left_context, "assert", message, location, [
+      #("kind", python.String("binary_operator")),
+      #("operator", python.String("&&")),
+      #("left", asserted_operand_payload(left, left_temp)),
+      #("right", unevaluated_operand_payload(right)),
+      #("start", python.Number(int.to_string(location.start))),
+      #("end", python.Number(int.to_string(right.location.end))),
+      #("expression_start", python.Number(int.to_string(left.location.start))),
+    ])
+  let right_result = transform_expression(left_context, right)
+  let right_temp =
+    "_assert_" <> int.to_string(right_result.context.next_assert_id)
+  let #(right_condition, right_binds) = case compile_time_literal(right) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(right_temp), [
+      python.SimpleAssignment(right_temp, right_result.expression),
+    ])
+  }
+  let right_payload =
+    panic_payload(right_result.context, "assert", message, location, [
+      #("kind", python.String("binary_operator")),
+      #("operator", python.String("&&")),
+      #("left", asserted_operand_payload(left, left_temp)),
+      #("right", asserted_operand_payload(right, right_temp)),
+      #("start", python.Number(int.to_string(location.start))),
+      #("end", python.Number(int.to_string(right.location.end))),
+      #("expression_start", python.Number(int.to_string(left.location.start))),
+    ])
+  internal.StatementReturn(
+    context: internal.TransformerContext(
+      ..right_result.context,
+      next_assert_id: right_result.context.next_assert_id + 1,
+    ),
+    statements: list.append(
+      list.append(message_statements, left_result.statements),
+      list.append(
+        left_binds,
+        list.append(
+          [
+            python.If(condition: python.Not(left_condition), body: [
+              python.Expression(python.Panic(left_payload)),
+            ]),
+          ],
+          list.append(
+            right_result.statements,
+            list.append(right_binds, [
+              python.If(condition: python.Not(right_condition), body: [
+                python.Expression(python.Panic(right_payload)),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    ),
+  )
+}
+
+// `assert a || b`: a single error branch reached only when both operands are
+// falsy, mirroring erlang's `A orelse B`. The right side is only evaluated
+// when the left side is falsy.
+fn transform_assert_binary_or(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  left: glance.Expression,
+  right: glance.Expression,
+  message: python.Expression,
+  message_statements: List(python.Statement),
+) -> internal.StatementReturn {
+  let left_result = transform_expression(context, left)
+  let left_temp =
+    "_assert_" <> int.to_string(left_result.context.next_assert_id)
+  let #(left_condition, left_binds) = case compile_time_literal(left) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(left_temp), [
+      python.SimpleAssignment(left_temp, left_result.expression),
+    ])
+  }
+  let left_context =
+    internal.TransformerContext(
+      ..left_result.context,
+      next_assert_id: left_result.context.next_assert_id + 1,
+    )
+  let right_result = transform_expression(left_context, right)
+  let right_temp =
+    "_assert_" <> int.to_string(right_result.context.next_assert_id)
+  let #(right_condition, right_binds) = case compile_time_literal(right) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(right_temp), [
+      python.SimpleAssignment(right_temp, right_result.expression),
+    ])
+  }
+  let payload =
+    panic_payload(right_result.context, "assert", message, location, [
+      #("kind", python.String("binary_operator")),
+      #("operator", python.String("||")),
+      #("left", asserted_operand_payload(left, left_temp)),
+      #("right", asserted_operand_payload(right, right_temp)),
+      #("start", python.Number(int.to_string(location.start))),
+      #("end", python.Number(int.to_string(right.location.end))),
+      #("expression_start", python.Number(int.to_string(left.location.start))),
+    ])
+  internal.StatementReturn(
+    context: internal.TransformerContext(
+      ..right_result.context,
+      next_assert_id: right_result.context.next_assert_id + 1,
+    ),
+    statements: list.append(
+      list.append(message_statements, left_result.statements),
+      list.append(left_binds, [
+        python.If(
+          condition: python.Not(left_condition),
+          body: list.append(
+            right_result.statements,
+            list.append(right_binds, [
+              python.If(condition: python.Not(right_condition), body: [
+                python.Expression(python.Panic(payload)),
+              ]),
+            ]),
+          ),
+        ),
+      ]),
+    ),
+  )
+}
+
+// `assert a == b` (or any non-&&/|| operator): both operands are always
+// evaluated; a single error branch reports them by kind.
+fn transform_assert_binary_operator(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  operator: glance.BinaryOperator,
+  left: glance.Expression,
+  right: glance.Expression,
+  message: python.Expression,
+  message_statements: List(python.Statement),
+) -> internal.StatementReturn {
+  let left_result = transform_expression(context, left)
+  let left_temp =
+    "_assert_" <> int.to_string(left_result.context.next_assert_id)
+  let #(left_condition, left_binds) = case compile_time_literal(left) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(left_temp), [
+      python.SimpleAssignment(left_temp, left_result.expression),
+    ])
+  }
+  let left_context =
+    internal.TransformerContext(
+      ..left_result.context,
+      next_assert_id: left_result.context.next_assert_id + 1,
+    )
+  let right_result = transform_expression(left_context, right)
+  let right_temp =
+    "_assert_" <> int.to_string(right_result.context.next_assert_id)
+  let #(right_condition, right_binds) = case compile_time_literal(right) {
+    option.Some(literal) -> #(literal, [])
+    option.None -> #(python.Variable(right_temp), [
+      python.SimpleAssignment(right_temp, right_result.expression),
+    ])
+  }
+  let payload =
+    panic_payload(right_result.context, "assert", message, location, [
+      #("kind", python.String("binary_operator")),
+      #("operator", python.String(binary_operator_string(operator))),
+      #("left", asserted_operand_payload(left, left_temp)),
+      #("right", asserted_operand_payload(right, right_temp)),
+      #("start", python.Number(int.to_string(location.start))),
+      #("end", python.Number(int.to_string(right.location.end))),
+      #("expression_start", python.Number(int.to_string(left.location.start))),
+    ])
+  let condition =
+    python.BinaryOperator(
+      binary_operator_python(operator),
+      left_condition,
+      right_condition,
+    )
+  internal.StatementReturn(
+    context: internal.TransformerContext(
+      ..right_result.context,
+      next_assert_id: right_result.context.next_assert_id + 1,
+    ),
+    statements: list.append(
+      list.append(message_statements, left_result.statements),
+      list.append(
+        left_binds,
+        list.append(
+          right_result.statements,
+          list.append(right_binds, [
+            python.If(condition: python.Not(condition), body: [
+              python.Expression(python.Panic(payload)),
+            ]),
+          ]),
+        ),
+      ),
+    ),
+  )
+}
+
+fn binary_operator_python(
+  operator: glance.BinaryOperator,
+) -> python.BinaryOperator {
+  case operator {
+    glance.And -> python.And
+    glance.Or -> python.Or
+    glance.Eq -> python.Equal
+    glance.NotEq -> python.NotEqual
+    glance.LtInt -> python.LessThan
+    glance.LtEqInt -> python.LessThanEqual
+    glance.LtFloat -> python.LessThan
+    glance.LtEqFloat -> python.LessThanEqual
+    glance.GtInt -> python.GreaterThan
+    glance.GtEqInt -> python.GreaterThanEqual
+    glance.GtFloat -> python.GreaterThan
+    glance.GtEqFloat -> python.GreaterThanEqual
+    glance.AddInt -> python.Add
+    glance.AddFloat -> python.Add
+    glance.SubInt -> python.Subtract
+    glance.SubFloat -> python.Subtract
+    glance.MultInt -> python.Multiply
+    glance.MultFloat -> python.Multiply
+    glance.DivInt -> python.DivideInt
+    glance.DivFloat -> python.Divide
+    glance.RemainderInt -> python.Modulo
+    glance.Concatenate -> python.Add
+    glance.Pipe -> panic as "Pipe should have been desugared before asserts"
+  }
+}
+
+fn binary_operator_string(operator: glance.BinaryOperator) -> String {
+  case operator {
+    glance.And -> "&&"
+    glance.Or -> "||"
+    glance.Eq -> "=="
+    glance.NotEq -> "!="
+    glance.LtInt -> "<"
+    glance.LtEqInt -> "<="
+    glance.LtFloat -> "<"
+    glance.LtEqFloat -> "<="
+    glance.GtInt -> ">"
+    glance.GtEqInt -> ">="
+    glance.GtFloat -> ">"
+    glance.GtEqFloat -> ">="
+    glance.AddInt -> "+"
+    glance.AddFloat -> "+"
+    glance.SubInt -> "-"
+    glance.SubFloat -> "-"
+    glance.MultInt -> "*"
+    glance.MultFloat -> "*"
+    glance.DivInt -> "/"
+    glance.DivFloat -> "/"
+    glance.RemainderInt -> "%"
+    glance.Concatenate -> "<>"
+    glance.Pipe -> "|>"
+  }
+}
+
+// `assert f(a, b)`: kind "function_call". Non-literal arguments are bound to
+// temporaries before the call so their runtime values can be reported.
+fn transform_assert_function_call(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  subject: glance.Expression,
+  message: python.Expression,
+  message_statements: List(python.Statement),
+) -> internal.StatementReturn {
+  case subject {
+    glance.Call(
+      location: call_location,
+      function: function,
+      arguments: arguments,
+    ) -> {
+      let #(arg_statements, rebuilt_arguments, arg_payloads, context) =
+        list.fold(arguments, #([], [], [], context), fold_assert_call_argument)
+      let call_result = transform_call(context, function, rebuilt_arguments)
+      let temp = "_assert_" <> int.to_string(call_result.context.next_assert_id)
+      let payload =
+        panic_payload(call_result.context, "assert", message, location, [
+          #("kind", python.String("function_call")),
+          #("arguments", python.List(arg_payloads)),
+          #("start", python.Number(int.to_string(location.start))),
+          #("end", python.Number(int.to_string(call_location.end))),
+          #(
+            "expression_start",
+            python.Number(int.to_string(call_location.start)),
+          ),
+        ])
+      internal.StatementReturn(
+        context: internal.TransformerContext(
+          ..call_result.context,
+          next_assert_id: call_result.context.next_assert_id + 1,
+        ),
+        statements: list.append(
+          list.append(message_statements, arg_statements),
+          list.append(call_result.statements, [
+            python.SimpleAssignment(temp, call_result.expression),
+            python.If(condition: python.Not(python.Variable(temp)), body: [
+              python.Expression(python.Panic(payload)),
+            ]),
+          ]),
+        ),
+      )
+    }
+    _ -> panic as "Expected a call in transform_assert_function_call"
+  }
+}
+
+fn let_assert_payload(
+  context: internal.TransformerContext,
+  location: glance.Span,
+  pattern: glance.Pattern,
+  value: glance.Expression,
+  message: python.Expression,
+) -> python.Expression {
+  panic_payload(context, "let_assert", message, location, [
+    #("value", python.Variable("_case_subject")),
+    #("start", python.Number(int.to_string(location.start))),
+    #("end", python.Number(int.to_string(value.location.end))),
+    #("pattern_start", python.Number(int.to_string(pattern.location.start))),
+    #("pattern_end", python.Number(int.to_string(pattern.location.end))),
+  ])
+}
+
+// Folds a `glance.Field` call argument for an assert: literal arguments are
+// kept in place and reported statically; non-literal arguments are bound to a
+// temporary before the call so their runtime values can be reported. The
+// rebuilt argument list is passed to `transform_call`.
+fn fold_assert_call_argument(
+  state: #(
+    List(python.Statement),
+    List(glance.Field(glance.Expression)),
+    List(python.Expression),
+    internal.TransformerContext,
+  ),
+  argument: glance.Field(glance.Expression),
+) -> #(
+  List(python.Statement),
+  List(glance.Field(glance.Expression)),
+  List(python.Expression),
+  internal.TransformerContext,
+) {
+  let #(statements, rebuilt, payloads, state_context) = state
+  case argument {
+    glance.UnlabelledField(expression) -> {
+      let #(statements, rebuilt, payload, context) =
+        fold_assert_call_argument_item(
+          statements,
+          rebuilt,
+          payloads,
+          state_context,
+          expression,
+          glance.UnlabelledField,
+        )
+      #(statements, rebuilt, payload, context)
+    }
+    glance.LabelledField(label, location, expression) -> {
+      let #(statements, rebuilt, payloads, context) =
+        fold_assert_call_argument_item(
+          statements,
+          rebuilt,
+          payloads,
+          state_context,
+          expression,
+          fn(item) { glance.LabelledField(label, location, item) },
+        )
+      #(statements, rebuilt, payloads, context)
+    }
+    glance.ShorthandField(label, location) -> {
+      let expression = glance.Variable(location, label)
+      let #(statements, rebuilt, payloads, context) =
+        fold_assert_call_argument_item(
+          statements,
+          rebuilt,
+          payloads,
+          state_context,
+          expression,
+          fn(item) { glance.LabelledField(label, location, item) },
+        )
+      #(statements, rebuilt, payloads, context)
+    }
+  }
+}
+
+fn fold_assert_call_argument_item(
+  statements: List(python.Statement),
+  rebuilt: List(glance.Field(glance.Expression)),
+  payloads: List(python.Expression),
+  state_context: internal.TransformerContext,
+  expression: glance.Expression,
+  field: fn(glance.Expression) -> glance.Field(glance.Expression),
+) -> #(
+  List(python.Statement),
+  List(glance.Field(glance.Expression)),
+  List(python.Expression),
+  internal.TransformerContext,
+) {
+  case compile_time_literal(expression) {
+    option.Some(literal) -> #(
+      statements,
+      list.append(rebuilt, [field(expression)]),
+      list.append(payloads, [
+        python.Dict([
+          #("start", python.Number(int.to_string(expression.location.start))),
+          #("end", python.Number(int.to_string(expression.location.end))),
+          #("kind", python.String("literal")),
+          #("value", literal),
+        ]),
+      ]),
+      state_context,
+    )
+    option.None -> {
+      let result = transform_expression(state_context, expression)
+      let temp = "_assert_" <> int.to_string(result.context.next_assert_id)
+      #(
+        list.append(
+          statements,
+          list.append(result.statements, [
+            python.SimpleAssignment(temp, result.expression),
+          ]),
+        ),
+        list.append(rebuilt, [
+          field(glance.Variable(expression.location, temp)),
+        ]),
+        list.append(payloads, [
+          python.Dict([
+            #("start", python.Number(int.to_string(expression.location.start))),
+            #("end", python.Number(int.to_string(expression.location.end))),
+            #("kind", python.String("expression")),
+            #("value", python.Variable(temp)),
+          ]),
+        ]),
+        internal.TransformerContext(
+          ..result.context,
+          next_assert_id: result.context.next_assert_id + 1,
+        ),
+      )
+    }
+  }
 }
 
 fn transform_expression(
@@ -328,23 +984,46 @@ fn transform_expression(
       |> internal.map_return(python.Not)
     }
 
-    glance.Panic(_, option.None) ->
+    glance.Panic(location, option.None) ->
       internal.empty_return(
         context,
-        python.Panic(python.String("panic expression evaluated")),
+        python.Panic(
+          panic_payload(
+            context,
+            "panic",
+            python.String("`panic` expression evaluated."),
+            location,
+            [],
+          ),
+        ),
       )
-    glance.Panic(_, option.Some(expression)) ->
+    glance.Panic(location, option.Some(expression)) ->
       transform_expression(context, expression)
-      |> internal.map_return(python.Panic)
+      |> internal.map_return(fn(message) {
+        python.Panic(panic_payload(context, "panic", message, location, []))
+      })
 
-    glance.Todo(_, option.None) ->
+    glance.Todo(location, option.None) ->
       internal.empty_return(
         context,
-        python.Todo(python.String("This has not yet been implemented")),
+        python.Todo(
+          panic_payload(
+            context,
+            "todo",
+            python.String(
+              "`todo` expression evaluated. This code has not yet been"
+              <> " implemented.",
+            ),
+            location,
+            [],
+          ),
+        ),
       )
-    glance.Todo(_, option.Some(expression)) ->
+    glance.Todo(location, option.Some(expression)) ->
       transform_expression(context, expression)
-      |> internal.map_return(python.Todo)
+      |> internal.map_return(fn(message) {
+        python.Todo(panic_payload(context, "todo", message, location, []))
+      })
 
     glance.Call(_, function, arguments) ->
       transform_call(context, function, arguments)
@@ -647,6 +1326,50 @@ fn transform_call(
       }
     option.None -> arguments
   }
+  // A regular (non-external, non-constructor) function call mixing positional
+  // and labelled arguments must be reordered the same way: labelled arguments
+  // bind their parameter by name, and positional arguments fill the first
+  // unfilled parameter slot (Gleam's fill order). E.g. the pipe
+  // `"Hello" |> write(to: filepath)` for `fn write(to filepath:, contents
+  // contents:)` must emit `write(to=filepath, contents="Hello")`, not
+  // `write("Hello", to=filepath)` (which would raise a TypeError).
+  // The reordered arguments are emitted positionally (in parameter order)
+  // rather than as keyword arguments: the generated Python parameters may have
+  // been shadow-renamed (e.g. `filepath` -> `filepath_0`) or keyword-escaped,
+  // so relabelling positionals with their Gleam label would not match the
+  // emitted `def` signature. Positional emission always binds by slot, exactly
+  // like the official Gleam compiler.
+  let arguments = case is_external_callee(context, function) {
+    True -> arguments
+    False ->
+      case constructor_field_names_of(context, function) {
+        option.Some(_) -> arguments
+        option.None ->
+          // A locally-bound callee (a `let`, parameter, case pattern or fn
+          // literal parameter shadowing a module-level function) is a call to
+          // that local value, never to the module function, so its labelled
+          // arguments must not be reordered using the module function's
+          // signature.
+          case is_locally_bound(context, function) {
+            True -> arguments
+            False ->
+              case function_parameter_names(context, function) {
+                option.None -> arguments
+                option.Some(param_names) ->
+                  case list.any(arguments, is_labelled_field) {
+                    False -> arguments
+                    True ->
+                      case
+                        reorder_constructor_arguments(arguments, param_names)
+                      {
+                        Ok(reordered) -> strip_external_labels(reordered)
+                        Error(_) -> arguments
+                      }
+                  }
+              }
+          }
+      }
+  }
   internal.ExpressionReturn(
     reversed_arguments_result.context,
     list.append(
@@ -729,6 +1452,46 @@ fn external_parameter_names(
         Error(_) -> option.None
       }
     }
+  }
+}
+
+// The Python parameter names for a regular (non-external) function call, in
+// declaration order. The generated `def` uses each parameter's label as its
+// name (falling back to the name for unlabelled parameters), so keyword
+// arguments in a call must be keyed by those same names.
+fn function_parameter_names(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> option.Option(List(String)) {
+  case external_parameter_names(context, function) {
+    option.None -> option.None
+    option.Some(params) ->
+      option.Some(
+        list.map(params, fn(pair) {
+          let #(label, name) = pair
+          case label {
+            option.Some(label) -> label
+            option.None -> name
+          }
+        }),
+      )
+  }
+}
+
+// Whether a bare callee name refers to a value bound in the current scope
+// (a parameter, `let` binding, case pattern or fn literal parameter) rather
+// than a module-level function. A locally-bound name shadows any module-level
+// function of the same name, so argument reordering for labelled calls must
+// not use the module function's signature.
+fn is_locally_bound(
+  context: internal.TransformerContext,
+  function: glance.Expression,
+) -> Bool {
+  case function {
+    glance.Variable(_, name) -> list.contains(context.local_bindings, name)
+    glance.FieldAccess(_, glance.Variable(_, alias), _) ->
+      list.contains(context.local_bindings, alias)
+    _ -> False
   }
 }
 
@@ -863,6 +1626,14 @@ fn is_labelled_field(field: python.Field(python.Expression)) -> Bool {
   case field {
     python.LabelledField(_, _) -> True
     python.UnlabelledField(_) -> False
+  }
+}
+
+fn is_labelled_glance_field(field: glance.Field(glance.Expression)) -> Bool {
+  case field {
+    glance.LabelledField(..) -> True
+    glance.ShorthandField(..) -> True
+    glance.UnlabelledField(_) -> False
   }
 }
 
@@ -1070,6 +1841,13 @@ fn transform_fn(
 
   let function_name = "_fn_def_" <> int.to_string(context.next_function_id)
   let parameters = list.reverse(parameters_result.item)
+  let parameter_names =
+    list.filter_map(parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) -> Ok(name)
+        python.DiscardParam(_) -> Error(Nil)
+      }
+    })
   let transformed_body =
     transform_statement_block_with_context(
       internal.TransformerContext(
@@ -1081,7 +1859,12 @@ fn transform_fn(
         module_bindings: context.module_bindings,
         external_functions: context.external_functions,
         external_qualified: context.external_qualified,
+        local_bindings: list.append(context.local_bindings, parameter_names),
         fresh_pool: context.fresh_pool,
+        module_name: context.module_name,
+        function_name: context.function_name,
+        file_path: context.file_path,
+        module_source: context.module_source,
       ),
       body,
     )
@@ -1163,7 +1946,12 @@ fn transform_block(
         module_bindings: context.module_bindings,
         external_functions: context.external_functions,
         external_qualified: context.external_qualified,
+        local_bindings: context.local_bindings,
         fresh_pool: context.fresh_pool,
+        module_name: context.module_name,
+        function_name: context.function_name,
+        file_path: context.file_path,
+        module_source: context.module_source,
       ),
       body,
     )
@@ -1250,9 +2038,23 @@ fn fold_case_clause(
           is_multi_subject,
           state.context.module_bindings,
         )
+      let clause_binds =
+        pattern_list
+        |> list.flat_map(fn(alternative) {
+          list.flat_map(alternative, patterns.collect_binds)
+        })
+        |> list.unique
       let guard_return = transform_optional_expression(state.context, guard)
+      let body_context =
+        internal.TransformerContext(
+          ..guard_return.context,
+          local_bindings: list.append(
+            state.context.local_bindings,
+            clause_binds,
+          ),
+        )
       let statements_result =
-        transform_statement_block_with_context(guard_return.context, statements)
+        transform_statement_block_with_context(body_context, statements)
       let match_cases =
         list.map(pattern_results, fn(pattern_result) {
           let rewritten_clause_guard =
@@ -1272,7 +2074,10 @@ fn fold_case_clause(
           )
         })
       internal.TransformState(
-        statements_result.context,
+        internal.TransformerContext(
+          ..statements_result.context,
+          local_bindings: state.context.local_bindings,
+        ),
         state.statements,
         list.fold(match_cases, state.item, fn(item, match_case) {
           list.prepend(item, match_case)
@@ -1288,7 +2093,19 @@ fn fold_case_clause(
           state.context.module_bindings,
         )
       let guard_return = transform_optional_expression(state.context, guard)
-      let body_result = transform_expression(guard_return.context, body)
+      let body_context =
+        internal.TransformerContext(
+          ..guard_return.context,
+          local_bindings: list.append(
+            state.context.local_bindings,
+            pattern_list
+              |> list.flat_map(fn(alternative) {
+                list.flat_map(alternative, patterns.collect_binds)
+              })
+              |> list.unique,
+          ),
+        )
+      let body_result = transform_expression(body_context, body)
 
       let match_cases =
         list.map(pattern_results, fn(pattern_result) {
@@ -1318,7 +2135,10 @@ fn fold_case_clause(
         })
 
       internal.TransformState(
-        body_result.context,
+        internal.TransformerContext(
+          ..body_result.context,
+          local_bindings: state.context.local_bindings,
+        ),
         state.statements,
         list.fold(match_cases, state.item, fn(item, match_case) {
           list.prepend(item, match_case)
@@ -1370,7 +2190,28 @@ fn transform_pipe(
     glance.Call(location, function, arguments) ->
       case is_external_callee(context, function) {
         True -> option.Some(#(location, function, arguments))
-        False -> option.None
+        False ->
+          // Regular function calls mixing a piped positional with labelled
+          // arguments must also be reordered (see `transform_call`), so the
+          // piped value is prepended here before the argument keywords are
+          // assigned, exactly like externals. Calls without labelled
+          // arguments keep the positional merge path below. A locally-bound
+          // callee (shadowing a module function) must not be treated this way
+          // either: its arguments would be reordered against the module
+          // function's signature, and the piped value should simply land
+          // positionally on the local's first parameter.
+          case is_locally_bound(context, function) {
+            True -> option.None
+            False ->
+              case function_parameter_names(context, function) {
+                option.Some(_) ->
+                  case list.any(arguments, is_labelled_glance_field) {
+                    True -> option.Some(#(location, function, arguments))
+                    False -> option.None
+                  }
+                option.None -> option.None
+              }
+          }
       }
     _ -> option.None
   }

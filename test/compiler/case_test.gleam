@@ -288,7 +288,7 @@ from gleam_builtins import *
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case None:
+            case EmptyGleamList():
                 return 1
     return _fn_case_0(to_gleam_list([]))
 
@@ -312,7 +312,7 @@ from gleam_builtins import *
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case GleamList(1, None):
+            case GleamList(1, EmptyGleamList()):
                 return 1
     return _fn_case_0(to_gleam_list([1]))
 
@@ -336,7 +336,7 @@ from gleam_builtins import *
 def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
-            case GleamList(1, GleamList(2, GleamList(3, None))):
+            case GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
                 return 1
     return _fn_case_0(to_gleam_list([1, 2, 3]))
 

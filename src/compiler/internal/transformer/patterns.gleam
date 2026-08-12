@@ -1009,5 +1009,12 @@ pub fn rewrite_guard_binds(
           )
         }),
       )
+    python.Dict(entries) ->
+      python.Dict(
+        list.map(entries, fn(entry) {
+          let #(key, value) = entry
+          #(key, rewrite_guard_binds(value, guard_binds))
+        }),
+      )
   }
 }

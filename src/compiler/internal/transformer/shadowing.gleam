@@ -779,6 +779,13 @@ fn expression_binds(expression: python.Expression) -> List(String) {
           expression_binds(value)
         }),
       )
+    python.Dict(entries) ->
+      list.flatten(
+        list.map(entries, fn(entry) {
+          let #(_, value) = entry
+          expression_binds(value)
+        }),
+      )
   }
 }
 
@@ -865,6 +872,13 @@ fn expression_refs(
       list.flatten(
         list.map(segments, fn(segment) {
           let python.BitStringSegment(value, _) = segment
+          expression_refs(value, in_scope)
+        }),
+      )
+    python.Dict(entries) ->
+      list.flatten(
+        list.map(entries, fn(entry) {
+          let #(_, value) = entry
           expression_refs(value, in_scope)
         }),
       )
@@ -1048,12 +1062,18 @@ fn resolve_nested_binds(
       // bindings are closures: the case's active renames become this scope's
       // always-active renames. The case's own renames are threaded through so
       // a rebind inside the function gets a fresh name (e.g. a `use` callback
-      // destructuring the same name its enclosing case pattern bound).
+      // destructuring the same name its enclosing case pattern bound). But a
+      // name the function's own parameters bind is NOT a closure: it points at
+      // the parameter for the whole body, so the enclosing case's renames for
+      // those names must not apply inside.
+      let function_binds =
+        set.from_list(function_parameter_names(function.parameters))
       let effective =
         dict.merge(
           cross_renames,
           dict.filter(own_cross, fn(name, _) { set.contains(cross_scope, name) }),
         )
+        |> dict.filter(fn(name, _) { !set.contains(function_binds, name) })
       let #(body, pool) =
         nested_resolve_fold(
           renamed_function.body,
@@ -1617,6 +1637,13 @@ fn rename_expression(
             rename_expression(value, renames, in_scope),
             options,
           )
+        }),
+      )
+    python.Dict(entries) ->
+      python.Dict(
+        list.map(entries, fn(entry) {
+          let #(key, value) = entry
+          #(key, rename_expression(value, renames, in_scope))
         }),
       )
   }

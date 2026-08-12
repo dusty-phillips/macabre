@@ -2,6 +2,7 @@ import compiler/generator
 import compiler/internal/comments
 import compiler/internal/transformer as internal
 import compiler/package
+import compiler/project
 import compiler/transformer
 import glance
 import gleam/dict
@@ -81,13 +82,40 @@ pub fn compile_module_with_comments(
   external_qualified: List(String),
   comments: List(comments.Comment),
 ) -> String {
+  compile_module_with_metadata(
+    glance_module,
+    function_signatures,
+    constructor_arities,
+    external_functions,
+    external_qualified,
+    comments,
+    "",
+    "",
+    "",
+  )
+}
+
+pub fn compile_module_with_metadata(
+  glance_module: glance.Module,
+  function_signatures: internal.FunctionSignatures,
+  constructor_arities: dict.Dict(String, List(String)),
+  external_functions: List(String),
+  external_qualified: List(String),
+  comments: List(comments.Comment),
+  module_name: String,
+  file_path: String,
+  module_source: String,
+) -> String {
   glance_module
-  |> transformer.transform_with_comments(
+  |> transformer.transform_module_with_metadata(
     option.Some(function_signatures),
     option.Some(constructor_arities),
     external_functions,
     external_qualified,
     comments,
+    module_name,
+    file_path,
+    module_source,
   )
   |> generator.generate
 }
@@ -95,6 +123,8 @@ pub fn compile_module_with_comments(
 pub fn compile_package(
   package: package.GleamPackage,
 ) -> package.CompiledPackage {
+  let test_modules = set.from_list(project.test_module_names(package.project))
+  let dev_modules = set.from_list(project.dev_module_names(package.project))
   package.CompiledPackage(
     project: package.project,
     has_main: dict.get(package.package.modules, package.project.name)
@@ -119,15 +149,33 @@ pub fn compile_package(
               ),
             fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
           )
-        compile_module_with_comments(
+        let file_path = case set.contains(test_modules, module_name) {
+          True -> "test/" <> module_name <> ".gleam"
+          False ->
+            case set.contains(dev_modules, module_name) {
+              True -> "dev/" <> module_name <> ".gleam"
+              False -> "src/" <> module_name <> ".gleam"
+            }
+        }
+        let module_source =
+          package.module_sources
+          |> dict.get(module_name)
+          |> result.unwrap("")
+        compile_module_with_metadata(
           value.module,
           function_signatures(package.package.modules, module_name),
           constructor_arities,
-          module_external_names(value.module),
+          module_external_names_with_unqualified(
+            value.module,
+            package.package.modules,
+          ),
           package_externals(package.package.modules),
           package.comments
             |> dict.get(module_name)
             |> result.unwrap([]),
+          module_name,
+          file_path,
+          module_source,
         )
       }),
     external_import_files: package.external_import_files,
@@ -320,6 +368,65 @@ fn function_signatures(
     })
   })
   |> add_import_alias_signatures(modules)
+  |> add_unqualified_import_signatures(modules, current_module_name)
+}
+
+// Functions brought in by unqualified imports (`import simplifile.{write}`)
+// are called by their bare name, so the signature map must also carry the bare
+// name as a key. Aliased imports (`import simplifile.{write: w}`) bind the
+// alias instead.
+fn add_unqualified_import_signatures(
+  acc: internal.FunctionSignatures,
+  modules: dict.Dict(String, glimpse.Module),
+  current_module_name: String,
+) -> internal.FunctionSignatures {
+  case dict.get(modules, current_module_name) {
+    Error(_) -> acc
+    Ok(current_module) ->
+      list.fold(current_module.module.imports, acc, fn(acc, definition) {
+        case definition {
+          glance.Definition(
+            _,
+            glance.Import(_, module_path, _, _, unqualified_values),
+          ) ->
+            case dict.get(modules, module_path) {
+              Error(_) -> acc
+              Ok(imported_module) -> {
+                let imported_functions = imported_module.module.functions
+                list.fold(unqualified_values, acc, fn(acc, unqualified) {
+                  case unqualified {
+                    glance.UnqualifiedImport(name, alias) -> {
+                      let binding = case alias {
+                        option.Some(alias) -> alias
+                        option.None -> name
+                      }
+                      case
+                        list.find(imported_functions, fn(function) {
+                          function.definition.name == name
+                        })
+                      {
+                        Ok(function) ->
+                          dict.insert(
+                            acc,
+                            binding,
+                            function.definition.parameters
+                              |> list.map(fn(parameter) {
+                                #(
+                                  parameter.label,
+                                  assignment_name(parameter.name),
+                                )
+                              }),
+                          )
+                        Error(_) -> acc
+                      }
+                    }
+                  }
+                })
+              }
+            }
+        }
+      })
+  }
 }
 
 // `use` callbacks resolve against the aliased module name (e.g.
@@ -391,20 +498,67 @@ fn module_external_names(glance_module: glance.Module) -> List(String) {
   |> list.filter_map(fn(definition) {
     case definition {
       glance.Definition(attributes, function) ->
-        case
-          list.any(attributes, fn(attribute) {
-            case attribute {
-              glance.Attribute("external", [glance.Variable(_, "python"), _, _]) ->
-                True
-              _ -> False
-            }
-          })
-        {
+        case is_python_external(attributes) {
           True -> Ok(function.name)
           False -> Error(Nil)
         }
     }
   })
+}
+
+fn is_python_external(attributes: List(glance.Attribute)) -> Bool {
+  list.any(attributes, fn(attribute) {
+    case attribute {
+      glance.Attribute("external", [glance.Variable(_, "python"), _, _]) -> True
+      _ -> False
+    }
+  })
+}
+
+fn binding_name(name: String, alias: option.Option(String)) -> String {
+  case alias {
+    option.Some(alias) -> alias
+    option.None -> name
+  }
+}
+
+// The bare external names visible in a module: its own externals plus externals
+// brought in by unqualified imports (`import simplifile.{write_bits}`). A bare
+// call to such a name must be treated as an external call so its labelled
+// arguments are remapped to the binding's parameter names.
+fn module_external_names_with_unqualified(
+  glance_module: glance.Module,
+  modules: dict.Dict(String, glimpse.Module),
+) -> List(String) {
+  let own = module_external_names(glance_module)
+  let imported =
+    glance_module.imports
+    |> list.flat_map(fn(definition) {
+      case definition {
+        glance.Definition(
+          _,
+          glance.Import(_, module_path, _, _, unqualified_values),
+        ) ->
+          case dict.get(modules, module_path) {
+            Error(_) -> []
+            Ok(imported_module) -> {
+              let imported_externals =
+                module_external_names(imported_module.module)
+              unqualified_values
+              |> list.filter_map(fn(unqualified) {
+                case unqualified {
+                  glance.UnqualifiedImport(name, alias) ->
+                    case list.contains(imported_externals, name) {
+                      True -> Ok(binding_name(name, alias))
+                      False -> Error(Nil)
+                    }
+                }
+              })
+            }
+          }
+      }
+    })
+  list.unique(list.append(own, imported))
 }
 
 // Every external function in the package, keyed by the module-qualified name

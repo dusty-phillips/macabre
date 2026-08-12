@@ -169,7 +169,7 @@ pub fn empty_panic_test() {
 from gleam_builtins import *
 
 def main():
-    raise GleamPanic(\"panic expression evaluated\")"
+    raise GleamPanic({\"gleam_error\": \"panic\", \"message\": \"`panic` expression evaluated.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})"
 }
 
 pub fn string_panic_test() {
@@ -182,7 +182,7 @@ pub fn string_panic_test() {
 from gleam_builtins import *
 
 def main():
-    raise GleamPanic(\"my custom panic\")"
+    raise GleamPanic({\"gleam_error\": \"panic\", \"message\": \"my custom panic\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})"
 }
 
 pub fn empty_todo_test() {
@@ -195,7 +195,7 @@ pub fn empty_todo_test() {
 from gleam_builtins import *
 
 def main():
-    raise NotImplementedError(\"This has not yet been implemented\")"
+    raise NotImplementedError({\"gleam_error\": \"todo\", \"message\": \"`todo` expression evaluated. This code has not yet been implemented.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})"
 }
 
 pub fn case_clause_panic_test() {
@@ -214,7 +214,7 @@ def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1:
-                raise GleamPanic(\"panic expression evaluated\")
+                raise GleamPanic({\"gleam_error\": \"panic\", \"message\": \"`panic` expression evaluated.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})
             case _:
                 return 2
     return _fn_case_0(1)"
@@ -236,7 +236,7 @@ def main():
     def _fn_case_0(_case_subject):
         match _case_subject:
             case 1:
-                raise NotImplementedError(\"This has not yet been implemented\")
+                raise NotImplementedError({\"gleam_error\": \"todo\", \"message\": \"`todo` expression evaluated. This code has not yet been implemented.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})
             case _:
                 return 2
     return _fn_case_0(1)"
@@ -252,7 +252,7 @@ pub fn string_todo_test() {
 from gleam_builtins import *
 
 def main():
-    raise NotImplementedError(\"much is yet to be done\")"
+    raise NotImplementedError({\"gleam_error\": \"todo\", \"message\": \"much is yet to be done\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0})"
 }
 
 pub fn tuple_index_test() {
