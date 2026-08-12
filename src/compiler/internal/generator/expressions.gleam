@@ -64,13 +64,20 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
       |> string_tree.append(")")
 
     python.Tuple(expressions) ->
-      string_tree.new()
-      |> string_tree.append("(")
-      |> string_tree.append_tree(
-        expressions
-        |> internal.generate_plural(generate_expression, ", "),
-      )
-      |> string_tree.append(",)")
+      case expressions {
+        [] ->
+          // An empty tuple is written `()` in Python; `(,)` is a syntax
+          // error. Emitted for e.g. a zero-argument tail call's GleamTco args.
+          string_tree.from_string("()")
+        _ ->
+          string_tree.new()
+          |> string_tree.append("(")
+          |> string_tree.append_tree(
+            expressions
+            |> internal.generate_plural(generate_expression, ", "),
+          )
+          |> string_tree.append(",)")
+      }
 
     python.TupleIndex(expression, index) ->
       generate_expression(expression)

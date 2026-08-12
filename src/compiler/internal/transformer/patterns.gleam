@@ -174,10 +174,12 @@ fn transform_pattern_indexed(
       index,
     )
     glance.PatternDiscard(_, "") -> #(plain(python.PatternWildcard), index)
-    glance.PatternDiscard(_, str) -> #(
-      plain(python.PatternVariable("_" <> str)),
-      index,
-    )
+    glance.PatternDiscard(_, _str) ->
+      // A `_name` discard binds nothing and is never referenced, so it maps
+      // to Python's anonymous `_` wildcard. Emitting `_name` as a named
+      // pattern variable would collide when the same discard appears twice
+      // in one pattern (Python forbids rebinding a name in a single match).
+      #(plain(python.PatternVariable("_")), index)
     glance.PatternTuple(_, patterns) ->
       transform_nested_patterns(patterns, index, module_bindings)
       |> fn(result) {
@@ -364,13 +366,10 @@ fn transform_nested_pattern(
       index,
     )
     glance.PatternDiscard(_, "") -> #(python.PatternWildcard, [], [], [], index)
-    glance.PatternDiscard(_, str) -> #(
-      python.PatternVariable("_" <> str),
-      [],
-      [],
-      [],
-      index,
-    )
+    glance.PatternDiscard(_, _str) ->
+      // A `_name` discard maps to Python's anonymous `_` wildcard (reusable
+      // across one pattern); see the note in `transform_pattern_indexed`.
+      #(python.PatternVariable("_"), [], [], [], index)
     glance.PatternTuple(_, patterns) ->
       transform_nested_patterns(patterns, index, module_bindings)
       |> fn(result) {
@@ -830,8 +829,8 @@ fn transform_bitstring_pattern_option(
       transform_bit_array_size(bit_array_size),
     )
     glance.UnitOption(size) -> #("Unit", python.Number(int.to_string(size)))
-    glance.SignedOption | glance.UnsignedOption ->
-      panic as "Signed and unsigned options are not supported in bitstring patterns yet"
+    glance.SignedOption -> #("Signed", python.Nil)
+    glance.UnsignedOption -> #("Unsigned", python.Nil)
   }
   python.Tuple([python.String(name), payload])
 }
@@ -864,7 +863,7 @@ pub fn collect_binds(pattern: glance.Pattern) -> List(String) {
   case pattern {
     glance.PatternVariable(_, name) -> [name]
     glance.PatternDiscard(_, "") -> []
-    glance.PatternDiscard(_, name) -> ["_" <> name]
+    glance.PatternDiscard(_, _name) -> []
     glance.PatternAssignment(_, inner, name) -> [name, ..collect_binds(inner)]
     glance.PatternTuple(_, patterns) ->
       list.flatten(list.map(patterns, collect_binds))

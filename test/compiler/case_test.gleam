@@ -574,7 +574,7 @@ def do_lex():
         match _case_subject:
             case (lexer, None):
                 return 0
-            case (_lexer, Some(token.EndOfFile())):
+            case (_, Some(token.EndOfFile())):
                 return 1
             case (lexer, Some(token_0)):
                 return token_0

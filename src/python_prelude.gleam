@@ -276,6 +276,7 @@ def gleam_match_bitstring(subject, *segments):
         type = None
         bitsize = None
         endianness = 'big'
+        signed = False
         for option in options:
             match option:
                 case ('SizeValue', size):
@@ -300,6 +301,10 @@ def gleam_match_bitstring(subject, *segments):
                     type = 'utf16'
                 case ('Utf32', _):
                     type = 'utf32'
+                case ('Signed', _):
+                    signed = True
+                case ('Unsigned', _):
+                    signed = False
                 case _:
                     raise Exception(f'Unexpected bitstring option {option}')
 
@@ -336,6 +341,8 @@ def gleam_match_bitstring(subject, *segments):
             match type:
                 case 'int':
                     value = _bits_to_int(data, start_bit, bitsize, endianness)
+                    if signed and bitsize > 0:
+                        value = _to_signed(value, bitsize)
                 case 'float':
                     value = _bits_to_float(data, start_bit, bitsize, endianness)
                 case 'utf8':
@@ -400,6 +407,13 @@ def _bits_to_int(data: bytes, start_bit: int, count: int, endianness: str) -> in
         extracted = _bits_to_bytes(data, start_bit, count)
         value = int.from_bytes(extracted, 'big')
         value >>= byte_count * 8 - count
+    return value
+
+
+def _to_signed(value: int, bitsize: int) -> int:
+    sign_bit = 1 << (bitsize - 1)
+    if value & sign_bit:
+        return value - (1 << bitsize)
     return value
 
 

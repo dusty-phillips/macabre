@@ -1735,7 +1735,7 @@ pub fn resolve_tail_calls(
                   python.MatchCase(
                     python.PatternConstructor(option.None, "True", []),
                     option.None,
-                    [unpack_result(parameters)],
+                    unpack_result(parameters),
                   ),
                   python.MatchCase(
                     python.PatternConstructor(option.None, "False", []),
@@ -1771,22 +1771,29 @@ fn parameter_names(parameters: List(python.FunctionParameter)) -> List(String) {
 // assign the whole tuple.
 fn unpack_result(
   parameters: List(python.FunctionParameter),
-) -> python.Statement {
+) -> List(python.Statement) {
   let names = parameter_names(parameters)
   case names {
-    [single] ->
+    [] ->
+      // A zero-argument tail-recursive call has nothing to unpack: the
+      // MatchCase body is empty, which the generator renders as `pass`, and
+      // the `while True` loop carries on to the next iteration.
+      []
+    [single] -> [
       python.SimpleAssignment(
         single,
         python.TupleIndex(
           python.FieldAccess(python.Variable("_result"), "args"),
           0,
         ),
-      )
-    multiple ->
+      ),
+    ]
+    multiple -> [
       python.MultipleAssignment(
         multiple,
         python.FieldAccess(python.Variable("_result"), "args"),
-      )
+      ),
+    ]
   }
 }
 
