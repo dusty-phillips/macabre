@@ -49,6 +49,167 @@ fn target_includes_python(attributes: List(glance.Attribute)) -> Bool {
   }
 }
 
+// Constants are emitted at module level in dependency order: a constant
+// whose value references another constant must come after it, otherwise the
+// generated Python raises NameError on the forward reference. Real Gleam
+// sorts constants the same way. The sort is stable, preserving source order
+// among constants that do not depend on one another.
+fn sort_constants(
+  constants: List(glance.Definition(glance.Constant)),
+) -> List(glance.Definition(glance.Constant)) {
+  let name_of = fn(constant: glance.Definition(glance.Constant)) {
+    constant.definition.name
+  }
+  let names = list.map(constants, name_of)
+  let deps_of =
+    dict.from_list(
+      list.map(constants, fn(constant) {
+        #(
+          name_of(constant),
+          constant.definition.value
+            |> constant_refs
+            |> list.filter(fn(name) { list.contains(names, name) })
+            |> list.unique,
+        )
+      }),
+    )
+  let #(sorted, _) =
+    list.fold(constants, #([], constants), fn(state, _constant) {
+      let #(placed, remaining) = state
+      let placed_names = list.map(placed, name_of)
+      let next =
+        list.find(remaining, fn(constant) {
+          let deps = dict.get(deps_of, name_of(constant)) |> result.unwrap([])
+          list.all(deps, fn(dep) { list.contains(placed_names, dep) })
+        })
+      case next {
+        Ok(found) -> #(
+          list.append(placed, [found]),
+          list.filter(remaining, fn(constant) {
+            name_of(constant) != name_of(found)
+          }),
+        )
+        Error(_) -> state
+      }
+    })
+  sorted
+}
+
+// The names of constants (and top-level values) referenced by a constant's
+// value expression. Only bare variable references matter: a constant can
+// reference another constant by name, but a module-qualified access refers
+// to a module binding, not a local constant.
+fn constant_refs(expression: glance.Expression) -> List(String) {
+  case expression {
+    glance.Variable(_, name) -> [name]
+    glance.Int(_, _) | glance.Float(_, _) | glance.String(_, _) -> []
+    glance.NegateInt(_, value) | glance.NegateBool(_, value) ->
+      constant_refs(value)
+    glance.Block(_, statements) -> constant_statement_refs(statements)
+    glance.Panic(_, message) | glance.Todo(_, message) ->
+      message |> option.map(constant_refs) |> option.unwrap([])
+    glance.Tuple(_, elements) -> list.flatten(list.map(elements, constant_refs))
+    glance.List(_, elements, rest) ->
+      list.flatten(list.map(elements, constant_refs))
+      |> list.append(rest |> option.map(constant_refs) |> option.unwrap([]))
+    glance.Fn(_, _, _, body) -> constant_statement_refs(body)
+    glance.RecordUpdate(_, _, _, record, fields) ->
+      constant_refs(record)
+      |> list.append(
+        list.flatten(
+          list.map(fields, fn(field) {
+            case field {
+              glance.RecordUpdateField(_, item) ->
+                item |> option.map(constant_refs) |> option.unwrap([])
+            }
+          }),
+        ),
+      )
+    glance.FieldAccess(_, container, _) -> constant_refs(container)
+    glance.Call(_, function, arguments) ->
+      constant_refs(function)
+      |> list.append(list.flatten(list.map(arguments, constant_field_refs)))
+    glance.TupleIndex(_, tuple, _) -> constant_refs(tuple)
+    glance.FnCapture(_, _, function, arguments_before, arguments_after) ->
+      constant_refs(function)
+      |> list.append(
+        list.flatten(list.map(arguments_before, constant_field_refs)),
+      )
+      |> list.append(
+        list.flatten(list.map(arguments_after, constant_field_refs)),
+      )
+    glance.BitString(_, segments) ->
+      list.flatten(
+        list.map(segments, fn(segment) {
+          let #(value, options) = segment
+          constant_refs(value)
+          |> list.append(
+            list.flatten(
+              list.map(options, fn(option) {
+                case option {
+                  glance.SizeValueOption(value) -> constant_refs(value)
+                  _ -> []
+                }
+              }),
+            ),
+          )
+        }),
+      )
+    glance.Case(_, subjects, clauses) ->
+      list.flatten(list.map(subjects, constant_refs))
+      |> list.append(
+        list.flatten(
+          list.map(clauses, fn(clause) {
+            let refs = case clause {
+              glance.Clause(_, guard, body) ->
+                constant_refs(body)
+                |> list.append(
+                  guard
+                  |> option.map(constant_refs)
+                  |> option.unwrap([]),
+                )
+            }
+            refs
+          }),
+        ),
+      )
+    glance.BinaryOperator(_, _, left, right) ->
+      constant_refs(left) |> list.append(constant_refs(right))
+    glance.Echo(_, expression, message) ->
+      expression
+      |> option.map(constant_refs)
+      |> option.unwrap([])
+      |> list.append(message |> option.map(constant_refs) |> option.unwrap([]))
+  }
+}
+
+fn constant_statement_refs(statements: List(glance.Statement)) -> List(String) {
+  list.flatten(
+    list.map(statements, fn(statement) {
+      case statement {
+        glance.Use(_, _, function) -> constant_refs(function)
+        glance.Assignment(_, _, _, _, value) -> constant_refs(value)
+        glance.Assert(_, expression, message) ->
+          constant_refs(expression)
+          |> list.append(
+            message |> option.map(constant_refs) |> option.unwrap([]),
+          )
+        glance.Expression(expression) -> constant_refs(expression)
+      }
+    }),
+  )
+}
+
+fn constant_field_refs(field: glance.Field(glance.Expression)) -> List(String) {
+  case field {
+    glance.LabelledField(_, _, item) -> constant_refs(item)
+    // The shorthand `f(foo)` desugars to `f(foo: foo)`, referencing the name
+    // directly.
+    glance.ShorthandField(label, _) -> [label]
+    glance.UnlabelledField(item) -> constant_refs(item)
+  }
+}
+
 pub fn transform(input: glance.Module) -> python.Module {
   transform_with_signatures(input, option.None, option.None, [], [])
 }
@@ -134,28 +295,32 @@ pub fn transform_module_with_metadata(
     |> list.fold(input.imports, _, fn(module, import_) {
       transform_import(module, import_, module_bindings)
     })
-    |> list.fold(input.constants, _, fn(module, constant) {
-      let definition_comments =
-        comments_for(comments_by_start, constant.definition.location.start)
-      statements.transform_constant(
-        internal.TransformerContext(
-          ..internal.empty_context(),
-          function_signatures: function_signatures,
-          module_aliases: module_aliases,
-          constructor_arities:,
-          module_bindings: option.Some(module_bindings),
-          external_functions: option.Some(external_functions),
-          external_qualified: option.Some(external_qualified),
-          module_name: module_name,
-          file_path: file_path,
-          module_source: module_source,
-        ),
-        module,
-        constant,
-        comments.docstring(definition_comments),
-        comments.comment_texts(definition_comments),
-      )
-    })
+    |> list.fold(
+      sort_constants(input.constants) |> list.reverse,
+      _,
+      fn(module, constant) {
+        let definition_comments =
+          comments_for(comments_by_start, constant.definition.location.start)
+        statements.transform_constant(
+          internal.TransformerContext(
+            ..internal.empty_context(),
+            function_signatures: function_signatures,
+            module_aliases: module_aliases,
+            constructor_arities:,
+            module_bindings: option.Some(module_bindings),
+            external_functions: option.Some(external_functions),
+            external_qualified: option.Some(external_qualified),
+            module_name: module_name,
+            file_path: file_path,
+            module_source: module_source,
+          ),
+          module,
+          constant,
+          comments.docstring(definition_comments),
+          comments.comment_texts(definition_comments),
+        )
+      },
+    )
     |> list.fold(input.functions, _, fn(module, function) {
       transform_function_or_external(
         module,

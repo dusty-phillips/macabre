@@ -113,8 +113,9 @@ pub fn generate_comments(comments: List(String)) -> string_tree.StringTree {
 
 /// Renders a docstring as a triple-quoted string, or nothing when absent.
 /// Renders a docstring as a triple-quoted string, or nothing when absent.
-/// Backslashes are escaped so Python does not interpret `\u`, `\n`, etc. in
-/// the doc comment as escapes.
+/// Backslashes and quotes are escaped so Python does not interpret `\u`,
+/// `\n`, etc. in the doc comment as escapes, and a trailing `"` in the text
+/// cannot merge with the closing `"""`.
 pub fn generate_docstring(
   docstring: option.Option(String),
 ) -> string_tree.StringTree {
@@ -122,7 +123,11 @@ pub fn generate_docstring(
     option.None -> string_tree.new()
     option.Some(text) ->
       string_tree.from_string("\"\"\"")
-      |> string_tree.append(text |> string.replace("\\", "\\\\"))
+      |> string_tree.append(
+        text
+        |> string.replace("\\", "\\\\")
+        |> string.replace("\"", "\\\""),
+      )
       |> string_tree.append("\"\"\"")
   }
 }
