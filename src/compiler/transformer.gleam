@@ -140,7 +140,15 @@ pub fn transform_module_with_metadata(
       statements.transform_constant(
         internal.TransformerContext(
           ..internal.empty_context(),
+          function_signatures: function_signatures,
+          module_aliases: module_aliases,
           constructor_arities:,
+          module_bindings: option.Some(module_bindings),
+          external_functions: option.Some(external_functions),
+          external_qualified: option.Some(external_qualified),
+          module_name: module_name,
+          file_path: file_path,
+          module_source: module_source,
         ),
         module,
         constant,
