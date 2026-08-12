@@ -37,7 +37,10 @@ pub fn usage(message: String) -> Nil {
 
 pub fn build(directory: String) -> Nil {
   case load_and_compile(directory) {
-    Error(error) -> filesystem.write_error(error)
+    Error(error) -> {
+      filesystem.write_error(error)
+      shellout.exit(1)
+    }
     Ok(_) -> Nil
   }
 }
