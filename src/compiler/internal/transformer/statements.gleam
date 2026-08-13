@@ -1126,6 +1126,7 @@ fn transform_expression(
                                   context.module_reserved,
                                   alias <> "_0",
                                 )
+                                || list.contains(context.local_bindings, alias)
                               {
                                 True ->
                                   transform_expression(context, expression)
