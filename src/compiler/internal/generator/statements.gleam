@@ -153,7 +153,7 @@ fn generate_pattern(pattern: python.Pattern) -> StringTree {
   case pattern {
     python.PatternWildcard -> string_tree.from_string("_")
     python.PatternInt(str) | python.PatternFloat(str) ->
-      string_tree.from_string(str)
+      string_tree.from_string(expressions.python_number_literal(str))
     python.PatternVariable(str) ->
       string_tree.from_string(str |> internal.python_name)
     python.PatternString(str) ->

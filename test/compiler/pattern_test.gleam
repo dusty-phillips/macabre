@@ -241,3 +241,30 @@ def main():
 __all__ = [\"main\"]
 "
 }
+
+pub fn leading_zero_int_pattern_test() {
+  let assert Ok(module) =
+    "pub fn main() {
+    case 5 {
+      05 -> True
+      _ -> False
+    }
+  }
+  "
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 5:
+                return True
+            case _:
+                return False
+    return _fn_case_0(5)
+
+
+__all__ = [\"main\"]
+"
+}

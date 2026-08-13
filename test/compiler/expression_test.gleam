@@ -27,6 +27,71 @@ def main():
     return 42"
 }
 
+pub fn leading_zero_int_expression_test() {
+  let assert Ok(module) =
+    "fn main() {
+      04
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return 4"
+}
+
+pub fn leading_zero_underscored_int_expression_test() {
+  let assert Ok(module) =
+    "fn main() {
+      0_4
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return 4"
+}
+
+pub fn base_prefixed_int_expression_test() {
+  let assert Ok(module) =
+    "fn main() {
+      0xFF
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return 0xFF"
+}
+
+pub fn zero_int_expression_test() {
+  let assert Ok(module) =
+    "fn main() {
+      0
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return 0"
+}
+
+pub fn leading_zero_float_expression_test() {
+  let assert Ok(module) =
+    "fn main() {
+      04.5
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return 04.5"
+}
+
 pub fn float_expression_test() {
   let assert Ok(module) =
     "fn main() {

@@ -16,7 +16,8 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
           string_tree.from_string("\"" <> python_escape(unescaped) <> "\"")
       }
 
-    python.Number(number) -> string_tree.from_string(number)
+    python.Number(number) ->
+      string_tree.from_string(python_number_literal(number))
 
     python.Bool(value) -> string_tree.from_string(value)
 
@@ -330,4 +331,46 @@ fn zero_pad_hex(hex: String) -> String {
     1 -> "0" <> hex
     _ -> hex
   }
+}
+
+/// Python rejects decimal integer literals with leading zeros (e.g. `04` and
+/// `0_4` are syntax errors) while Gleam permits them. Floats (`04.5`, `0_4.5`)
+/// and base-prefixed integers (`0xFF`, `0b101`, `0o17`) are accepted by both
+/// languages and pass through unchanged.
+pub fn python_number_literal(literal: String) -> String {
+  let is_float =
+    string.contains(literal, ".") || string.contains(literal, "e")
+    || string.contains(literal, "E")
+  case is_base_prefixed(literal) {
+    True -> literal
+    False ->
+      case is_float {
+        True -> literal
+        False -> strip_leading_zeroes(literal)
+      }
+  }
+}
+
+fn is_base_prefixed(literal: String) -> Bool {
+  string.starts_with(literal, "0x")
+  || string.starts_with(literal, "0X")
+  || string.starts_with(literal, "0b")
+  || string.starts_with(literal, "0B")
+  || string.starts_with(literal, "0o")
+  || string.starts_with(literal, "0O")
+}
+
+/// Remove leading zero digits (and any underscores separating them) from a
+/// decimal integer literal, keeping at least one digit. `04` -> `4`, `0_4` ->
+/// `4`, `0` -> `0`, `00` -> `0`, `1_000` -> `1_000`.
+fn strip_leading_zeroes(literal: String) -> String {
+  let zeroes = literal |> string.split("") |> list.drop_while(is_zero_or_underscore)
+  case zeroes {
+    [] -> "0"
+    _ -> string.join(zeroes, "")
+  }
+}
+
+fn is_zero_or_underscore(grapheme: String) -> Bool {
+  grapheme == "0" || grapheme == "_"
 }
