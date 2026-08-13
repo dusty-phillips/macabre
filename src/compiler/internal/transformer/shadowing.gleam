@@ -1867,9 +1867,16 @@ fn expression_passes_function(
   case expression {
     python.Call(python.Variable(callee), _) if callee == name -> True
     python.Call(callee, arguments) ->
-      case marker_swallowing_callee(callee) {
-        True -> False
-        False ->
+      // A nested function is only a tail driver when the call it is passed to
+      // is guaranteed to invoke it in tail position and propagate its result
+      // back to the enclosing driver. The compiler-recognized `use` helpers
+      // (`result.try`, `result.map`, `bool.guard`) do this. A function passed
+      // to any other callee may instead be *stored* (e.g. a streaming parser
+      // that holds a continuation in a record to resume later); rewriting its
+      // self-call into a `GleamTco` marker would leak that marker to whoever
+      // later invokes the stored closure.
+      case known_driver_callee(callee) {
+        True ->
           list.any(arguments, fn(field) {
             case field {
               python.UnlabelledField(python.Variable(arg_name))
@@ -1881,15 +1888,31 @@ fn expression_passes_function(
               _ -> False
             }
           })
+        False -> False
       }
     _ -> False
   }
 }
 
-// Callees whose compiled form runs the callback through its own match/trampoline
-// protocol, so a `GleamTco` marker returned by the callback never reaches the
-// enclosing driver. A nested function passed to one of these is not a tail
-// driver and its recursion must not be rewritten.
+// The compiler-generated helpers that `use` desugars to, plus the stdlib
+// functions whose compiled form invokes a callback and returns its value
+// unchanged (so a `GleamTco` marker flows through to the driver).
+fn known_driver_callee(callee: python.Expression) -> Bool {
+  let name = case callee {
+    python.Variable(name) -> name
+    python.FieldAccess(python.ModuleRef(module), function_name) ->
+      module <> "." <> function_name
+    python.FieldAccess(python.Variable(module), function_name) ->
+      module <> "." <> function_name
+    _ -> ""
+  }
+  name == "result.try"
+  || name == "result.map"
+  || name == "bool.guard"
+  || name == "result.lazy_try"
+  || name == "result.lazy_unwrap"
+}
+
 fn marker_swallowing_callee(callee: python.Expression) -> Bool {
   let name = case callee {
     python.Variable(name) -> name

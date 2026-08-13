@@ -129,7 +129,10 @@ def gleam_bitstring_segments_to_bytes(*segments):
 
         # Defaults from https://www.erlang.org/doc/system/bit_syntax.html
         if type == None:
-            type = 'int'
+            # A bare string literal in a bitstring segment (for example a
+            # two-char string in `body, rest`) is encoded as latin-1 bytes,
+            # matching erlang. Int values default to int.
+            type = 'utf8' if isinstance(value, str) else 'int'
 
         if size == None:
             match type:
@@ -309,11 +312,29 @@ def gleam_match_bitstring(subject, *segments):
                     raise Exception(f'Unexpected bitstring option {option}')
 
         if type == None:
-            type = 'int'
+            # A bare string literal in a bitstring pattern is matched as its
+            # byte sequence (erlang semantics). The payload is a python str.
+            if kind == 'string' and isinstance(payload, str):
+                type = 'utf8'
+                if size == None:
+                    size = len(payload.encode('utf-8'))
+            else:
+                type = 'int'
 
         if type == 'bitstring':
-            value = _bitstring_slice(subject_bytes, cursor, total_bits - cursor)
-            cursor = total_bits
+            if size == None:
+                value = _bitstring_slice(
+                    subject_bytes, cursor, total_bits - cursor,
+                )
+                cursor = total_bits
+            else:
+                if unit == None:
+                    unit = 8
+                bitsize = unit * size
+                if cursor + bitsize > total_bits:
+                    return None
+                value = _bitstring_slice(subject_bytes, cursor, bitsize)
+                cursor += bitsize
         else:
             if size == None:
                 match type:
