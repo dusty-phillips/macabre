@@ -464,7 +464,7 @@ def main():
                 return \"Just zero\"
             case x if x < 0:
                 return \"So negative\"
-            case x if x % 2 == 0:
+            case x if gleam_int_rem(x, 2) == 0:
                 return \"Positively even\"
             case _:
                 return \"Somewhat odd\"

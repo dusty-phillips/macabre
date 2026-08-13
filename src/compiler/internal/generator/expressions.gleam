@@ -203,22 +203,38 @@ fn generate_binop(
     python.Or -> " or "
     python.Add -> " + "
     python.Subtract -> " - "
-    python.Divide -> " / "
-    python.DivideInt -> " // "
     python.Multiply -> " * "
-    python.Modulo -> " % "
     python.Equal -> " == "
     python.NotEqual -> " != "
     python.LessThan -> " < "
     python.LessThanEqual -> " <= "
     python.GreaterThan -> " > "
     python.GreaterThanEqual -> " >= "
+    python.Divide -> "gleam_float_div"
+    python.DivideInt -> "gleam_int_div"
+    python.Modulo -> "gleam_int_rem"
   }
 
-  string_tree.new()
-  |> string_tree.append_tree(generate_expression(left))
-  |> string_tree.append(op_string)
-  |> string_tree.append_tree(generate_expression(right))
+  case name {
+    python.Divide | python.DivideInt | python.Modulo ->
+      // Erlang's `/`, `div` and `rem` guard against a zero divisor (returning a
+      // sign-preserving zero for float division, 0 for int division/rem) and
+      // truncate toward zero for integers; Python's `/`, `//` and `%` instead
+      // raise on zero and floor. Route through the prelude helpers so negative
+      // operands and zero divisors match Gleam semantics.
+      string_tree.new()
+      |> string_tree.append(op_string)
+      |> string_tree.append("(")
+      |> string_tree.append_tree(generate_expression(left))
+      |> string_tree.append(", ")
+      |> string_tree.append_tree(generate_expression(right))
+      |> string_tree.append(")")
+    _ ->
+      string_tree.new()
+      |> string_tree.append_tree(generate_expression(left))
+      |> string_tree.append(op_string)
+      |> string_tree.append_tree(generate_expression(right))
+  }
 }
 
 fn generate_bitstring(segments: List(python.BitStringSegment)) -> StringTree {

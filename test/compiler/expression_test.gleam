@@ -356,7 +356,7 @@ pub fn binop_int_div_test() {
 from gleam_builtins import *
 
 def main():
-    return 40 // 2"
+    return gleam_int_div(40, 2)"
 }
 
 pub fn binop_float_div_test() {
@@ -369,7 +369,7 @@ pub fn binop_float_div_test() {
 from gleam_builtins import *
 
 def main():
-    return 40.2 / 2.5"
+    return gleam_float_div(40.2, 2.5)"
 }
 
 pub fn binop_int_modulo_test() {
@@ -382,7 +382,7 @@ pub fn binop_int_modulo_test() {
 from gleam_builtins import *
 
 def main():
-    return 5 % 2"
+    return gleam_int_rem(5, 2)"
 }
 
 pub fn equality_test() {

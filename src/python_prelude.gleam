@@ -32,6 +32,31 @@ class GleamTco:
         self.args = args
 
 
+def gleam_int_div(a, b):
+    # Erlang's `div` truncates toward zero and returns 0 on a zero divisor.
+    if b == 0:
+        return 0
+    q = abs(a) // abs(b)
+    return q if (a < 0) == (b < 0) else -q
+
+
+def gleam_int_rem(a, b):
+    # Erlang's `rem` truncates toward zero and returns 0 on a zero divisor.
+    if b == 0:
+        return 0
+    return a - b * gleam_int_div(a, b)
+
+
+def gleam_float_div(a, b):
+    # Erlang float division guards a zero divisor, returning a zero with the
+    # DIVISOR's sign: dividing by +0.0 gives +0.0 and by -0.0 gives -0.0.
+    # Python raises ZeroDivisionError, so guard explicitly.
+    import math
+    if b == 0.0:
+        return math.copysign(0.0, b)
+    return a / b
+
+
 class GleamList(typing.Generic[GleamListElem]):
     __slots__ = [\"value\", \"tail\"]
     __match_args__ = (\"value\", \"tail\")
