@@ -197,24 +197,16 @@ fn fold_function_parameter(
 ) -> ParamFoldState {
   case function_parameter {
     glance.FunctionParameter(
-      label: option.Some(label),
+      label: option.Some(_label),
       name: glance.Named(name),
       type_: _,
     ) -> {
-      let binds = case name == label {
-        True -> state.reversed_binds
-        False ->
-          list.prepend(
-            state.reversed_binds,
-            python.SimpleAssignment(name, python.Variable(label)),
-          )
-      }
       ParamFoldState(
         ..state,
-        reversed_binds: binds,
+        reversed_binds: state.reversed_binds,
         reversed_params: list.prepend(
           state.reversed_params,
-          python.NameParam(label),
+          python.NameParam(name),
         ),
       )
     }

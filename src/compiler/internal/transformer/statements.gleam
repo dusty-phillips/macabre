@@ -1492,6 +1492,7 @@ fn is_locally_bound(
     glance.Variable(_, name) -> list.contains(context.local_bindings, name)
     glance.FieldAccess(_, glance.Variable(_, alias), _) ->
       list.contains(context.local_bindings, alias)
+      && !list.contains(context.module_aliases, alias)
     _ -> False
   }
 }

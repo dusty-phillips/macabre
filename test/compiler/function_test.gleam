@@ -153,8 +153,7 @@ pub fn labelled_param_different_name_test() {
   assert compiler.compile_module(module) == "from __future__ import annotations
 from gleam_builtins import *
 
-def add(labelled):
-    a = labelled
+def add(a):
     return a"
 }
 
