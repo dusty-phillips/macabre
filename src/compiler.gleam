@@ -347,6 +347,15 @@ fn function_signatures(
             }),
         )
       })
+      |> list.append(
+        module.module.constants
+        |> list.map(fn(constant) {
+          // A constant is a nullary value, so it has no parameter names; the
+          // key just marks the name as a module member so module-qualified
+          // references (e.g. `decode.string`) resolve to the module.
+          #(prefix <> "." <> constant.definition.name, [])
+        }),
+      )
     let local_entries = case module_name == current_module_name {
       True ->
         module.module.functions
@@ -359,6 +368,10 @@ fn function_signatures(
               }),
           )
         })
+        |> list.append(
+          module.module.constants
+          |> list.map(fn(constant) { #(constant.definition.name, []) }),
+        )
       False -> []
     }
     list.append(qualified_entries, local_entries)
