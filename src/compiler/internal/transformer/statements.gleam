@@ -1812,6 +1812,27 @@ fn transform_fn_capture(
       internal.TransformState(function_result.context, [], []),
       fold_call_argument,
     )
+  let arguments = reversed_arguments_result.item |> list.reverse
+  // The partial-application closure calls the same callee as a direct call,
+  // so labelled arguments must be reordered the same way transform_call does
+  // for a regular function: positional emission binds by parameter slot,
+  // which matches the name-based `def` emitted for labelled parameters.
+  let arguments = case is_locally_bound(context, function) {
+    True -> arguments
+    False ->
+      case function_parameter_names(context, function) {
+        option.None -> arguments
+        option.Some(param_names) ->
+          case list.any(arguments, is_labelled_field) {
+            False -> arguments
+            True ->
+              case reorder_constructor_arguments(arguments, param_names) {
+                Ok(reordered) -> strip_external_labels(reordered)
+                Error(_) -> arguments
+              }
+          }
+      }
+  }
 
   internal.ExpressionReturn(
     reversed_arguments_result.context,
@@ -1821,10 +1842,7 @@ fn transform_fn_capture(
     ),
     python.Lambda(
       [python.Variable("fn_capture")],
-      python.Call(
-        function_result.expression,
-        reversed_arguments_result.item |> list.reverse,
-      ),
+      python.Call(function_result.expression, arguments),
     ),
   )
 }
