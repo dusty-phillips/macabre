@@ -11,6 +11,7 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/set
 import gleam/string
 
 // macabre only compiles for the python target. A top-level definition with a
@@ -249,6 +250,7 @@ pub fn transform_with_comments(
     "",
     "",
     "",
+    set.new(),
   )
 }
 
@@ -262,6 +264,7 @@ pub fn transform_module_with_metadata(
   module_name: String,
   file_path: String,
   module_source: String,
+  submodule_names: set.Set(String),
 ) -> python.Module {
   // Private top-level values colliding with submodule import bindings are
   // renamed first, so the emitted `def` does not clobber the parent package
@@ -287,7 +290,7 @@ pub fn transform_module_with_metadata(
         ]
       }
     })
-  let module_bindings = compute_module_bindings(input)
+  let module_bindings = compute_module_bindings(input, submodule_names)
   let #(leading_comments, comments_by_start, trailing_comments) =
     comments.assign_leading_comments(top_level_spans(input), module_comments)
   let module =
@@ -398,20 +401,29 @@ fn definition_spans(
 // Names bound at module level by imports (the module binding, e.g. `token`
 // for `import glexer/token`). If a top-level function or constant in this
 // module has the same name, the import binding is renamed so the emitted
-// `def` does not override the import.
-fn compute_module_bindings(input: glance.Module) -> dict.Dict(String, String) {
+// `def` does not override the import. The same renaming applies when the
+// binding collides with a sibling submodule of this package (e.g. importing
+// `gleam/string` binds `string`, which must not shadow a `pkg/string`
+// submodule).
+fn compute_module_bindings(
+  input: glance.Module,
+  submodule_names: set.Set(String),
+) -> dict.Dict(String, String) {
   let defined =
     list.append(
-      list.map(input.functions, fn(function) {
-        case function {
-          glance.Definition(_, definition) -> definition.name
-        }
-      }),
-      list.map(input.constants, fn(constant) {
-        case constant {
-          glance.Definition(_, definition) -> definition.name
-        }
-      }),
+      list.append(
+        list.map(input.functions, fn(function) {
+          case function {
+            glance.Definition(_, definition) -> definition.name
+          }
+        }),
+        list.map(input.constants, fn(constant) {
+          case constant {
+            glance.Definition(_, definition) -> definition.name
+          }
+        }),
+      ),
+      set.to_list(submodule_names),
     )
   list.fold(input.imports, dict.new(), fn(bindings, import_) {
     case import_ {

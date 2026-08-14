@@ -2,6 +2,7 @@ import compiler
 import glance
 import gleam/dict
 import gleam/option
+import gleam/set
 
 pub fn qualified_import_no_namespace_test() {
   let assert Ok(module) = "import my_cool_lib" |> glance.module
@@ -378,6 +379,58 @@ def main():
 
 import glexer.token
 from glexer import token
+
+
+"
+}
+
+// An import binding that collides with a sibling submodule of the same
+// package must be renamed, so that importing the submodule later (e.g. a
+// test importing `bitty.string`) does not clobber the `from gleam import
+// string` binding in this module.
+pub fn module_binding_colliding_with_submodule_test() {
+  let assert Ok(module) =
+    "import gleam/string
+
+  fn main() -> String {
+    string.inspect(\"x\")
+  }"
+    |> glance.module
+  let submodules = set.from_list(["string", "bytes"])
+  assert compiler.compile_module_with_submodules(module, submodules)
+    == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return string_module.inspect(\"x\")
+
+
+import gleam.string
+from gleam import string as string_module
+
+
+"
+}
+
+pub fn module_binding_not_colliding_with_submodule_test() {
+  let assert Ok(module) =
+    "import gleam/string
+
+  fn main() -> String {
+    string.inspect(\"x\")
+  }"
+    |> glance.module
+  let submodules = set.from_list(["bits", "bytes"])
+  assert compiler.compile_module_with_submodules(module, submodules)
+    == "from __future__ import annotations
+from gleam_builtins import *
+
+def main():
+    return string.inspect(\"x\")
+
+
+import gleam.string
+from gleam import string
 
 
 "

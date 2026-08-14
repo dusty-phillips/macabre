@@ -92,6 +92,25 @@ pub fn compile_module_with_comments(
     "",
     "",
     "",
+    set.new(),
+  )
+}
+
+pub fn compile_module_with_submodules(
+  glance_module: glance.Module,
+  submodule_names: set.Set(String),
+) -> String {
+  compile_module_with_metadata(
+    glance_module,
+    dict.new(),
+    module_arities(glance_module),
+    [],
+    [],
+    [],
+    "",
+    "",
+    "",
+    submodule_names,
   )
 }
 
@@ -105,6 +124,7 @@ pub fn compile_module_with_metadata(
   module_name: String,
   file_path: String,
   module_source: String,
+  submodule_names: set.Set(String),
 ) -> String {
   glance_module
   |> transformer.transform_module_with_metadata(
@@ -116,6 +136,7 @@ pub fn compile_module_with_metadata(
     module_name,
     file_path,
     module_source,
+    submodule_names,
   )
   |> generator.generate
 }
@@ -176,6 +197,7 @@ pub fn compile_package(
           module_name,
           file_path,
           module_source,
+          sibling_submodule_names(package.package.modules, module_name),
         )
       }),
     external_import_files: package.external_import_files,
@@ -186,6 +208,30 @@ pub fn compile_package(
       |> dict.keys
       |> set.from_list,
   )
+}
+
+// The first path segment of every submodule of this module (e.g. for `bitty`,
+// the `bits`, `bytes`, `num`, `string` of `bitty/bits`, `bitty/bytes`, ...).
+// Importing `bitty.string` sets the `string` attribute on the `bitty` package,
+// so an import binding named `string` in `bitty.gleam` must be renamed to
+// avoid being clobbered (e.g. `from gleam import string`).
+fn sibling_submodule_names(
+  modules: dict.Dict(String, glimpse.Module),
+  module_name: String,
+) -> set.Set(String) {
+  let prefix = module_name <> "/"
+  modules
+  |> dict.keys
+  |> list.filter(fn(name) {
+    string.starts_with(name, prefix)
+  })
+  |> list.filter_map(fn(name) {
+    name
+    |> string.remove_prefix(prefix)
+    |> string.split("/")
+    |> list.first
+  })
+  |> set.from_list
 }
 
 // Maps constructor names to their field names, in declaration order. Keys
