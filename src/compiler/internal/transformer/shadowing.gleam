@@ -1173,7 +1173,9 @@ fn active_renames_for(
   dict.merge(
     dict.merge(
       dict.filter(renames, fn(name, _) {
-        set.contains(scope, name) && !set.contains(cross_keys, name)
+        let in_cross_scope = set.contains(cross_scope, name)
+        let active_cross = set.contains(cross_keys, name) && in_cross_scope
+        set.contains(scope, name) && !active_cross
       }),
       cross_renames,
     ),
@@ -1278,6 +1280,13 @@ fn resolve_match_cases(
     cases
     |> list.map(case_binds)
     |> list.flatten
+  let all_guard_binds =
+    cases
+    |> list.map(fn(match_case) {
+      let python.MatchCase(_, guard, _) = match_case
+      option.unwrap(option.map(guard, expression_binds), [])
+    })
+    |> list.flatten
   // `nested_resolve_case` renames the case bodies through the renames dicts
   // when it resolves them, so a reference's FINAL name is what matters for
   // collision detection: a capture renamed to a fresh name here must not
@@ -1307,7 +1316,24 @@ fn resolve_match_cases(
   let collisions =
     all_binds
     |> list.filter(fn(name) {
-      list.any(final_refs, fn(referenced) { referenced == name })
+      // A body bind's collision is detected against the raw reference name:
+      // the block-level shadowing pass has already renamed body binds that
+      // collide with an enclosing scope's references, so a final-name match
+      // here would double-rename them. A guard bind (e.g. the walrus in a
+      // string-concatenation pattern) is renamed through the guard renames,
+      // whose effective names can differ from the raw name, so those compare
+      // their final name against the final references.
+      let matches_raw = list.any(final_refs, fn(referenced) {
+        referenced == name
+      })
+      case list.contains(all_guard_binds, name) {
+        False -> matches_raw
+        True ->
+          matches_raw
+          || list.any(final_refs, fn(referenced) {
+            referenced == effective_rename(name)
+          })
+      }
     })
     |> list.unique
   let #(new_cross, pool) =
