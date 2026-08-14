@@ -107,19 +107,33 @@ fn load_glimpse_package(
       filepath.join(project.build_src_dir(project), module_name <> ".gleam")
     filesystem.read(path)
   }
+  // A package's entry module is normally named after the project itself, but
+  // some libraries keep their root module under a different path (e.g.
+  // `gleam_community/colour` for the `gleam_community_colour` project). When
+  // the entry module is absent, start from an empty package and let the
+  // project's test and dev modules pull in whatever src modules they import.
+  let main_path =
+    filepath.join(
+      project.build_src_dir(project),
+      project.name <> ".gleam",
+    )
   use main_package <- result.try(
-    glimpse.load_package(project.name, loader)
-    |> result.map_error(fn(error) {
-      case error {
-        glimpse_error.LoadError(error) -> error
-        glimpse_error.ParseError(glance_error, name, content) ->
-          errors.GlanceParseError(glance_error, name, content)
-        glimpse_error.ImportError(import_error) ->
-          errors.GlimpseImportError(import_error)
-        glimpse_error.TypeCheckError(type_check_error) ->
-          errors.GlimpseTypeCheckError(type_check_error)
-      }
-    }),
+    case filesystem.read(main_path) {
+      Ok(_) ->
+        glimpse.load_package(project.name, loader)
+        |> result.map_error(fn(error) {
+          case error {
+            glimpse_error.LoadError(error) -> error
+            glimpse_error.ParseError(glance_error, name, content) ->
+              errors.GlanceParseError(glance_error, name, content)
+            glimpse_error.ImportError(import_error) ->
+              errors.GlimpseImportError(import_error)
+            glimpse_error.TypeCheckError(type_check_error) ->
+              errors.GlimpseTypeCheckError(type_check_error)
+          }
+        })
+      Error(_) -> Ok(glimpse.Package(project.name, dict.new(), []))
+    },
   )
   // The project's own test and dev modules are compiled alongside its src:
   // each is an extra entry point whose transitive imports resolve against the

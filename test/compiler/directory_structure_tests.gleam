@@ -144,6 +144,36 @@ pub fn package_compile_test_with_nested_folders_test() {
   assert build_foo_listing == ["bar.py", "bindings.py"]
 }
 
+pub fn project_without_root_module_test() {
+  // Some libraries keep their root module under a different path than the
+  // project name (e.g. `gleam_community/colour` for the
+  // `gleam_community_colour` project). The package must still load: the entry
+  // module is absent, so the project's test modules pull in the src modules
+  // they import.
+  use project_files <- init_folders()
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.src_dir, "nested_sample.gleam"),
+      contents: "pub fn main() {}",
+    )
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"nested_sample_extra\"",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+  let assert Ok(_) = project.copy_project_srcs(gleam_project)
+
+  // The project name does not match any module, but the package still loads
+  // (empty main package) and compiles to the entry module named after the
+  // project.
+  let assert Ok(gleam_package) = package.load(gleam_project)
+  let compiled_package = compiler.compile_package(gleam_package)
+  assert compiled_package.modules |> dict.size == 0
+  assert compiled_package.has_main == False
+}
+
 pub fn git_dependency_parsing_test() {
   use project_files <- init_folders()
   let assert Ok(_) =
