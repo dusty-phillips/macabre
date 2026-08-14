@@ -197,6 +197,41 @@ filepath = \">= 1.0.0 and < 2.0.0\"",
     == Ok(project.HexPackage(version: ">= 1.0.0 and < 2.0.0"))
 }
 
+pub fn dev_dependency_parsing_test() {
+  use project_files <- init_folders()
+  let assert Ok(_) =
+    simplifile.write(
+      to: filepath.join(project_files.base_dir, "gleam.toml"),
+      contents: "name = \"dev_dependency_parsing\"
+
+[dependencies]
+my_library = { git = \"https://example.com/me/my_library\", ref = \"abc123\" }
+
+[dev-dependencies]
+gleeunit = { git = \"https://example.com/me/gleeunit\", ref = \"def456\" }",
+    )
+
+  let assert Ok(gleam_project) = project.load(project_files.base_dir)
+
+  // Dev dependencies are merged into the package set so the project's own
+  // test suite can run.
+  assert gleam_project.packages |> dict.size == 2
+  assert gleam_project.packages
+    |> dict.get("my_library")
+    == Ok(project.GitPackage(
+      git_url: "https://example.com/me/my_library",
+      git_ref: "abc123",
+      path: option.None,
+    ))
+  assert gleam_project.packages
+    |> dict.get("gleeunit")
+    == Ok(project.GitPackage(
+      git_url: "https://example.com/me/gleeunit",
+      git_ref: "def456",
+      path: option.None,
+    ))
+}
+
 pub fn macabre_toml_preferred_over_gleam_toml_test() {
   use project_files <- init_folders()
   let assert Ok(_) =

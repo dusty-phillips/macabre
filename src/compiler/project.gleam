@@ -55,7 +55,6 @@ pub fn load(base_directory: String) -> Result(Project, errors.Error) {
     parsed_toml,
     toml_path,
   ))
-
   Ok(Project(name, packages, base_directory))
 }
 
@@ -370,13 +369,13 @@ fn load_dependency_list(
     // tool. A macabre.toml project has no manifest, so read the dependencies
     // straight from the config file.
     "macabre.toml" ->
-      parse_gleam_dependencies(toml)
+      parse_gleam_dependencies_with_dev(toml, True)
       |> result.map_error(errors.TomlFieldError(toml_path, _))
     _ -> {
       let manifest_path = filepath.join(base_directory, "manifest.toml")
       case simplifile.read(manifest_path) {
         Error(_) ->
-          parse_gleam_dependencies(toml)
+          parse_gleam_dependencies_with_dev(toml, True)
           |> result.map_error(errors.TomlFieldError(toml_path, _))
         Ok(contents) -> parse_manifest(manifest_path, contents)
       }
@@ -437,7 +436,30 @@ fn parse_manifest_package(
 fn parse_gleam_dependencies(
   toml: dict.Dict(String, tom.Toml),
 ) -> Result(dict.Dict(String, Package), tom.GetError) {
-  case tom.get_table(toml, ["dependencies"]) {
+  parse_gleam_dependencies_with_dev(toml, False)
+}
+
+/// Parse the `dependencies` table, optionally also merging the
+/// `dev-dependencies` table. Dev dependencies are only used to run the
+/// project's own test suite, so they are never pulled in transitively from a
+/// dependency's config file.
+fn parse_gleam_dependencies_with_dev(
+  toml: dict.Dict(String, tom.Toml),
+  include_dev: Bool,
+) -> Result(dict.Dict(String, Package), tom.GetError) {
+  use dependencies <- result.try(parse_dependency_table(toml, "dependencies"))
+  use dev_dependencies <- result.try(parse_dependency_table(toml, "dev-dependencies"))
+  case include_dev {
+    True -> Ok(dict.merge(dependencies, dev_dependencies))
+    False -> Ok(dependencies)
+  }
+}
+
+fn parse_dependency_table(
+  toml: dict.Dict(String, tom.Toml),
+  key: String,
+) -> Result(dict.Dict(String, Package), tom.GetError) {
+  case tom.get_table(toml, [key]) {
     Ok(dependencies) -> {
       use state, key, _value <- dict.fold(dependencies, Ok(dict.new()))
       use state_dict <- result.try(state)
