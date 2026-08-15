@@ -1138,9 +1138,16 @@ fn resolve_nested_binds(
           bound,
           pool,
         )
+      // The subject is evaluated in program order at this statement's position,
+      // so it references the bindings in scope now (the parameters/earlier
+      // binds). A rename for a name this block binds LATER (e.g. `let times =
+      // times / 2` after a `case times` subject) must not apply here: only
+      // names already bound (`bound`) use their rename.
+      let subject_renames =
+        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
       #(
         python.Match(
-          subject: rename_expression(subject, renames, scope),
+          subject: rename_expression(subject, subject_renames, scope),
           cases: renamed_cases,
         ),
         pool,
@@ -1158,9 +1165,13 @@ fn resolve_nested_binds(
           bound,
           pool,
         )
+      // The condition runs in program order before the loop body's binds; only
+      // names bound by earlier statements use their rename here.
+      let condition_renames =
+        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
       #(
         python.While(
-          condition: rename_expression(condition, renames, scope),
+          condition: rename_expression(condition, condition_renames, scope),
           body: body,
         ),
         pool,
@@ -1178,9 +1189,13 @@ fn resolve_nested_binds(
           bound,
           pool,
         )
+      // The condition runs in program order before the branch's binds; only
+      // names bound by earlier statements use their rename here.
+      let condition_renames =
+        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
       #(
         python.If(
-          condition: rename_expression(condition, renames, scope),
+          condition: rename_expression(condition, condition_renames, scope),
           body: body,
         ),
         pool,
@@ -1537,59 +1552,38 @@ fn rename_statement(
   bound: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(python.Statement, dict.Dict(String, Int)) {
+  // At this statement's position in program order, only names bound by earlier
+  // statements of the block use their rename. A rename for a name this block
+  // binds LATER (e.g. `let times = times / 2` after a `case times % 2`
+  // subject) must not apply to expressions evaluated now: they reference the
+  // value bound before this statement (a parameter or an earlier `let`).
+  let current_renames =
+    dict.filter(renames, fn(name, _) { set.contains(bound, name) })
   case statement {
     python.Expression(expression) -> #(
-      python.Expression(rename_expression(expression, renames, in_scope)),
+      python.Expression(rename_expression(expression, current_renames, in_scope)),
       pool,
     )
     python.Return(expression) -> #(
-      python.Return(rename_expression(expression, renames, in_scope)),
+      python.Return(rename_expression(expression, current_renames, in_scope)),
       pool,
     )
-    // Binding targets are handled by `rename_binding_targets` after this
-    // call, which knows whether the name is already bound in this program
-    // order walk (a rebind needing a fresh name) or not; renaming the target
-    // here would hide the original name from that check. A reference to the
-    // target name inside its own right hand side points at the value bound
-    // before this statement: a name already bound by an earlier statement in
-    // this block uses that earlier binding's rename (e.g. a chain of `let out
-    // = out <> ...` where the RHS refers to the previous `out`), while a
-    // first bind or a parameter reference keeps the original name.
+    // The right-hand side is evaluated before this statement binds its target,
+    // so a reference to the target name points at the value bound before it (a
+    // parameter, or a name an earlier statement bound). Names bound by earlier
+    // statements use their rename (`current_renames`); the target's own fresh
+    // name only applies from the statement after this one.
     python.SimpleAssignment(name, value) -> #(
       python.SimpleAssignment(
         name,
-        rename_expression(
-          value,
-          case dict.get(renames, name) {
-            Ok(_) ->
-              case set.contains(bound, name) {
-                True -> renames
-                False -> dict.delete(renames, name)
-              }
-            Error(_) -> dict.delete(renames, name)
-          },
-          in_scope,
-        ),
+        rename_expression(value, current_renames, in_scope),
       ),
       pool,
     )
     python.MultipleAssignment(names, value) -> #(
       python.MultipleAssignment(
         names,
-        rename_expression(
-          value,
-          list.fold(names, renames, fn(acc, name) {
-            case dict.get(renames, name) {
-              Ok(_) ->
-                case set.contains(bound, name) {
-                  True -> acc
-                  False -> dict.delete(acc, name)
-                }
-              Error(_) -> dict.delete(acc, name)
-            }
-          }),
-          in_scope,
-        ),
+        rename_expression(value, current_renames, in_scope),
       ),
       pool,
     )
@@ -1600,7 +1594,10 @@ fn rename_statement(
     // been given its fresh name.
     python.FunctionDef(_) -> #(statement, pool)
     python.Match(subject, cases) -> #(
-      python.Match(rename_expression(subject, renames, in_scope), cases),
+      python.Match(
+        rename_expression(subject, current_renames, in_scope),
+        cases,
+      ),
       pool,
     )
     python.While(condition, body) -> {
@@ -1613,7 +1610,7 @@ fn rename_statement(
         })
       #(
         python.While(
-          rename_expression(condition, renames, in_scope),
+          rename_expression(condition, current_renames, in_scope),
           list.reverse(body),
         ),
         pool,
@@ -1629,7 +1626,7 @@ fn rename_statement(
         })
       #(
         python.If(
-          rename_expression(condition, renames, in_scope),
+          rename_expression(condition, current_renames, in_scope),
           list.reverse(body),
         ),
         pool,

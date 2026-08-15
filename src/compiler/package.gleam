@@ -128,7 +128,7 @@ fn load_glimpse_package(
           glimpse_error.ImportError(import_error) ->
             errors.GlimpseImportError(import_error)
           glimpse_error.TypeCheckError(type_check_error) ->
-            errors.GlimpseTypeCheckError(type_check_error)
+            errors.GlimpseTypeCheckError("", type_check_error)
         }
       })
     Error(_) -> Ok(glimpse.Package(project.name, dict.new(), []))
@@ -199,7 +199,9 @@ fn typecheck_package(package: glimpse.Package) -> Result(glimpse.Package, errors
         )
         use #(new_module, env) <- result.try(
           typecheck.module(glimpse_module, envs, target)
-          |> result.map_error(errors.GlimpseTypeCheckError),
+          |> result.map_error(fn(error) {
+            errors.GlimpseTypeCheckError(module_name, error)
+          }),
         )
         let modules = dict.insert(package.modules, module_name, new_module)
         Ok(#(

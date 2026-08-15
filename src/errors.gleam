@@ -20,7 +20,7 @@ pub type Error {
   TomlFieldError(path: String, error: tom.GetError)
   TomlParseError(path: String, error: tom.ParseError)
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
-  GlimpseTypeCheckError(error: glimpse_error.TypeCheckError)
+  GlimpseTypeCheckError(module: String, error: glimpse_error.TypeCheckError)
 }
 
 pub fn format_error(error: Error) -> String {
@@ -56,7 +56,8 @@ pub fn format_error(error: Error) -> String {
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
     GlimpseImportError(error) -> format_glimpse_import_error(error)
-    GlimpseTypeCheckError(error) -> "Type check failed: " <> string.inspect(error)
+    GlimpseTypeCheckError(module, error) ->
+      "Type check failed in " <> module <> ": " <> string.inspect(error)
   }
 }
 

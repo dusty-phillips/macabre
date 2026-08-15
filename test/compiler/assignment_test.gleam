@@ -158,3 +158,48 @@ def do_fold(fun, initial, dict):
 __all__ = [\"fold\"]
 "
 }
+
+pub fn case_subject_before_rebind_test() {
+  let assert Ok(module) =
+    "pub fn repeat_loop(times: Int, doubling_acc: String, acc: String) -> String {
+    let acc = case times % 2 {
+      0 -> acc
+      _ -> acc <> doubling_acc
+    }
+    let times = times / 2
+    case times <= 0 {
+      True -> acc
+      False -> repeat_loop(times, doubling_acc <> doubling_acc, acc)
+    }
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def repeat_loop(times, doubling_acc, acc):
+    while True:
+        def _fn_case_0(_case_subject):
+            match _case_subject:
+                case 0:
+                    return acc
+                case _:
+                    return acc + doubling_acc
+        acc_0 = _fn_case_0(gleam_int_rem(times, 2))
+        times_0 = gleam_int_div(times, 2)
+        def _fn_case_1(_case_subject):
+            match _case_subject:
+                case True:
+                    return acc_0
+                case False:
+                    return GleamTco((times_0, doubling_acc + doubling_acc, acc_0,))
+        _result = _fn_case_1(times_0 <= 0)
+        match isinstance(_result, GleamTco):
+            case True:
+                times, doubling_acc, acc = _result.args
+            case False:
+                return _result
+
+
+__all__ = [\"repeat_loop\"]
+"
+}
