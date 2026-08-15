@@ -56,7 +56,7 @@ pub fn format_error(error: Error) -> String {
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
     GlimpseImportError(error) -> format_glimpse_import_error(error)
-    GlimpseTypeCheckError(error) -> "Type check failed"
+    GlimpseTypeCheckError(error) -> "Type check failed: " <> string.inspect(error)
   }
 }
 

@@ -19,6 +19,9 @@ import gleam/set
 import gleam/string
 import glimpse
 import glimpse/error as glimpse_error
+import glimpse/internal/typecheck/types.{type Environment}
+import glimpse/target
+import glimpse/typecheck
 import simplifile
 
 pub type GleamPackage {
@@ -157,6 +160,111 @@ fn load_glimpse_package(
       Error(error) -> Error(error)
     }
   })
+  |> result.try(typecheck_package)
+}
+
+// Typechecks every module in the package for the python target using glimpse's
+// typechecker, catching type errors, name errors, and exhaustiveness problems
+// that macabre's transpiler would otherwise silently compile into runtime
+// failures. Returns the typechecked package, whose modules carry the inferred
+// types.
+//
+// glimpse's `typecheck.package` only checks the modules reachable from the
+// single entry point named after the project, but macabre compiles every
+// loaded module (the root module may live under a different path, and test and
+// dev modules are additional entry points). So the full module set is sorted
+// topologically and each module is checked individually.
+fn typecheck_package(package: glimpse.Package) -> Result(glimpse.Package, errors.Error) {
+  // An empty package (no root module named after the project and nothing
+  // importing any other module) has nothing to check.
+  case dict.is_empty(package.modules) {
+    True -> Ok(package)
+    False -> {
+      let graph =
+        dict.map_values(package.modules, fn(_, module) { module.dependencies })
+      use sorted <- result.try(
+        topo_sort(graph)
+        |> result.map_error(errors.GlimpseImportError),
+      )
+      let target = target.Named("python")
+      list.fold(sorted, Ok(#(package, dict.new())), fn(state, module_name) {
+        use #(package, envs) <- result.try(state)
+        use glimpse_module <- result.try(
+          dict.get(package.modules, module_name)
+          |> result.replace_error(
+            errors.GlimpseImportError(
+              glimpse_error.MissingImportError(module_name),
+            ),
+          ),
+        )
+        use #(new_module, env) <- result.try(
+          typecheck.module(glimpse_module, envs, target)
+          |> result.map_error(errors.GlimpseTypeCheckError),
+        )
+        let modules = dict.insert(package.modules, module_name, new_module)
+        Ok(#(
+          glimpse.Package(..package, modules: modules),
+          dict.insert(envs, module_name, env),
+        ))
+      })
+      |> result.map(fn(state) { state.0 })
+    }
+  }
+}
+
+// Topologically sorts every module in the import graph (not just those
+// reachable from a single entry point) from leaves to roots: a module is only
+// processed after all of its dependencies. Returns the module names in that
+// order, or a circular-dependency error.
+fn topo_sort(
+  graph: dict.Dict(String, List(String)),
+) -> Result(List(String), glimpse_error.GlimpseImportError) {
+  let all_modules = dict.keys(graph)
+  let module_set = set.from_list(all_modules)
+  topo_sort_recurse(graph, module_set, [])
+  |> result.map(list.reverse)
+}
+
+fn topo_sort_recurse(
+  graph: dict.Dict(String, List(String)),
+  remaining: set.Set(String),
+  result: List(String),
+) -> Result(List(String), glimpse_error.GlimpseImportError) {
+  case set.is_empty(remaining) {
+    True -> Ok(result)
+    False -> {
+      // A module is ready when none of its remaining dependencies are
+      // unprocessed. A dependency that is not itself a module in the package
+      // (e.g. an unavailable dev-only library) is treated as already
+      // satisfied.
+      let ready =
+        set.filter(remaining, fn(module_name) {
+          case dict.get(graph, module_name) {
+            Ok(dependencies) ->
+              list.all(dependencies, fn(dep) {
+                !set.contains(remaining, dep)
+              })
+            Error(_) -> True
+          }
+        })
+      case set.is_empty(ready) {
+        True -> Error(glimpse_error.CircularDependencyError(""))
+        False -> {
+          let next =
+            ready
+            |> set.to_list
+            |> list.first
+            |> result.unwrap("")
+          let remaining = set.delete(remaining, next)
+          topo_sort_recurse(
+            graph,
+            remaining,
+            list.prepend(result, next),
+          )
+        }
+      }
+    }
+  }
 }
 
 fn load_module_recursively(

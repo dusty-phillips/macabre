@@ -108,3 +108,53 @@ def main():
 __all__ = [\"main\"]
 "
 }
+
+pub fn rebind_reference_before_binding_test() {
+  let assert Ok(module) =
+    "pub fn sequences(from initial: List(Int)) -> List(Int) {
+    let growing = [0, ..initial]
+    let growing = [1, ..growing]
+    growing
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def sequences(initial):
+    growing = to_gleam_list([0], initial)
+    growing_0 = to_gleam_list([1], growing)
+    return growing_0
+
+
+__all__ = [\"sequences\"]
+"
+}
+
+pub fn closure_captures_original_parameter_test() {
+  let assert Ok(module) =
+    "pub fn fold(over dict: List(Int), from initial: Int, with fun: fn(Int, Int, Int) -> Int) -> Int {
+    let fun = fn(key: Int, value: Int, acc: Int) -> Int { fun(acc, key, value) }
+    do_fold(fun, initial, dict)
+  }
+
+  fn do_fold(fun: fn(Int, Int, Int) -> Int, initial: Int, dict: List(Int)) -> Int {
+    initial
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def fold(dict, initial, fun):
+    def _fn_def_0(key, value, acc):
+        return fun(acc, key, value)
+    fun_0 = _fn_def_0
+    return do_fold(fun_0, initial, dict)
+
+
+def do_fold(fun, initial, dict):
+    return initial
+
+
+__all__ = [\"fold\"]
+"
+}

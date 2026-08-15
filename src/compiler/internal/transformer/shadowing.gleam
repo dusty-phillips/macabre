@@ -61,9 +61,16 @@ pub fn resolve_block_shadowing(
       let #(scope, refs, binds) = acc
       // Deep refs: a reference to an enclosing scope's name inside a match
       // case body or nested function still resolves to the (unbound) local
-      // in Python, so it must count as a collision.
-      let more_refs = deep_statement_refs(statement, scope)
-      let more_binds = all_nested_binds(statement)
+      // in Python, so it must count as a collision. Only top-level binds of
+      // this block are considered: binds inside case bodies and nested
+      // functions are resolved by their own shadowing passes (the case
+      // machinery, closure resolution), so a name the case arm rebinds must
+      // not trigger a rename of the enclosing scope's binding here. A name
+      // already bound by an earlier top-level statement is a legitimate
+      // capture: references to it from a later closure do not collide.
+      let binds_so_far = set.difference(scope, initial_scope)
+      let more_refs = deep_statement_refs(statement, scope, binds_so_far)
+      let more_binds = top_level_binds(statement)
       #(
         set.union(scope, set.from_list(top_level_binds(statement))),
         list.append(refs, more_refs),
@@ -130,7 +137,7 @@ pub fn resolve_block_shadowing(
               )
             let #(renamed, pool) =
               statement
-              |> rename_statement(active_renames, set.new(), pool)
+              |> rename_statement(active_renames, set.new(), bound, pool)
             let #(renamed, renames, own_cross, pool) =
               rename_binding_targets(renamed, renames, own_cross, bound, pool)
             let #(renamed, pool) =
@@ -628,7 +635,8 @@ fn body_refs_in_order(
   let #(_, refs) =
     list.fold(statements, #(initial_scope, []), fn(acc, statement) {
       let #(scope, out) = acc
-      let more_refs = deep_statement_refs(statement, scope)
+      let more_refs =
+        deep_statement_refs(statement, scope, set.difference(scope, initial_scope))
       let next_scope =
         set.union(scope, set.from_list(top_level_binds(statement)))
       #(next_scope, list.append(out, more_refs))
@@ -931,6 +939,7 @@ fn statement_refs(
 fn deep_statement_refs(
   statement: python.Statement,
   in_scope: set.Set(String),
+  binds_so_far: set.Set(String),
 ) -> List(String) {
   case statement {
     python.Expression(expression) | python.Return(expression) ->
@@ -940,8 +949,16 @@ fn deep_statement_refs(
     python.FunctionDef(function) ->
       // Track binds in program order so a reference to a name the nested
       // function binds itself is not mistaken for a reference to the
-      // enclosing scope.
-      body_refs_in_order(function.body, function_scope(function, in_scope))
+      // enclosing scope. Only the function's own name and parameters are in
+      // scope here: a reference to an enclosing-scope name (e.g. a parameter
+      // of the enclosing function captured by the closure) must still be
+      // reported, because a later rebind of that name in the enclosing block
+      // would break the closure's capture (Python closures capture by name).
+      // A name already bound by an earlier top-level statement is a
+      // legitimate capture (the closure was defined after the bind), so it is
+      // not reported.
+      body_refs_in_order(function.body, function_own_scope(function))
+      |> list.filter(fn(name) { !set.contains(binds_so_far, name) })
     python.Match(subject, cases) ->
       list.append(
         expression_refs(subject, in_scope),
@@ -962,6 +979,12 @@ fn function_scope(
   function: python.Function,
   in_scope: set.Set(String),
 ) -> set.Set(String) {
+  function_own_scope(function)
+  |> set.union(in_scope)
+}
+
+// The names a function binds itself: its own name and its parameters.
+fn function_own_scope(function: python.Function) -> set.Set(String) {
   let parameter_names =
     list.map(function.parameters, fn(parameter) {
       case parameter {
@@ -971,7 +994,6 @@ fn function_scope(
     })
     |> list.flatten
   set.from_list([function.name, ..parameter_names])
-  |> set.union(in_scope)
 }
 
 // Binds anywhere in a statement tree, including inside nested function
@@ -1074,10 +1096,20 @@ fn resolve_nested_binds(
           dict.filter(own_cross, fn(name, _) { set.contains(cross_scope, name) }),
         )
         |> dict.filter(fn(name, _) { !set.contains(function_binds, name) })
+      // A closure captures the enclosing scope's bindings that are in scope at
+      // its definition point. A rename for a name the enclosing block binds
+      // LATER than this closure (e.g. `let fun = fn() { fun }` rebinding a
+      // parameter the closure body references) must not apply here: the
+      // closure's reference points at the earlier binding (the parameter), so
+      // it keeps the original name; only references after the binding use the
+      // fresh name. Names already bound by earlier statements of the enclosing
+      // block (`bound`) are captured and use their rename.
+      let block_renames =
+        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
       let #(body, pool) =
         nested_resolve_fold(
           renamed_function.body,
-          renames,
+          block_renames,
           effective,
           own_cross,
           set.union(
@@ -1227,7 +1259,7 @@ fn nested_resolve_fold(
           )
         let #(renamed, pool) =
           statement
-          |> rename_statement(active_renames, set.new(), pool)
+          |> rename_statement(active_renames, set.new(), bound, pool)
         let #(renamed, renames, own_cross, pool) =
           rename_binding_targets(renamed, renames, own_cross, bound, pool)
         let #(renamed, pool) =
@@ -1502,6 +1534,7 @@ fn rename_statement(
   statement: python.Statement,
   renames: dict.Dict(String, String),
   in_scope: set.Set(String),
+  bound: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(python.Statement, dict.Dict(String, Int)) {
   case statement {
@@ -1516,15 +1549,47 @@ fn rename_statement(
     // Binding targets are handled by `rename_binding_targets` after this
     // call, which knows whether the name is already bound in this program
     // order walk (a rebind needing a fresh name) or not; renaming the target
-    // here would hide the original name from that check.
+    // here would hide the original name from that check. A reference to the
+    // target name inside its own right hand side points at the value bound
+    // before this statement: a name already bound by an earlier statement in
+    // this block uses that earlier binding's rename (e.g. a chain of `let out
+    // = out <> ...` where the RHS refers to the previous `out`), while a
+    // first bind or a parameter reference keeps the original name.
     python.SimpleAssignment(name, value) -> #(
-      python.SimpleAssignment(name, rename_expression(value, renames, in_scope)),
+      python.SimpleAssignment(
+        name,
+        rename_expression(
+          value,
+          case dict.get(renames, name) {
+            Ok(_) ->
+              case set.contains(bound, name) {
+                True -> renames
+                False -> dict.delete(renames, name)
+              }
+            Error(_) -> dict.delete(renames, name)
+          },
+          in_scope,
+        ),
+      ),
       pool,
     )
     python.MultipleAssignment(names, value) -> #(
       python.MultipleAssignment(
         names,
-        rename_expression(value, renames, in_scope),
+        rename_expression(
+          value,
+          list.fold(names, renames, fn(acc, name) {
+            case dict.get(renames, name) {
+              Ok(_) ->
+                case set.contains(bound, name) {
+                  True -> acc
+                  False -> dict.delete(acc, name)
+                }
+              Error(_) -> dict.delete(acc, name)
+            }
+          }),
+          in_scope,
+        ),
       ),
       pool,
     )
@@ -1543,7 +1608,7 @@ fn rename_statement(
         list.fold(body, #([], pool), fn(acc, statement) {
           let #(out, pool) = acc
           let #(renamed, pool) =
-            rename_statement(statement, renames, in_scope, pool)
+            rename_statement(statement, renames, in_scope, set.new(), pool)
           #([renamed, ..out], pool)
         })
       #(
@@ -1559,7 +1624,7 @@ fn rename_statement(
         list.fold(body, #([], pool), fn(acc, statement) {
           let #(out, pool) = acc
           let #(renamed, pool) =
-            rename_statement(statement, renames, in_scope, pool)
+            rename_statement(statement, renames, in_scope, set.new(), pool)
           #([renamed, ..out], pool)
         })
       #(
