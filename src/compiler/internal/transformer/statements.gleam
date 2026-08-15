@@ -2206,6 +2206,27 @@ fn transform_pipe(
   right: glance.Expression,
 ) -> internal.ExpressionReturn {
   let left_result = transform_expression(context, left)
+  let right_is_call = case right {
+    glance.Call(_, _, _) -> True
+    _ -> False
+  }
+  // Whether the piped value should be applied to the result of the call
+  // rather than prepended as its first positional argument. Gleam's
+  // (deprecated) pipe-into-result form: `a |> f(b)` where `f(b)` already has
+  // every parameter filled becomes `f(b)(a)`. Decided by comparing the number
+  // of supplied arguments against the callee's parameter count.
+  let piped_into_complete_call = case right {
+    glance.Call(_, function, arguments) ->
+      case is_locally_bound(context, function) {
+        True -> False
+        False ->
+          case function_parameter_names(context, function) {
+            option.Some(params) -> list.length(arguments) >= list.length(params)
+            option.None -> False
+          }
+      }
+    _ -> False
+  }
   let piped_into_call = case right {
     glance.Call(location, function, arguments) ->
       case is_external_callee(context, function) {
@@ -2252,14 +2273,24 @@ fn transform_pipe(
     option.None -> transform_expression(left_result.context, right)
   }
   internal.merge_return(left_result, right_result, fn(left_ex, right_ex) {
-    case right_ex, piped_into_call {
-      python.Call(function, arguments), option.None ->
+    case right_ex, piped_into_call, right_is_call, piped_into_complete_call {
+      // A plain call (no labels to reorder) receives the piped value as its
+      // first positional argument, unless the call is already complete, in
+      // which case the piped value is applied to its result (see
+      // `piped_into_complete_call`).
+      python.Call(function, arguments), option.None, True, False ->
         python.Call(
           function,
           list.prepend(arguments, python.UnlabelledField(left_ex)),
         )
-      python.Call(_, _), option.Some(_) -> right_ex
-      _, _ -> python.Call(right_ex, [python.UnlabelledField(left_ex)])
+      // A call that already had the piped value prepended during its own
+      // transformation (labels/externals) is emitted as-is.
+      python.Call(_, _), option.Some(_), _, _ -> right_ex
+      // Anything else (e.g. a `case` expression, which compiles to a call of
+      // its generated match function on the subject) is an expression whose
+      // RESULT receives the piped value: `input |> case x { .. }` desugars to
+      // `(case x { .. })(input)`.
+      _, _, _, _ -> python.Call(right_ex, [python.UnlabelledField(left_ex)])
     }
   })
 }

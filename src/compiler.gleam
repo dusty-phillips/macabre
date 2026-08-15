@@ -222,9 +222,7 @@ fn sibling_submodule_names(
   let prefix = module_name <> "/"
   modules
   |> dict.keys
-  |> list.filter(fn(name) {
-    string.starts_with(name, prefix)
-  })
+  |> list.filter(fn(name) { string.starts_with(name, prefix) })
   |> list.filter_map(fn(name) {
     name
     |> string.remove_prefix(prefix)

@@ -1,5 +1,7 @@
 import compiler
 import glance
+import gleam/dict
+import gleam/option
 
 pub fn string_expression_test() {
   let assert Ok(module) =
@@ -578,6 +580,99 @@ from gleam_builtins import *
 
 def main():
     return (lambda fn_capture: println(\"a\", fn_capture, \"b\"))(\"foo\")"
+}
+
+pub fn pipe_into_case_test() {
+  let assert Ok(module) =
+    "fn add(a: Int, b: Int) -> Int {
+    a + b
+  }
+
+  fn main() {
+    5 |> case 3 {
+      3 -> add(_, 10)
+      _ -> add(_, 0)
+    }
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def add(a, b):
+    return a + b
+
+
+def main():
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 3:
+                return (lambda fn_capture: add(fn_capture, 10))
+            case _:
+                return (lambda fn_capture: add(fn_capture, 0))
+    return _fn_case_0(3)(5)"
+}
+
+pub fn pipe_into_complete_call_test() {
+  let assert Ok(module) =
+    "pub fn tag(prefix: String) -> fn(Int) -> String {
+    fn(x: Int) -> String { prefix }
+  }
+
+  fn main() {
+    42 |> tag(\"answer\")
+  }"
+    |> glance.module
+  let signatures = dict.from_list([#("tag", [#(option.None, "prefix")])])
+  assert compiler.compile_module_with_signatures(module, signatures)
+    == "from __future__ import annotations
+from gleam_builtins import *
+
+def tag(prefix):
+    def _fn_def_0(x):
+        return prefix
+    return _fn_def_0
+
+
+def main():
+    return tag(\"answer\")(42)
+
+
+__all__ = [\"tag\"]
+"
+}
+
+pub fn pipe_into_incomplete_call_test() {
+  let assert Ok(module) =
+    "pub fn three(a: Int, b: Int, c: Int) -> Int {
+    a + b + c
+  }
+
+  fn main() {
+    42 |> three(1, 2)
+  }"
+    |> glance.module
+  let signatures =
+    dict.from_list([
+      #("three", [
+        #(option.None, "a"),
+        #(option.None, "b"),
+        #(option.None, "c"),
+      ]),
+    ])
+  assert compiler.compile_module_with_signatures(module, signatures)
+    == "from __future__ import annotations
+from gleam_builtins import *
+
+def three(a, b, c):
+    return a + b + c
+
+
+def main():
+    return three(42, 1, 2)
+
+
+__all__ = [\"three\"]
+"
 }
 
 pub fn simple_call_expression_test() {

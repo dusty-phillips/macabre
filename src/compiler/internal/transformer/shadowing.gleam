@@ -1323,9 +1323,8 @@ fn resolve_match_cases(
       // string-concatenation pattern) is renamed through the guard renames,
       // whose effective names can differ from the raw name, so those compare
       // their final name against the final references.
-      let matches_raw = list.any(final_refs, fn(referenced) {
-        referenced == name
-      })
+      let matches_raw =
+        list.any(final_refs, fn(referenced) { referenced == name })
       case list.contains(all_guard_binds, name) {
         False -> matches_raw
         True ->

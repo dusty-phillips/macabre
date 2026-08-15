@@ -339,7 +339,8 @@ fn zero_pad_hex(hex: String) -> String {
 /// languages and pass through unchanged.
 pub fn python_number_literal(literal: String) -> String {
   let is_float =
-    string.contains(literal, ".") || string.contains(literal, "e")
+    string.contains(literal, ".")
+    || string.contains(literal, "e")
     || string.contains(literal, "E")
   case is_base_prefixed(literal) {
     True -> literal
@@ -364,7 +365,8 @@ fn is_base_prefixed(literal: String) -> Bool {
 /// decimal integer literal, keeping at least one digit. `04` -> `4`, `0_4` ->
 /// `4`, `0` -> `0`, `00` -> `0`, `1_000` -> `1_000`.
 fn strip_leading_zeroes(literal: String) -> String {
-  let zeroes = literal |> string.split("") |> list.drop_while(is_zero_or_underscore)
+  let zeroes =
+    literal |> string.split("") |> list.drop_while(is_zero_or_underscore)
   case zeroes {
     [] -> "0"
     _ -> string.join(zeroes, "")

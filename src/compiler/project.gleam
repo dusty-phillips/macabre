@@ -448,7 +448,10 @@ fn parse_gleam_dependencies_with_dev(
   include_dev: Bool,
 ) -> Result(dict.Dict(String, Package), tom.GetError) {
   use dependencies <- result.try(parse_dependency_table(toml, "dependencies"))
-  use dev_dependencies <- result.try(parse_dependency_table(toml, "dev-dependencies"))
+  use dev_dependencies <- result.try(parse_dependency_table(
+    toml,
+    "dev-dependencies",
+  ))
   case include_dev {
     True -> Ok(dict.merge(dependencies, dev_dependencies))
     False -> Ok(dependencies)
