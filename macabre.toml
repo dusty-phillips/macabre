@@ -17,6 +17,6 @@ macabre_splitter = { git = "git@github.com:dusty-phillips/macabre_splitter.git",
 macabre_gleeunit = { git = "git@github.com:dusty-phillips/macabre_gleeunit.git", ref = "main" }
 macabre_temporary = { git = "git@github.com:dusty-phillips/macabre_temporary.git", ref = "main" }
 glance = "7.0.0"
-glimpse = "0.9.0"
+glimpse = { git = "git@github.com:dusty-phillips/glimpse.git", ref = "main" }
 gleam_time = "1.8.0"
 gleam_yielder = "1.1.0"

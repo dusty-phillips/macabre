@@ -636,7 +636,11 @@ fn body_refs_in_order(
     list.fold(statements, #(initial_scope, []), fn(acc, statement) {
       let #(scope, out) = acc
       let more_refs =
-        deep_statement_refs(statement, scope, set.difference(scope, initial_scope))
+        deep_statement_refs(
+          statement,
+          scope,
+          set.difference(scope, initial_scope),
+        )
       let next_scope =
         set.union(scope, set.from_list(top_level_binds(statement)))
       #(next_scope, list.append(out, more_refs))
@@ -1360,6 +1364,27 @@ fn resolve_match_cases(
     |> set.union(set.from_list(dict.values(renames)))
     |> set.union(set.from_list(dict.values(cross_renames)))
     |> set.union(set.from_list(dict.values(own_cross)))
+    // Fresh names minted here become locals of the generated match function,
+    // so they must not collide with names bound by nested functions or nested
+    // matches inside the case bodies. A `use` callback that rebinds a name the
+    // case pattern binds already renamed that rebind to a fresh name in its own
+    // block-shadowing pass; if the pattern's cross rename minted the same fresh
+    // name, the callback's pre-binding RHS reference would resolve to the local
+    // instead of the pattern.
+    |> set.union(set.from_list(
+      cases
+      |> list.map(fn(match_case) {
+        list.flatten(list.map(match_case.body, all_nested_binds))
+      })
+      |> list.flatten,
+    ))
+    |> set.union(set.from_list(
+      cases
+      |> list.map(fn(match_case) {
+        list.flatten(list.map(match_case.body, all_case_binds))
+      })
+      |> list.flatten,
+    ))
   let collisions =
     all_binds
     |> list.filter(fn(name) {
@@ -1594,10 +1619,7 @@ fn rename_statement(
     // been given its fresh name.
     python.FunctionDef(_) -> #(statement, pool)
     python.Match(subject, cases) -> #(
-      python.Match(
-        rename_expression(subject, current_renames, in_scope),
-        cases,
-      ),
+      python.Match(rename_expression(subject, current_renames, in_scope), cases),
       pool,
     )
     python.While(condition, body) -> {

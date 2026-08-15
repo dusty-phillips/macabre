@@ -198,7 +198,7 @@ fn typecheck_package(package: glimpse.Package) -> Result(glimpse.Package, errors
           ),
         )
         use #(new_module, env) <- result.try(
-          typecheck.module(glimpse_module, envs, target)
+          typecheck.module(glimpse_module, envs, target, True)
           |> result.map_error(fn(error) {
             errors.GlimpseTypeCheckError(module_name, error)
           }),

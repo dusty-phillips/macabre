@@ -203,3 +203,69 @@ def repeat_loop(times, doubling_acc, acc):
 __all__ = [\"repeat_loop\"]
 "
 }
+
+// A `use` callback that rebinds a name its enclosing case pattern bound gets
+// its own fresh name; the case pattern's cross rename must mint a different
+// fresh name so the callback's pre-binding RHS reference still resolves to the
+// pattern binding (not to the callback's own local).
+pub fn use_callback_rebind_of_case_pattern_binding_test() {
+  let assert Ok(module) =
+    "pub type MyResult(a, e) {
+    Ok(a)
+    Error(e)
+  }
+
+  fn result_try(value: MyResult(a, e)) -> MyResult(a, e) {
+    value
+  }
+
+  pub fn repro(input: MyResult(String, String)) -> MyResult(String, String) {
+    case input {
+      Error(error) -> Error(error)
+      Ok(environment) -> {
+        use first <- result_try(Ok(environment))
+        use second <- result_try(Ok(environment))
+        let environment = environment
+        Ok(environment)
+      }
+    }
+  }
+  "
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+A = typing.TypeVar('A')
+
+E = typing.TypeVar('E')
+@dataclasses.dataclass(frozen=True)
+class Ok:
+    _0: A
+
+@dataclasses.dataclass(frozen=True)
+class Error:
+    _0: E
+
+
+def result_try(value):
+    return value
+
+
+def repro(input):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case Error(error):
+                return Error(error)
+            case Ok(environment_1):
+                def _fn_def_0(first):
+                    def _fn_def_0(second):
+                        environment_0 = environment_1
+                        return Ok(environment_0)
+                    return result_try(Ok(environment_1), _fn_def_0)
+                return result_try(Ok(environment_1), _fn_def_0)
+    return _fn_case_0(input)
+
+
+__all__ = [\"repro\", \"Ok\", \"Error\"]
+"
+}
