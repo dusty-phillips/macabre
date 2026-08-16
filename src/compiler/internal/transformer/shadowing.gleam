@@ -3109,3 +3109,189 @@ fn expression_contains_gleam_tco(expression: python.Expression) -> Bool {
     python.Dict(_) -> False
   }
 }
+
+// Rewrites the list iteration loops left by `resolve_tail_calls` into a
+// `while isinstance(list, GleamList)` loop. Python's `match` dispatches a
+// two-case list (EmptyGleamList / GleamList) with two `isinstance` checks plus
+// `__match_args__` unpacking per element; a plain `isinstance` check and two
+// attribute reads are several times faster:
+//
+//     while True:
+//         match list:
+//             case EmptyGleamList():
+//                 return initial
+//             case GleamList(first, rest):
+//                 list, initial, fun = (rest, fun(initial, first), fun,)
+//
+// becomes
+//
+//     while isinstance(list, GleamList):
+//         first = list.value
+//         rest = list.tail
+//         list, initial, fun = (rest, fun(initial, first), fun,)
+//     return initial
+//
+// The match must have exactly two cases: a `GleamList(first, rest)` cons case
+// and a capture-free base case (EmptyGleamList or a wildcard) that ends the
+// loop with a value. Anything else (guards, alternate patterns, a base case
+// that binds names, or more than two cases) is left untouched.
+pub fn optimize_list_loops(
+  statements: List(python.Statement),
+) -> List(python.Statement) {
+  list.fold(statements, [], fn(acc, statement) {
+    case statement {
+      python.While(python.Bool("True"), [python.Match(subject, cases)]) ->
+        case list_loop_rewrite(subject, cases) {
+          option.Some(rewritten) ->
+            list.append(acc, optimize_list_loops(rewritten))
+          option.None ->
+            list.append(acc, [
+              python.While(
+                python.Bool("True"),
+                optimize_list_loops([
+                  python.Match(subject: subject, cases: cases),
+                ]),
+              ),
+            ])
+        }
+      python.While(condition, body) ->
+        list.append(acc, [
+          python.While(condition: condition, body: optimize_list_loops(body)),
+        ])
+      python.Match(subject, cases) ->
+        list.append(acc, [
+          python.Match(
+            subject: subject,
+            cases: list.map(cases, fn(match_case) {
+              let python.MatchCase(pattern, guard, body) = match_case
+              python.MatchCase(pattern, guard, optimize_list_loops(body))
+            }),
+          ),
+        ])
+      python.FunctionDef(function) ->
+        list.append(acc, [
+          python.FunctionDef(
+            python.Function(
+              ..function,
+              body: optimize_list_loops(function.body),
+            ),
+          ),
+        ])
+      python.If(condition, body) ->
+        list.append(acc, [
+          python.If(condition: condition, body: optimize_list_loops(body)),
+        ])
+      _ -> list.append(acc, [statement])
+    }
+  })
+}
+
+fn list_loop_rewrite(
+  subject: python.Expression,
+  cases: List(python.MatchCase),
+) -> option.Option(List(python.Statement)) {
+  case subject, cases {
+    python.Variable(subject_name), [case_a, case_b] ->
+      case list_cons_case(case_a), list_base_case(case_b) {
+        option.Some(#(first, rest)), option.Some(base_value) ->
+          option.Some(build_list_loop(
+            subject_name,
+            first,
+            rest,
+            case_a.body,
+            base_value,
+          ))
+        _, _ ->
+          case list_cons_case(case_b), list_base_case(case_a) {
+            option.Some(#(first, rest)), option.Some(base_value) ->
+              option.Some(build_list_loop(
+                subject_name,
+                first,
+                rest,
+                case_b.body,
+                base_value,
+              ))
+            _, _ -> option.None
+          }
+      }
+    _, _ -> option.None
+  }
+}
+
+// The recursive cons case: `case [first, ..rest]: <rebind>`.
+fn list_cons_case(
+  match_case: python.MatchCase,
+) -> option.Option(#(String, String)) {
+  case match_case {
+    python.MatchCase(
+      python.PatternList(
+        [python.PatternVariable(first)],
+        option.Some(python.PatternVariable(rest)),
+      ),
+      option.None,
+      _,
+    ) -> option.Some(#(first, rest))
+    _ -> option.None
+  }
+}
+
+// The base case: `case []: return value` (or `case _:`), binding no names, that
+// ends the loop.
+fn list_base_case(
+  match_case: python.MatchCase,
+) -> option.Option(python.Expression) {
+  case match_case {
+    python.MatchCase(pattern, option.None, [python.Return(value)]) ->
+      case pattern {
+        python.PatternList([], option.None) -> option.Some(value)
+        python.PatternWildcard -> option.Some(value)
+        _ -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+fn build_list_loop(
+  subject_name: String,
+  first: String,
+  rest: String,
+  cons_body: List(python.Statement),
+  base_value: python.Expression,
+) -> List(python.Statement) {
+  // Read both fields before a binding can clobber the subject: the pattern
+  // captures can share the subject's name (e.g. `append_loop(first, second)`
+  // matches `[first, ..rest]`), so the binding that shares the subject name
+  // must come last.
+  let bindings = case first == subject_name {
+    True -> [
+      python.SimpleAssignment(
+        rest,
+        python.FieldAccess(python.Variable(subject_name), "tail"),
+      ),
+      python.SimpleAssignment(
+        first,
+        python.FieldAccess(python.Variable(subject_name), "value"),
+      ),
+    ]
+    False -> [
+      python.SimpleAssignment(
+        first,
+        python.FieldAccess(python.Variable(subject_name), "value"),
+      ),
+      python.SimpleAssignment(
+        rest,
+        python.FieldAccess(python.Variable(subject_name), "tail"),
+      ),
+    ]
+  }
+  [
+    python.While(
+      python.Call(python.Variable("isinstance"), [
+        python.UnlabelledField(python.Variable(subject_name)),
+        python.UnlabelledField(python.Variable("GleamList")),
+      ]),
+      list.append(bindings, cons_body),
+    ),
+    python.Return(base_value),
+  ]
+}

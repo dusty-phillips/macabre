@@ -186,7 +186,8 @@ pub fn transform_top_level_function(
     parameters: parameters,
     body: body
       |> shadowing.resolve_tail_calls(function.name, parameters)
-      |> shadowing.inline_case_drivers,
+      |> shadowing.inline_case_drivers
+      |> shadowing.optimize_list_loops,
     public: public,
     docstring: option.None,
     comments: [],
