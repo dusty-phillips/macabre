@@ -3,11 +3,14 @@ import compiler/internal/generator/imports
 import compiler/internal/generator/statements
 import compiler/internal/generator/types
 import compiler/python
+import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/string_tree.{type StringTree}
 import python_prelude
 
 pub fn generate(module: python.Module) -> String {
+  let field_names = module_field_names(module)
   string_tree.new()
   |> string_tree.append(python_prelude.prelude)
   |> string_tree.append_tree(statements.generate_module_header(
@@ -23,7 +26,7 @@ pub fn generate(module: python.Module) -> String {
   ))
   |> string_tree.append_tree(internal.generate_plural(
     module.functions,
-    statements.generate_function,
+    fn(function) { statements.generate_function(function, field_names) },
     "\n\n\n",
   ))
   // Imports are emitted after classes and functions: module imports form
@@ -58,6 +61,37 @@ pub fn generate(module: python.Module) -> String {
   )
   |> string_tree.append_tree(generate_all(module))
   |> string_tree.to_string
+}
+
+// Maps each variant of the module's own custom types to the dataclass field
+// names generated for it, in positional order. Labelled fields keep their
+// (keyword-mangled) label; unlabelled fields become `_0`, `_1`, ... exactly
+// as `types.generate_custom_type` emits them. Constructor patterns on these
+// types can then extract fields with plain attribute access instead of the
+// slower positional `getattr(subject, subject.__match_args__[i])`.
+fn module_field_names(
+  module: python.Module,
+) -> dict.Dict(String, List(String)) {
+  list.fold(module.custom_types, dict.new(), fn(acc, custom_type) {
+    list.fold(custom_type.variants, acc, fn(acc, variant) {
+      let #(_, names) =
+        variant.fields
+        |> list.fold(#(0, []), fn(state, field) {
+          let #(index, acc) = state
+          case field {
+            python.UnlabelledField(_) -> #(
+              index + 1,
+              list.append(acc, ["_" <> int.to_string(index)]),
+            )
+            python.LabelledField(label, _) -> #(
+              index,
+              list.append(acc, [internal.python_name(label)]),
+            )
+          }
+        })
+      dict.insert(acc, variant.name, names)
+    })
+  })
 }
 
 // The public API of the module, for `from module import *`. Gleam's public

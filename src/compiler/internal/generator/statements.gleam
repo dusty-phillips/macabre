@@ -1,6 +1,7 @@
 import compiler/internal/generator as internal
 import compiler/internal/generator/expressions
 import compiler/python
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
@@ -8,7 +9,10 @@ import gleam/string
 import gleam/string_tree.{type StringTree}
 import glexer
 
-pub fn generate_function(function: python.Function) -> StringTree {
+pub fn generate_function(
+  function: python.Function,
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   string_tree.new()
   |> string_tree.append_tree(internal.generate_comments(function.comments))
   |> string_tree.append("def ")
@@ -21,21 +25,24 @@ pub fn generate_function(function: python.Function) -> StringTree {
   ))
   |> string_tree.append("):\n")
   |> string_tree.append_tree(
-    generate_function_body(function) |> internal.indent(4),
+    generate_function_body(function, field_names) |> internal.indent(4),
   )
 }
 
 // A docstring is emitted as the first statement of the body. A function whose
 // body is otherwise empty emits just the docstring, not `pass`.
-fn generate_function_body(function: python.Function) -> StringTree {
+fn generate_function_body(
+  function: python.Function,
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   case function.docstring, function.body {
     option.None, [] -> string_tree.from_string("pass")
     option.Some(_), [] -> internal.generate_docstring(function.docstring)
-    option.None, _ -> generate_block(function.body)
+    option.None, _ -> generate_block(function.body, field_names)
     option.Some(_), _ ->
       internal.generate_docstring(function.docstring)
       |> string_tree.append("\n")
-      |> string_tree.append_tree(generate_block(function.body))
+      |> string_tree.append_tree(generate_block(function.body, field_names))
   }
 }
 
@@ -70,15 +77,25 @@ fn generate_parameter(param: python.FunctionParameter) -> StringTree {
   }
 }
 
-pub fn generate_block(statements: List(python.Statement)) -> StringTree {
+pub fn generate_block(
+  statements: List(python.Statement),
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   case statements {
     [] -> string_tree.from_string("pass")
     multiple_lines ->
-      internal.generate_plural(multiple_lines, generate_statement, "\n")
+      internal.generate_plural(
+        multiple_lines,
+        fn(statement) { generate_statement(statement, field_names) },
+        "\n",
+      )
   }
 }
 
-pub fn generate_statement(statement: python.Statement) -> StringTree {
+pub fn generate_statement(
+  statement: python.Statement,
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   case statement {
     python.Expression(expression) -> expressions.generate_expression(expression)
     python.Return(expression) ->
@@ -110,14 +127,14 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
           |> string_tree.append_tree(expressions.generate_expression(subject))
           |> string_tree.append(":\n")
           |> string_tree.append_tree(
-            generate_block(true_body) |> internal.indent(4),
+            generate_block(true_body, field_names) |> internal.indent(4),
           )
           |> string_tree.append("\nelse:\n")
           |> string_tree.append_tree(
-            generate_block(false_body) |> internal.indent(4),
+            generate_block(false_body, field_names) |> internal.indent(4),
           )
         option.None ->
-          case constructor_dispatch(subject, cases) {
+          case constructor_dispatch(subject, cases, field_names) {
             option.Some(chain) -> chain
             option.None ->
               string_tree.new()
@@ -127,7 +144,7 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
               ))
               |> string_tree.append(":\n")
               |> string_tree.append_tree(
-                generate_cases(cases) |> internal.indent(4),
+                generate_cases(cases, field_names) |> internal.indent(4),
               )
           }
       }
@@ -136,14 +153,18 @@ pub fn generate_statement(statement: python.Statement) -> StringTree {
       |> string_tree.append("while ")
       |> string_tree.append_tree(expressions.generate_expression(condition))
       |> string_tree.append(":\n")
-      |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
+      |> string_tree.append_tree(
+        generate_block(body, field_names) |> internal.indent(4),
+      )
     python.If(condition, body) ->
       string_tree.new()
       |> string_tree.append("if ")
       |> string_tree.append_tree(expressions.generate_expression(condition))
       |> string_tree.append(":\n")
-      |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
-    python.FunctionDef(function) -> generate_function(function)
+      |> string_tree.append_tree(
+        generate_block(body, field_names) |> internal.indent(4),
+      )
+    python.FunctionDef(function) -> generate_function(function, field_names)
   }
 }
 
@@ -157,19 +178,32 @@ pub fn generate_constant(constant: python.Constant) -> StringTree {
   )
 }
 
-fn generate_cases(cases: List(python.MatchCase)) -> StringTree {
+fn generate_cases(
+  cases: List(python.MatchCase),
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   case cases {
     [] -> string_tree.from_string("pass")
-    cases -> internal.generate_plural(cases, generate_case, "\n")
+    cases ->
+      internal.generate_plural(
+        cases,
+        fn(case_) { generate_case(case_, field_names) },
+        "\n",
+      )
   }
 }
 
-fn generate_case(case_: python.MatchCase) -> StringTree {
+fn generate_case(
+  case_: python.MatchCase,
+  field_names: dict.Dict(String, List(String)),
+) -> StringTree {
   string_tree.from_string("case ")
   |> string_tree.append_tree(generate_pattern(case_.pattern))
   |> string_tree.append_tree(generate_case_guard(case_.guard))
   |> string_tree.append(":\n")
-  |> string_tree.append_tree(generate_block(case_.body) |> internal.indent(4))
+  |> string_tree.append_tree(
+    generate_block(case_.body, field_names) |> internal.indent(4),
+  )
 }
 
 fn generate_pattern(pattern: python.Pattern) -> StringTree {
@@ -365,13 +399,6 @@ fn pattern_is_false(pattern: python.Pattern) -> Bool {
   }
 }
 
-fn pattern_is_wildcard(pattern: python.Pattern) -> Bool {
-  case pattern {
-    python.PatternWildcard -> True
-    _ -> False
-  }
-}
-
 type ConstructorBranch {
   ConstructorBranch(
     // The runtime class the case matches, rendered with any module prefix.
@@ -384,22 +411,29 @@ type ConstructorBranch {
 
 // A match whose cases are all simple constructor patterns dispatches on the
 // runtime class with `type(x) is T` chains, which is several times faster
-// than a Python match statement. Fields are read positionally through
-// `__match_args__`, so the generator needs no knowledge of a constructor's
-// field names. Returns None (the caller falls back to `match`) if any case
-// is too complex: nested patterns, guards, alternates, or the True/False/
-// None literals. Only simple subjects are reused, since repeating a call
-// expression would evaluate it more than once.
+// than a Python match statement. Constructor fields are read positionally;
+// for the module's own types the field name is known at compile time and a
+// plain attribute read is emitted, otherwise the runtime `__match_args__`
+// tuple supplies the name. Returns None (the caller falls back to `match`)
+// if any case is too complex: nested patterns, guards, alternates, or the
+// True/False/None literals. Only simple subjects are reused, since repeating
+// a call expression would evaluate it more than once.
 fn constructor_dispatch(
   subject: python.Expression,
   cases: List(python.MatchCase),
+  field_names: dict.Dict(String, List(String)),
 ) -> option.Option(StringTree) {
   case subject {
     python.Variable(_) | python.FieldAccess(_, _) ->
-      case constructor_branches(subject, cases) {
+      case constructor_branches(subject, cases, field_names) {
         option.None -> option.None
         option.Some(#(branches, else_body)) ->
-          option.Some(generate_constructor_chain(subject, branches, else_body))
+          option.Some(generate_constructor_chain(
+            subject,
+            branches,
+            else_body,
+            field_names,
+          ))
       }
     _ -> option.None
   }
@@ -408,6 +442,7 @@ fn constructor_dispatch(
 fn constructor_branches(
   subject: python.Expression,
   cases: List(python.MatchCase),
+  field_names: dict.Dict(String, List(String)),
 ) -> option.Option(
   #(List(ConstructorBranch), option.Option(List(python.Statement))),
 ) {
@@ -439,6 +474,7 @@ fn constructor_branches(
                           name,
                           arguments,
                           body,
+                          field_names,
                         )
                       {
                         option.Some(branch) -> #(
@@ -472,6 +508,7 @@ fn constructor_branch(
   name: String,
   arguments: List(python.Field(python.Pattern)),
   body: List(python.Statement),
+  field_names: dict.Dict(String, List(String)),
 ) -> option.Option(ConstructorBranch) {
   // The True/False/None constructors are the Python literals, and the Nil
   // constructor is a literal when unqualified; those are not classes.
@@ -483,9 +520,24 @@ fn constructor_branch(
       case module {
         option.None -> option.None
         option.Some(_) ->
-          build_constructor_branch(subject, module, name, arguments, body)
+          build_constructor_branch(
+            subject,
+            module,
+            name,
+            arguments,
+            body,
+            field_names,
+          )
       }
-    _ -> build_constructor_branch(subject, module, name, arguments, body)
+    _ ->
+      build_constructor_branch(
+        subject,
+        module,
+        name,
+        arguments,
+        body,
+        field_names,
+      )
   }
 }
 
@@ -495,6 +547,7 @@ fn build_constructor_branch(
   name: String,
   arguments: List(python.Field(python.Pattern)),
   body: List(python.Statement),
+  field_names: dict.Dict(String, List(String)),
 ) -> option.Option(ConstructorBranch) {
   case list.all(arguments, argument_is_simple) {
     False -> option.None
@@ -511,7 +564,10 @@ fn build_constructor_branch(
           case argument {
             python.UnlabelledField(python.PatternVariable(bound)) ->
               list.append(acc, [
-                python.SimpleAssignment(bound, getattr_field(subject, index)),
+                python.SimpleAssignment(
+                  bound,
+                  constructor_field(subject, module, name, index, field_names),
+                ),
               ])
             _ -> acc
           }
@@ -519,6 +575,43 @@ fn build_constructor_branch(
       option.Some(ConstructorBranch(class, bindings, body))
     }
   }
+}
+
+// Reads the i-th constructor field of a matched value. An unqualified
+// reference to one of the module's own constructors has a known field name,
+// so a plain attribute read is emitted; otherwise the name comes from the
+// runtime `__match_args__` tuple.
+fn constructor_field(
+  subject: python.Expression,
+  module: option.Option(String),
+  constructor: String,
+  index: Int,
+  field_names: dict.Dict(String, List(String)),
+) -> python.Expression {
+  case module {
+    option.None ->
+      case dict.get(field_names, constructor) {
+        Ok(names) ->
+          case nth(names, index) {
+            Ok(name) -> python.FieldAccess(subject, name)
+            Error(_) -> getattr_field(subject, index)
+          }
+        Error(_) -> getattr_field(subject, index)
+      }
+    option.Some(_) -> getattr_field(subject, index)
+  }
+}
+
+// The i-th element of a list, or Error if the list is shorter. Constructor
+// field lists are tiny, so a linear scan is fine.
+fn nth(list: List(String), index: Int) -> Result(String, Nil) {
+  list
+  |> list.index_fold(Error(Nil), fn(acc, item, i) {
+    case i == index {
+      True -> Ok(item)
+      False -> acc
+    }
+  })
 }
 
 // Reads the i-th constructor field of a matched value positionally. The field
@@ -546,6 +639,7 @@ fn generate_constructor_chain(
   subject: python.Expression,
   branches: List(ConstructorBranch),
   else_body: option.Option(List(python.Statement)),
+  field_names: dict.Dict(String, List(String)),
 ) -> StringTree {
   let chain =
     branches
@@ -558,7 +652,7 @@ fn generate_constructor_chain(
       let body_tree =
         branch.bindings
         |> list.append(branch.body)
-        |> generate_block
+        |> generate_block(field_names)
         |> internal.indent(4)
       acc
       |> internal.append_if_not_empty("\n")
@@ -576,6 +670,8 @@ fn generate_constructor_chain(
       chain
       |> internal.append_if_not_empty("\n")
       |> string_tree.append("else:\n")
-      |> string_tree.append_tree(generate_block(body) |> internal.indent(4))
+      |> string_tree.append_tree(
+        generate_block(body, field_names) |> internal.indent(4),
+      )
   }
 }

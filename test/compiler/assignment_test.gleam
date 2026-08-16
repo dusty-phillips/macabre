@@ -255,10 +255,10 @@ def result_try(value):
 
 def repro(input):
     if type(input) is Error:
-        error = getattr(input, input.__match_args__[0])
+        error = input._0
         return Error(error)
     elif type(input) is Ok:
-        environment_1 = getattr(input, input.__match_args__[0])
+        environment_1 = input._0
         def _fn_def_0(first):
             def _fn_def_0(second):
                 environment_0 = environment_1
