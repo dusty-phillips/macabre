@@ -108,16 +108,25 @@ pub fn generate_statement(
       |> string_tree.append_tree(expressions.generate_expression(value))
     }
     python.MultipleAssignment(names, value) -> {
-      string_tree.new()
-      |> string_tree.append_tree(
-        names
-        |> list.map(fn(name) {
-          name |> internal.python_name |> string_tree.from_string
-        })
-        |> string_tree.join(", "),
-      )
-      |> string_tree.append(" = ")
-      |> string_tree.append_tree(expressions.generate_expression(value))
+      case sequential_assignments(names, value) {
+        option.Some(assignments) ->
+          assignments
+          |> list.map(fn(assignment) {
+            generate_statement(assignment, field_names)
+          })
+          |> string_tree.join("\n")
+        option.None ->
+          string_tree.new()
+          |> string_tree.append_tree(
+            names
+            |> list.map(fn(name) {
+              name |> internal.python_name |> string_tree.from_string
+            })
+            |> string_tree.join(", "),
+          )
+          |> string_tree.append(" = ")
+          |> string_tree.append_tree(expressions.generate_expression(value))
+      }
     }
     python.Match(subject, cases) ->
       case bool_if_else(cases) {
@@ -673,5 +682,121 @@ fn generate_constructor_chain(
       |> string_tree.append_tree(
         generate_block(body, field_names) |> internal.indent(4),
       )
+  }
+}
+
+// A multiple assignment whose right-hand side is a tuple can be emitted as a
+// sequence of single assignments, avoiding a per-iteration tuple allocation
+// in the tail-recursive loop rebinds (`list, initial, fun = (rest, ...)`)
+// that every list fold compiles to. Simultaneous semantics are preserved as
+// long as each right-hand element reads only names that are not assigned
+// earlier in the sequence: those still hold their old values.
+fn sequential_assignments(
+  names: List(String),
+  value: python.Expression,
+) -> option.Option(List(python.Statement)) {
+  case value {
+    python.Tuple(elements) ->
+      case list.length(names) == list.length(elements) {
+        False -> option.None
+        True ->
+          case
+            list.index_fold(elements, True, fn(acc, element, index) {
+              case acc {
+                False -> False
+                True -> {
+                  let earlier = list.take(names, index)
+                  let referenced = expression_refs(element)
+                  list.all(earlier, fn(name) {
+                    !list.contains(referenced, name)
+                  })
+                }
+              }
+            })
+          {
+            False -> option.None
+            True ->
+              case
+                list.zip(names, elements)
+                |> list.map(fn(pair) { python.SimpleAssignment(pair.0, pair.1) })
+                |> list.filter(fn(assignment) {
+                  case assignment {
+                    python.SimpleAssignment(name, python.Variable(other)) ->
+                      name != other
+                    _ -> True
+                  }
+                })
+              {
+                // Every element was a no-op self-assignment (e.g. a driver
+                // loop's `toml, = (toml,)`); emitting nothing would leave an
+                // empty case body, so keep the tuple form instead.
+                [] -> option.None
+                assignments -> option.Some(assignments)
+              }
+          }
+      }
+    _ -> option.None
+  }
+}
+
+// The variable names an expression reads, used to decide whether a multiple
+// assignment can be split into sequential single assignments. A lambda's
+// body is not read when the lambda is created, so it contributes nothing.
+fn expression_refs(expression: python.Expression) -> List(String) {
+  case expression {
+    python.String(_) | python.Number(_) | python.Bool(_) | python.Nil -> []
+    python.Variable(name) -> [name]
+    python.ModuleRef(_) -> []
+    python.Tuple(elements) -> list.flat_map(elements, expression_refs)
+    python.Negate(inner) -> expression_refs(inner)
+    python.Not(inner) -> expression_refs(inner)
+    python.Panic(inner) -> expression_refs(inner)
+    python.Todo(inner) -> expression_refs(inner)
+    python.Lambda(_, _) -> []
+    python.List(elements) -> list.flat_map(elements, expression_refs)
+    python.ListWithRest(elements, rest) ->
+      list.flat_map(elements, expression_refs)
+      |> list.append(expression_refs(rest))
+    python.TupleIndex(tuple, _) -> expression_refs(tuple)
+    python.FieldAccess(container, _) -> expression_refs(container)
+    python.Call(function, arguments) ->
+      expression_refs(function)
+      |> list.append(list.flat_map(arguments, field_refs))
+    python.RecordUpdate(record, fields) ->
+      expression_refs(record)
+      |> list.append(list.flat_map(fields, field_refs))
+    python.BinaryOperator(_, left, right) ->
+      list.append(expression_refs(left), expression_refs(right))
+    python.Slice(container, start, end) ->
+      list.append(
+        expression_refs(container),
+        list.append(
+          expression_refs(start),
+          end |> option.map(expression_refs) |> option.unwrap([]),
+        ),
+      )
+    python.AssignmentExpression(_, value) -> expression_refs(value)
+    python.IsNotNone(inner) -> expression_refs(inner)
+    python.BitString(segments) ->
+      list.flat_map(segments, fn(segment) {
+        list.append(
+          expression_refs(segment.value),
+          list.flat_map(segment.options, fn(option) {
+            case option {
+              python.SizeValueOption(size) -> expression_refs(size)
+              _ -> []
+            }
+          }),
+        )
+      })
+    python.Dict(pairs) ->
+      list.flat_map(pairs, fn(pair) { expression_refs(pair.1) })
+  }
+}
+
+fn field_refs(field: python.Field(python.Expression)) -> List(String) {
+  case field {
+    python.UnlabelledField(expression) -> expression_refs(expression)
+    python.LabelledField(_, expression) -> expression_refs(expression)
   }
 }

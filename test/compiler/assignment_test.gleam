@@ -50,7 +50,8 @@ pub fn tuple_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    a, b = (\"one\", \"two\",)
+    a = \"one\"
+    b = \"two\"
 
 
 __all__ = [\"main\"]

@@ -139,9 +139,10 @@ def count_if(list, predicate, acc):
         first = list.value
         rest_0 = list.tail
         if predicate(first):
-            list, predicate, acc = (rest_0, predicate, acc + 1,)
+            list = rest_0
+            acc = acc + 1
         else:
-            list, predicate, acc = (rest_0, predicate, acc,)
+            list = rest_0
     return acc
 
 
@@ -184,7 +185,8 @@ def filter_loop(list, predicate, acc):
             new_acc = GleamList(first_0, acc)
         else:
             new_acc = acc
-        list, predicate, acc = (rest, predicate, new_acc,)
+        list = rest
+        acc = new_acc
     return list.reverse(acc)
 
 
