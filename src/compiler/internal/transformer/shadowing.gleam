@@ -1837,42 +1837,52 @@ pub fn resolve_tail_calls(
         _ -> option.None
       }
       case driver_expression {
-        option.Some(driver_call) -> {
-          let loop_body =
-            case list.reverse(rewritten) {
-              [python.Return(_), ..rest] -> list.reverse(rest)
-              _ -> rewritten
+        option.Some(driver_call) ->
+          // Inline the driver's match directly into the loop when the tail
+          // call is a simple `driver(subject)`: the loop body becomes the
+          // driver's own `match subject:`, a `return GleamTco((...))` case
+          // becomes a direct parameter rebinding, and a value return ends the
+          // loop. This avoids the per-iteration closure call, `GleamTco`
+          // allocation, and `isinstance` dispatch.
+          case inline_driver(driver_call, rewritten, parameters) {
+            option.Some(inlined) -> inlined
+            option.None -> {
+              let loop_body =
+                case list.reverse(rewritten) {
+                  [python.Return(_), ..rest] -> list.reverse(rest)
+                  _ -> rewritten
+                }
+                |> list.append([
+                  python.SimpleAssignment("_result", driver_call),
+                  python.Match(
+                    subject: python.Call(python.Variable("isinstance"), [
+                      python.UnlabelledField(python.Variable("_result")),
+                      python.UnlabelledField(python.Variable("GleamTco")),
+                    ]),
+                    cases: [
+                      python.MatchCase(
+                        python.PatternConstructor(option.None, "True", []),
+                        option.None,
+                        unpack_result(parameters),
+                      ),
+                      python.MatchCase(
+                        python.PatternConstructor(option.None, "False", []),
+                        option.None,
+                        [python.Return(python.Variable("_result"))],
+                      ),
+                    ],
+                  ),
+                ])
+              let #(drivers, body) =
+                list.partition(loop_body, fn(statement) {
+                  case statement {
+                    python.FunctionDef(_) -> True
+                    _ -> False
+                  }
+                })
+              list.append(drivers, [python.While(python.Bool("True"), body)])
             }
-            |> list.append([
-              python.SimpleAssignment("_result", driver_call),
-              python.Match(
-                subject: python.Call(python.Variable("isinstance"), [
-                  python.UnlabelledField(python.Variable("_result")),
-                  python.UnlabelledField(python.Variable("GleamTco")),
-                ]),
-                cases: [
-                  python.MatchCase(
-                    python.PatternConstructor(option.None, "True", []),
-                    option.None,
-                    unpack_result(parameters),
-                  ),
-                  python.MatchCase(
-                    python.PatternConstructor(option.None, "False", []),
-                    option.None,
-                    [python.Return(python.Variable("_result"))],
-                  ),
-                ],
-              ),
-            ])
-          let #(drivers, body) =
-            list.partition(loop_body, fn(statement) {
-              case statement {
-                python.FunctionDef(_) -> True
-                _ -> False
-              }
-            })
-          list.append(drivers, [python.While(python.Bool("True"), body)])
-        }
+          }
         option.None -> rewritten
       }
     }
@@ -1890,6 +1900,606 @@ fn parameter_names(parameters: List(python.FunctionParameter)) -> List(String) {
         }
     }
   })
+}
+
+// Where a driver's result flows when its call is inlined. `Return` means the
+// driver is called in tail position: a `return GleamTco((args))` case loops by
+// rebinding the function's parameters and a value return ends the loop.
+// `Assign(target)` means the driver's value is stored in `target` (e.g. a
+// nested `case` whose result feeds a later tail call). `Other` marks a call
+// site that cannot be inlined, so the driver is left as a closure.
+type DriverPosition {
+  DriverPositionReturn
+  DriverPositionAssign(target: String)
+  DriverPositionOther
+}
+
+// Inlines a `driver(subject)` tail call into a `while True` loop whose body is
+// the driver's own `match`. The driver is a `_fn_case_N` closure whose body is
+// a single `match` on the subject; a recursive case returns
+// `GleamTco((new_args))` (rewritten by `rewrite_expression_tail`) and a value
+// case returns the final value. Case bodies that recurse through their own
+// nested `_fn_case_N` driver (e.g. `list.try_fold`, which tail-recurses inside
+// an inner `case` on the fold function's result) are flattened too: the nested
+// driver is inlined into the case body, so a `GleamTco` return there becomes a
+// direct parameter rebinding. Returns `None` when the driver is not of this
+// shape (e.g. the loop body has other statements the driver captures, its match
+// body is missing, or a case does something other than `return GleamTco(...)`,
+// `return value`, or a nested driver call), in which case the caller falls back
+// to the `GleamTco`/`isinstance` protocol.
+fn inline_driver(
+  driver_call: python.Expression,
+  rewritten: List(python.Statement),
+  parameters: List(python.FunctionParameter),
+) -> option.Option(List(python.Statement)) {
+  case driver_call {
+    python.Call(python.Variable(name), [python.UnlabelledField(subject)]) ->
+      case rewritten {
+        // The whole loop body is just the driver definition and its tail call.
+        // If anything else is present (helper definitions, per-iteration
+        // computations the driver captures via closure), inlining is not
+        // valid, so fall back to the `GleamTco` protocol.
+        [python.FunctionDef(function), python.Return(_)]
+          if function.name == name
+        -> inline_driver_function(function, subject, parameters)
+        _ -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+fn inline_driver_function(
+  function: python.Function,
+  subject: python.Expression,
+  parameters: List(python.FunctionParameter),
+) -> option.Option(List(python.Statement)) {
+  case function.body {
+    [python.Match(match_subject, cases)] ->
+      case inline_driver_cases(cases, parameters, DriverPositionReturn) {
+        option.Some(inlined_cases) ->
+          option.Some([
+            python.While(
+              python.Bool("True"),
+              inline_match_statements(match_subject, subject, inlined_cases),
+            ),
+          ])
+        option.None -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+// Builds the `match` that replaces an inlined driver's definition and call.
+// The driver's match is on its own parameter (e.g. `_case_subject`), which case
+// guards reference. When nothing references the subject, match on the subject
+// expression directly; otherwise bind the subject to the parameter name first
+// so guards still see it.
+fn inline_match_statements(
+  match_subject: python.Expression,
+  subject: python.Expression,
+  inlined_cases: List(python.MatchCase),
+) -> List(python.Statement) {
+  case match_subject {
+    python.Variable(subject_name) ->
+      case subject_referenced(inlined_cases, subject_name) {
+        True -> [
+          python.SimpleAssignment(subject_name, subject),
+          python.Match(subject: match_subject, cases: inlined_cases),
+        ]
+        False -> [python.Match(subject: subject, cases: inlined_cases)]
+      }
+    _ -> [python.Match(subject: subject, cases: inlined_cases)]
+  }
+}
+
+// Whether any case guard or body references the driver's subject parameter
+// (e.g. a `case _ if subject.startswith(...)` guard). Only then must the
+// subject be bound to that name in the inlined loop.
+fn subject_referenced(cases: List(python.MatchCase), name: String) -> Bool {
+  list.any(cases, fn(match_case) {
+    let python.MatchCase(_, guard, body) = match_case
+    let guard_references = case guard {
+      option.Some(expression) -> expression_references(expression, name)
+      option.None -> False
+    }
+    guard_references
+    || list.any(body, fn(statement) { statement_references(statement, name) })
+  })
+}
+
+fn statement_references(statement: python.Statement, name: String) -> Bool {
+  case statement {
+    python.Expression(expression) -> expression_references(expression, name)
+    python.Return(expression) -> expression_references(expression, name)
+    python.SimpleAssignment(_, value) -> expression_references(value, name)
+    python.MultipleAssignment(_, value) -> expression_references(value, name)
+    python.Match(subject, cases) ->
+      expression_references(subject, name)
+      || list.any(cases, fn(match_case) {
+        let python.MatchCase(_, guard, body) = match_case
+        let guard_references = case guard {
+          option.Some(expression) -> expression_references(expression, name)
+          option.None -> False
+        }
+        guard_references
+        || list.any(body, fn(s) { statement_references(s, name) })
+      })
+    python.While(_, body) ->
+      list.any(body, fn(s) { statement_references(s, name) })
+    python.If(_, body) ->
+      list.any(body, fn(s) { statement_references(s, name) })
+    python.FunctionDef(_) -> False
+  }
+}
+
+fn expression_references(expression: python.Expression, name: String) -> Bool {
+  case expression {
+    python.Variable(value) -> value == name
+    python.String(_) -> False
+    python.Number(_) -> False
+    python.Bool(_) -> False
+    python.Nil -> False
+    python.ModuleRef(_) -> False
+    python.Tuple(elements) ->
+      list.any(elements, fn(e) { expression_references(e, name) })
+    python.Negate(e) -> expression_references(e, name)
+    python.Not(e) -> expression_references(e, name)
+    python.Panic(e) -> expression_references(e, name)
+    python.Todo(e) -> expression_references(e, name)
+    python.Lambda(_, body) -> expression_references(body, name)
+    python.List(elements) ->
+      list.any(elements, fn(e) { expression_references(e, name) })
+    python.ListWithRest(elements, rest) ->
+      list.any(elements, fn(e) { expression_references(e, name) })
+      || expression_references(rest, name)
+    python.TupleIndex(tuple, _) -> expression_references(tuple, name)
+    python.FieldAccess(container, _) -> expression_references(container, name)
+    python.Call(function, arguments) ->
+      expression_references(function, name)
+      || list.any(arguments, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_references(item, name)
+          python.LabelledField(_, item) -> expression_references(item, name)
+        }
+      })
+    python.RecordUpdate(record, fields) ->
+      expression_references(record, name)
+      || list.any(fields, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_references(item, name)
+          python.LabelledField(_, item) -> expression_references(item, name)
+        }
+      })
+    python.BinaryOperator(_, left, right) ->
+      expression_references(left, name) || expression_references(right, name)
+    python.Slice(container, start, end) ->
+      expression_references(container, name)
+      || expression_references(start, name)
+      || {
+        case end {
+          option.Some(e) -> expression_references(e, name)
+          option.None -> False
+        }
+      }
+    python.AssignmentExpression(_, value) -> expression_references(value, name)
+    python.IsNotNone(e) -> expression_references(e, name)
+    python.BitString(_) -> False
+    python.Dict(_) -> False
+  }
+}
+
+// Rewrites each case of the driver's match into loop-body form. Every case
+// body goes through `inline_case_body` with the given position, so a
+// `return GleamTco((args))` tail becomes a parameter rebinding, a value return
+// ends the loop, and a case body that recurses through its own nested driver
+// is flattened recursively. Any case that cannot be inlined makes the whole
+// driver non-inlinable.
+fn inline_driver_cases(
+  cases: List(python.MatchCase),
+  parameters: List(python.FunctionParameter),
+  position: DriverPosition,
+) -> option.Option(List(python.MatchCase)) {
+  list.fold(cases, option.Some([]), fn(acc, match_case) {
+    case acc {
+      option.None -> option.None
+      option.Some(inlined) ->
+        case inline_case_body(match_case.body, parameters, position) {
+          option.Some(new_body) ->
+            option.Some(
+              list.append(inlined, [
+                python.MatchCase(match_case.pattern, match_case.guard, new_body),
+              ]),
+            )
+          option.None -> option.None
+        }
+    }
+  })
+}
+
+// Transforms a driver case body into its inlined equivalent: single-use nested
+// `_fn_case_N` drivers are inlined first, then the body's tail decides how the
+// result flows (rebind parameters, return a value, or assign to `target`).
+fn inline_case_body(
+  body: List(python.Statement),
+  parameters: List(python.FunctionParameter),
+  position: DriverPosition,
+) -> option.Option(List(python.Statement)) {
+  case inline_nested_drivers(body, parameters) {
+    option.Some(inlined) ->
+      // A `use`-desugar helper (`result.try`, `result.map`, `bool.guard`) invokes
+      // the callback passed to it and returns its value unchanged, so a GleamTco
+      // marker produced by a tail call inside the callback flows straight back
+      // to the driver. The inlined loop has no `isinstance` dispatch to unpack
+      // it, so such a body must keep the driver protocol.
+      case passes_callback_to_known_callee(inlined) {
+        True -> option.None
+        False -> inline_tail(inlined, parameters, position)
+      }
+    option.None -> option.None
+  }
+}
+
+// Whether a case body's tail hands a locally-defined function to one of the
+// `use`-desugar helpers. If that callback tail-recurses it returns a `GleamTco`
+// marker the helper passes through, which only the driver's `isinstance`
+// dispatch can unpack.
+fn passes_callback_to_known_callee(statements: List(python.Statement)) -> Bool {
+  list.any(statements, fn(statement) {
+    case statement {
+      python.Return(expression) -> passes_local_callback(expression, statements)
+      _ -> False
+    }
+  })
+}
+
+fn passes_local_callback(
+  expression: python.Expression,
+  statements: List(python.Statement),
+) -> Bool {
+  case expression {
+    python.Call(callee, arguments) ->
+      known_driver_callee(callee)
+      && list.any(arguments, fn(field) {
+        case field {
+          python.UnlabelledField(python.Variable(arg_name)) ->
+            is_local_function(arg_name, statements)
+          python.LabelledField(_, python.Variable(arg_name)) ->
+            is_local_function(arg_name, statements)
+          _ -> False
+        }
+      })
+    _ -> False
+  }
+}
+
+fn is_local_function(name: String, statements: List(python.Statement)) -> Bool {
+  list.any(statements, fn(statement) {
+    case statement {
+      python.FunctionDef(function) -> function.name == name
+      _ -> False
+    }
+  })
+}
+
+// Handles the trailing statement of an inlined case body. After nested drivers
+// are inlined the tail is either `return GleamTco((args))` (loop on), `return
+// value` (return on), or a `match` left by an inlined tail-position driver
+// whose own cases already loop or return.
+fn inline_tail(
+  body: List(python.Statement),
+  parameters: List(python.FunctionParameter),
+  position: DriverPosition,
+) -> option.Option(List(python.Statement)) {
+  case position {
+    DriverPositionReturn ->
+      case list.reverse(body) {
+        [
+          python.Return(python.Call(
+            python.Variable("GleamTco"),
+            [python.UnlabelledField(python.Tuple(fields))],
+          )),
+          ..preceding
+        ] ->
+          option.Some(list.append(
+            list.reverse(preceding),
+            rebind_parameters(parameters, fields),
+          ))
+        [python.Return(value), ..preceding] ->
+          option.Some(
+            list.append(list.reverse(preceding), [python.Return(value)]),
+          )
+        [python.Match(_, _), ..] -> option.Some(body)
+        _ -> option.None
+      }
+    DriverPositionAssign(target) ->
+      case list.reverse(body) {
+        [python.Return(value), ..preceding] ->
+          option.Some(
+            list.append(list.reverse(preceding), [
+              python.SimpleAssignment(target, value),
+            ]),
+          )
+        [python.Match(_, _), ..] -> option.Some(body)
+        _ -> option.None
+      }
+    DriverPositionOther -> option.None
+  }
+}
+
+// Repeatedly inlines single-use `_fn_case_N` drivers found in `statements`.
+// A driver is inlined when its body is a single `match` and it is invoked
+// exactly once, either in return position (its value flows out of the case) or
+// assigned to a variable (its value feeds a later statement, e.g. a tail call).
+fn inline_nested_drivers(
+  statements: List(python.Statement),
+  parameters: List(python.FunctionParameter),
+) -> option.Option(List(python.Statement)) {
+  case statements {
+    [] -> option.Some([])
+    [statement, ..rest] ->
+      case statement {
+        python.FunctionDef(function) ->
+          case
+            is_inlinable_driver(function),
+            find_driver_usage(statements, function.name)
+          {
+            True, option.Some(#(usage_position, subject)) ->
+              case
+                inline_driver_usage(
+                  function,
+                  subject,
+                  parameters,
+                  usage_position,
+                )
+              {
+                option.Some(inlined) ->
+                  inline_nested_drivers(
+                    replace_usage(statements, function.name, inlined),
+                    parameters,
+                  )
+                option.None -> option.None
+              }
+            _, _ ->
+              case inline_nested_drivers(rest, parameters) {
+                option.Some(new_rest) -> option.Some([statement, ..new_rest])
+                option.None -> option.None
+              }
+          }
+        _ ->
+          case inline_nested_drivers(rest, parameters) {
+            option.Some(new_rest) -> option.Some([statement, ..new_rest])
+            option.None -> option.None
+          }
+      }
+  }
+}
+
+// Inlines a single-use driver `function` (called with `subject`) into a `match`
+// statement, processing each of its cases with `usage_position`.
+fn inline_driver_usage(
+  function: python.Function,
+  subject: python.Expression,
+  parameters: List(python.FunctionParameter),
+  usage_position: DriverPosition,
+) -> option.Option(List(python.Statement)) {
+  case function.body {
+    [python.Match(match_subject, cases)] ->
+      case inline_driver_cases(cases, parameters, usage_position) {
+        option.Some(inlined_cases) ->
+          option.Some(inline_match_statements(
+            match_subject,
+            subject,
+            inlined_cases,
+          ))
+        option.None -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+// A case driver inlinable by `inline_nested_drivers`: a `_fn_case_N`-shaped
+// closure whose body is exactly one `match` (guards whose expressions are
+// hoisted as `_fn_block_N` statements would break the direct inline).
+fn is_inlinable_driver(function: python.Function) -> Bool {
+  case function.body {
+    [python.Match(_, _)] -> True
+    _ -> False
+  }
+}
+
+// Whether `name` is invoked exactly once in `statements` and from an
+// inlinable position (`return name(subject)` or `x = name(subject)`). Returns
+// `None` for multiple or non-inlinable uses so the driver is left alone.
+fn find_driver_usage(
+  statements: List(python.Statement),
+  name: String,
+) -> option.Option(#(DriverPosition, python.Expression)) {
+  case driver_usage_sites(statements, name) {
+    [#(position, subject)] ->
+      case position {
+        DriverPositionOther -> option.None
+        _ -> option.Some(#(position, subject))
+      }
+    _ -> option.None
+  }
+}
+
+// The driver call sites within `statements`. A `FunctionDef` itself is not a
+// use; a call in any position other than return/assignment is recorded as
+// `DriverPositionOther` so the driver is not inlined.
+fn driver_usage_sites(
+  statements: List(python.Statement),
+  name: String,
+) -> List(#(DriverPosition, python.Expression)) {
+  list.filter_map(statements, fn(statement) {
+    case statement {
+      python.SimpleAssignment(
+        target,
+        python.Call(python.Variable(callee), [python.UnlabelledField(subject)]),
+      )
+        if callee == name
+      -> Ok(#(DriverPositionAssign(target: target), subject))
+      python.Return(python.Call(
+        python.Variable(callee),
+        [python.UnlabelledField(subject)],
+      ))
+        if callee == name
+      -> Ok(#(DriverPositionReturn, subject))
+      python.FunctionDef(function) if function.name == name -> Error(Nil)
+      _ ->
+        case statement_invokes_driver(statement, name) {
+          True -> Ok(#(DriverPositionOther, python.Nil))
+          False -> Error(Nil)
+        }
+    }
+  })
+}
+
+// Removes the driver's definition and replaces its call site with `inlined`.
+fn replace_usage(
+  statements: List(python.Statement),
+  name: String,
+  inlined: List(python.Statement),
+) -> List(python.Statement) {
+  case statements {
+    [] -> []
+    [statement, ..rest] ->
+      case statement {
+        python.FunctionDef(function) if function.name == name ->
+          replace_usage(rest, name, inlined)
+        python.SimpleAssignment(
+          _,
+          python.Call(python.Variable(callee), [python.UnlabelledField(_)]),
+        )
+          if callee == name
+        -> list.append(inlined, rest)
+        python.Return(python.Call(
+          python.Variable(callee),
+          [python.UnlabelledField(_)],
+        ))
+          if callee == name
+        -> list.append(inlined, rest)
+        _ -> [statement, ..replace_usage(rest, name, inlined)]
+      }
+  }
+}
+
+// Whether any statement in a driver case body calls `name` in a position other
+// than a top-level `return name(...)` / `x = name(...)`. Such a use would break
+// the inline, so it makes the driver non-inlinable.
+fn statement_invokes_driver(statement: python.Statement, name: String) -> Bool {
+  case statement {
+    python.Expression(expression) -> expression_invokes_driver(expression, name)
+    python.Return(expression) -> expression_invokes_driver(expression, name)
+    python.FunctionDef(_) -> False
+    python.SimpleAssignment(_, value) -> expression_invokes_driver(value, name)
+    python.MultipleAssignment(_, value) ->
+      expression_invokes_driver(value, name)
+    python.Match(subject, cases) ->
+      expression_invokes_driver(subject, name)
+      || list.any(cases, fn(match_case) {
+        let python.MatchCase(_, guard, body) = match_case
+        let guard_invokes = case guard {
+          option.Some(expression) -> expression_invokes_driver(expression, name)
+          option.None -> False
+        }
+        guard_invokes
+        || list.any(body, fn(s) { statement_invokes_driver(s, name) })
+      })
+    python.While(_, body) ->
+      list.any(body, fn(s) { statement_invokes_driver(s, name) })
+    python.If(_, body) ->
+      list.any(body, fn(s) { statement_invokes_driver(s, name) })
+  }
+}
+
+fn expression_invokes_driver(
+  expression: python.Expression,
+  name: String,
+) -> Bool {
+  case expression {
+    python.String(_) -> False
+    python.Number(_) -> False
+    python.Bool(_) -> False
+    python.Nil -> False
+    python.Variable(_) -> False
+    python.ModuleRef(_) -> False
+    python.Tuple(elements) ->
+      list.any(elements, fn(e) { expression_invokes_driver(e, name) })
+    python.Negate(e) -> expression_invokes_driver(e, name)
+    python.Not(e) -> expression_invokes_driver(e, name)
+    python.Panic(e) -> expression_invokes_driver(e, name)
+    python.Todo(e) -> expression_invokes_driver(e, name)
+    python.Lambda(_, body) -> expression_invokes_driver(body, name)
+    python.List(elements) ->
+      list.any(elements, fn(e) { expression_invokes_driver(e, name) })
+    python.ListWithRest(elements, rest) ->
+      list.any(elements, fn(e) { expression_invokes_driver(e, name) })
+      || expression_invokes_driver(rest, name)
+    python.TupleIndex(tuple, _) -> expression_invokes_driver(tuple, name)
+    python.FieldAccess(container, _) ->
+      expression_invokes_driver(container, name)
+    python.Call(python.Variable(callee), _) if callee == name -> True
+    python.Call(function, arguments) ->
+      expression_invokes_driver(function, name)
+      || list.any(arguments, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_invokes_driver(item, name)
+          python.LabelledField(_, item) -> expression_invokes_driver(item, name)
+        }
+      })
+    python.RecordUpdate(record, fields) ->
+      expression_invokes_driver(record, name)
+      || list.any(fields, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_invokes_driver(item, name)
+          python.LabelledField(_, item) -> expression_invokes_driver(item, name)
+        }
+      })
+    python.BinaryOperator(_, left, right) ->
+      expression_invokes_driver(left, name)
+      || expression_invokes_driver(right, name)
+    python.Slice(container, start, end) ->
+      expression_invokes_driver(container, name)
+      || expression_invokes_driver(start, name)
+      || {
+        case end {
+          option.Some(e) -> expression_invokes_driver(e, name)
+          option.None -> False
+        }
+      }
+    python.AssignmentExpression(_, value) ->
+      expression_invokes_driver(value, name)
+    python.IsNotNone(e) -> expression_invokes_driver(e, name)
+    python.BitString(_) -> False
+    python.Dict(_) -> False
+  }
+}
+
+// Reassigns the function's parameters from the `GleamTco` args tuple, so the
+// loop continues with the new values.
+fn rebind_parameters(
+  parameters: List(python.FunctionParameter),
+  fields: List(python.Expression),
+) -> List(python.Statement) {
+  let names = parameter_names(parameters)
+  case names {
+    [] ->
+      // A zero-argument tail-recursive call has nothing to rebind; the
+      // MatchCase body is empty, which the generator renders as `pass`, and
+      // the `while True` loop carries on to the next iteration.
+      []
+    [single] ->
+      // With a single parameter the field is the new value directly; there is
+      // no tuple to build and index.
+      case fields {
+        [field] -> [python.SimpleAssignment(single, field)]
+        _ -> []
+      }
+    multiple -> [
+      python.MultipleAssignment(multiple, python.Tuple(fields)),
+    ]
+  }
 }
 
 // Reassigns the function's parameters from the `_Tco` result. With a single
