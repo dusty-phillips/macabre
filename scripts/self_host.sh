@@ -58,7 +58,8 @@ compare_output() {
   # build/dev), then rebuild with Erlang so both outputs exist to diff.
   local saved="/tmp/macabre-python-output"
   rm -rf "$saved"
-  mv "$WORK/build/dev/python" "$saved"
+  cp -R "$WORK/build/dev/python" "$saved"
+  find "$saved" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
   ./macabre "$WORK" >/dev/null
   diff -r "$WORK/build/dev/python" "$saved" \
     && echo "    Output is byte-identical" \
