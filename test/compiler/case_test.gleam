@@ -473,11 +473,10 @@ class Active:
 
 
 def check(state):
-    match state:
-        case Idle():
-            return True
-        case Active():
-            return False
+    if type(state) is Idle:
+        return True
+    elif type(state) is Active:
+        return False
 
 
 __all__ = [\"Idle\", \"Active\"]

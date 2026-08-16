@@ -69,11 +69,11 @@ from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):
-        match _case_subject:
-            case Some(x):
-                return x
-            case _:
-                raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"Pattern match failed, no pattern matched the value.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
+        if type(_case_subject) is Some:
+            x = getattr(_case_subject, _case_subject.__match_args__[0])
+            return x
+        else:
+            raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"Pattern match failed, no pattern matched the value.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
     x = _fn_match_0(Some(1))
 
 
@@ -93,11 +93,11 @@ from gleam_builtins import *
 
 def main():
     def _fn_match_0(_case_subject):
-        match _case_subject:
-            case Some(x):
-                return x
-            case _:
-                raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"expected Some\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
+        if type(_case_subject) is Some:
+            x = getattr(_case_subject, _case_subject.__match_args__[0])
+            return x
+        else:
+            raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"expected Some\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
     x = _fn_match_0(Some(1))
 
 
@@ -180,20 +180,18 @@ def repeat_loop(times, doubling_acc, acc):
             case _:
                 return acc + doubling_acc
     def _fn_case_1(_case_subject):
-        match _case_subject:
-            case True:
-                return acc_0
-            case False:
-                return GleamTco((times_0, doubling_acc + doubling_acc, acc_0,))
+        if _case_subject:
+            return acc_0
+        else:
+            return GleamTco((times_0, doubling_acc + doubling_acc, acc_0,))
     while True:
         acc_0 = _fn_case_0(gleam_int_rem(times, 2))
         times_0 = gleam_int_div(times, 2)
         _result = _fn_case_1(times_0 <= 0)
-        match isinstance(_result, GleamTco):
-            case True:
-                times, doubling_acc, acc = _result.args
-            case False:
-                return _result
+        if isinstance(_result, GleamTco):
+            times, doubling_acc, acc = _result.args
+        else:
+            return _result
 
 
 __all__ = [\"repeat_loop\"]
@@ -256,16 +254,17 @@ def result_try(value):
 
 
 def repro(input):
-    match input:
-        case Error(error):
-            return Error(error)
-        case Ok(environment_1):
-            def _fn_def_0(first):
-                def _fn_def_0(second):
-                    environment_0 = environment_1
-                    return Ok(environment_0)
-                return result_try(Ok(environment_1), _fn_def_0)
+    if type(input) is Error:
+        error = getattr(input, input.__match_args__[0])
+        return Error(error)
+    elif type(input) is Ok:
+        environment_1 = getattr(input, input.__match_args__[0])
+        def _fn_def_0(first):
+            def _fn_def_0(second):
+                environment_0 = environment_1
+                return Ok(environment_0)
             return result_try(Ok(environment_1), _fn_def_0)
+        return result_try(Ok(environment_1), _fn_def_0)
 
 
 __all__ = [\"repro\", \"Ok\", \"Error\"]

@@ -46,11 +46,10 @@ def process(acc, tokens):
         return _fn_case_0(rest)
     while True:
         _result = result.try_(split(tokens), _fn_def_0)
-        match isinstance(_result, GleamTco):
-            case True:
-                acc, tokens = _result.args
-            case False:
-                return _result"
+        if isinstance(_result, GleamTco):
+            acc, tokens = _result.args
+        else:
+            return _result"
 }
 
 pub fn single_parameter_tail_call_test() {
@@ -139,11 +138,10 @@ def count_if(list, predicate, acc):
     while isinstance(list, GleamList):
         first = list.value
         rest_0 = list.tail
-        match predicate(first):
-            case True:
-                list, predicate, acc = (rest_0, predicate, acc + 1,)
-            case False:
-                list, predicate, acc = (rest_0, predicate, acc,)
+        if predicate(first):
+            list, predicate, acc = (rest_0, predicate, acc + 1,)
+        else:
+            list, predicate, acc = (rest_0, predicate, acc,)
     return acc
 
 
@@ -182,11 +180,10 @@ def filter_loop(list, predicate, acc):
     while isinstance(list, GleamList):
         first_0 = list.value
         rest = list.tail
-        match predicate(first_0):
-            case True:
-                new_acc = GleamList(first_0, acc)
-            case False:
-                new_acc = acc
+        if predicate(first_0):
+            new_acc = GleamList(first_0, acc)
+        else:
+            new_acc = acc
         list, predicate, acc = (rest, predicate, new_acc,)
     return list.reverse(acc)
 
@@ -243,11 +240,10 @@ def sum_until(tokens, acc):
                 return result.try_(parse(token), _fn_def_0)
     while True:
         _result = _fn_case_0(tokens)
-        match isinstance(_result, GleamTco):
-            case True:
-                tokens, acc = _result.args
-            case False:
-                return _result"
+        if isinstance(_result, GleamTco):
+            tokens, acc = _result.args
+        else:
+            return _result"
 }
 
 pub fn non_tail_call_not_optimized_test() {
