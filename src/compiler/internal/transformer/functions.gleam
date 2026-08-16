@@ -184,7 +184,9 @@ pub fn transform_top_level_function(
   python.Function(
     name: function.name,
     parameters: parameters,
-    body: body |> shadowing.resolve_tail_calls(function.name, parameters),
+    body: body
+      |> shadowing.resolve_tail_calls(function.name, parameters)
+      |> shadowing.inline_case_drivers,
     public: public,
     docstring: option.None,
     comments: [],

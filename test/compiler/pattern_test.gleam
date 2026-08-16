@@ -15,15 +15,14 @@ pub fn multiple_subjects_bitstring_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (_, _) if (_bitstring_binds_0 := gleam_match_bitstring(_case_subject[0], (\"variable\", \"x\",))) is not None and (_bitstring_binds_1 := gleam_match_bitstring(_case_subject[1], (\"variable\", \"y\",))) is not None:
-                x = _bitstring_binds_0[0]
-                y = _bitstring_binds_1[0]
-                return x
-            case (_, _):
-                return 0
-    return _fn_case_0((gleam_bitstring_segments_to_bytes((1, [])), gleam_bitstring_segments_to_bytes((2, [])),))
+    _case_subject = (gleam_bitstring_segments_to_bytes((1, [])), gleam_bitstring_segments_to_bytes((2, [])),)
+    match _case_subject:
+        case (_, _) if (_bitstring_binds_0 := gleam_match_bitstring(_case_subject[0], (\"variable\", \"x\",))) is not None and (_bitstring_binds_1 := gleam_match_bitstring(_case_subject[1], (\"variable\", \"y\",))) is not None:
+            x = _bitstring_binds_0[0]
+            y = _bitstring_binds_1[0]
+            return x
+        case (_, _):
+            return 0
 
 
 __all__ = [\"main\"]
@@ -44,13 +43,12 @@ pub fn multiple_subjects_concatenate_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (_, other) if _case_subject[0].startswith(\"hello\") and (rest := _case_subject[0][5:]) is not None:
-                return rest
-            case (_, _):
-                return \"\"
-    return _fn_case_0((\"hello world\", \"foo\",))
+    _case_subject = (\"hello world\", \"foo\",)
+    match _case_subject:
+        case (_, other) if _case_subject[0].startswith(\"hello\") and (rest := _case_subject[0][5:]) is not None:
+            return rest
+        case (_, _):
+            return \"\"
 
 
 __all__ = [\"main\"]
@@ -68,11 +66,10 @@ pub fn concatenate_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_match_0(_case_subject):
-        match _case_subject:
-            case _ if _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
-                return rest
-    rest = _fn_match_0(\"hello world\")
+    _case_subject = \"hello world\"
+    match _case_subject:
+        case _ if _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
+            rest = rest
 
 
 __all__ = [\"main\"]
@@ -96,13 +93,12 @@ pub fn escaped_prefix_concat_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if _case_subject.startswith(\"\\n\") and (rest := _case_subject[1:]) is not None:
-                return rest
-            case _:
-                return \"\"
-    return _fn_case_0(\"\\nworld\")
+    _case_subject = \"\\nworld\"
+    match _case_subject:
+        case _ if _case_subject.startswith(\"\\n\") and (rest := _case_subject[1:]) is not None:
+            return rest
+        case _:
+            return \"\"
 
 
 __all__ = [\"main\"]
@@ -126,13 +122,12 @@ pub fn concatenate_pattern_with_empty_rest_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if _case_subject.startswith(\"x\") and (rest := _case_subject[1:]) is not None:
-                return rest
-            case _:
-                return \"\"
-    return _fn_case_0(\"x\")
+    _case_subject = \"x\"
+    match _case_subject:
+        case _ if _case_subject.startswith(\"x\") and (rest := _case_subject[1:]) is not None:
+            return rest
+        case _:
+            return \"\"
 
 
 __all__ = [\"main\"]
@@ -152,11 +147,10 @@ pub fn concatenate_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if (prefix := \"hello\") and _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
-                return prefix
-    return _fn_case_0(\"hello world\")
+    _case_subject = \"hello world\"
+    match _case_subject:
+        case _ if (prefix := \"hello\") and _case_subject.startswith(\"hello\") and (rest := _case_subject[5:]) is not None:
+            return prefix
 
 
 __all__ = [\"main\"]
@@ -176,12 +170,11 @@ pub fn bitstring_pattern_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"variable\", \"x\",))) is not None:
-                x = _bitstring_binds[0]
-                return x
-    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))
+    _case_subject = gleam_bitstring_segments_to_bytes((1, []))
+    match _case_subject:
+        case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"variable\", \"x\",))) is not None:
+            x = _bitstring_binds[0]
+            return x
 
 
 __all__ = [\"main\"]
@@ -212,11 +205,9 @@ class Box:
 
 
 def main():
-    def _fn_match_0(_case_subject):
-        match _case_subject:
-            case Box(value=value):
-                return value
-    value = _fn_match_0(Box(5))
+    match Box(5):
+        case Box(value=value):
+            value = value
 
 
 __all__ = [\"Box\"]
@@ -260,13 +251,11 @@ pub fn leading_zero_int_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 5:
-                return True
-            case _:
-                return False
-    return _fn_case_0(5)
+    match 5:
+        case 5:
+            return True
+        case _:
+            return False
 
 
 __all__ = [\"main\"]

@@ -979,11 +979,9 @@ from gleam_builtins import *
 
 def main():
     value = Ok(1)
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case Error(None):
-                return 0
-            case Ok(x):
-                return x
-    return _fn_case_0(value)"
+    match value:
+        case Error(None):
+            return 0
+        case Ok(x):
+            return x"
 }

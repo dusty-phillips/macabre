@@ -370,11 +370,9 @@ def token_0(lexer, tok, source, offset):
 
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case Some(token.Name(name)):
-                return name
-    return _fn_case_0(Some(token.Name(\"x\")))
+    match Some(token.Name(\"x\")):
+        case Some(token.Name(name)):
+            return name
 
 
 import glexer.token

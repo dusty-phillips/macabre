@@ -11,7 +11,10 @@ pub fn external_python_test() {
   assert compiler.compile_module(module) == "from __future__ import annotations
 from gleam_builtins import *
 
-from mylib import println\n\n\n"
+from mylib import println
+
+
+"
 }
 
 pub fn skip_external_javascript_test() {

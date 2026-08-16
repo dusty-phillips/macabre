@@ -256,18 +256,16 @@ def result_try(value):
 
 
 def repro(input):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case Error(error):
-                return Error(error)
-            case Ok(environment_1):
-                def _fn_def_0(first):
-                    def _fn_def_0(second):
-                        environment_0 = environment_1
-                        return Ok(environment_0)
-                    return result_try(Ok(environment_1), _fn_def_0)
+    match input:
+        case Error(error):
+            return Error(error)
+        case Ok(environment_1):
+            def _fn_def_0(first):
+                def _fn_def_0(second):
+                    environment_0 = environment_1
+                    return Ok(environment_0)
                 return result_try(Ok(environment_1), _fn_def_0)
-    return _fn_case_0(input)
+            return result_try(Ok(environment_1), _fn_def_0)
 
 
 __all__ = [\"repro\", \"Ok\", \"Error\"]

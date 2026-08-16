@@ -2745,3 +2745,367 @@ fn rewrite_expression_tail(
     _ -> expression
   }
 }
+
+// Every `case` expression is compiled to a `_fn_case_N` closure wrapping a
+// single `match`. That closure allocation and call is pure overhead, so inline
+// single-use drivers back into their call sites:
+//
+//     def _fn_case_0(_case_subject):
+//         match _case_subject:
+//             case Some(v):
+//                 return v + 1
+//             case None:
+//                 return 0
+//     x = _fn_case_0(subject)
+//
+// becomes
+//
+//     match subject:
+//         case Some(v):
+//             x = v + 1
+//         case None:
+//             x = 0
+//
+// Python's `match` does not scope its pattern captures or the names bound in
+// case bodies, so inlining leaks them into the enclosing function scope. A
+// driver is only inlined when none of those leaked names are referenced by any
+// other statement of the enclosing scope, so a later use cannot silently pick
+// up the leaked value. `resolve_tail_calls` must run first: its drivers use
+// the `GleamTco` protocol, which this pass refuses to touch.
+pub fn inline_case_drivers(
+  statements: List(python.Statement),
+) -> List(python.Statement) {
+  inline_scope(statements)
+}
+
+fn inline_scope(statements: List(python.Statement)) -> List(python.Statement) {
+  case find_and_inline_driver(statements) {
+    option.Some(inlined) -> inline_scope(inlined)
+    option.None -> recurse_nested_scopes(statements)
+  }
+}
+
+// Inlines the first safe single-use case driver found among the top-level
+// statements. Returns `None` when there is none. `prefix` carries the
+// statements seen so far so they are not dropped when the driver is later in
+// the list.
+fn find_and_inline_driver(
+  statements: List(python.Statement),
+) -> option.Option(List(python.Statement)) {
+  find_driver_in_statements(statements, [])
+}
+
+fn find_driver_in_statements(
+  statements: List(python.Statement),
+  prefix: List(python.Statement),
+) -> option.Option(List(python.Statement)) {
+  case statements {
+    [] -> option.None
+    [statement, ..rest] ->
+      case statement {
+        python.FunctionDef(function) ->
+          case
+            is_inlinable_driver(function)
+            && !statement_contains_gleam_tco(statement),
+            find_driver_usage(statements, function.name)
+          {
+            True, option.Some(#(position, subject)) ->
+              case
+                driver_leak_safe(
+                  function,
+                  subject,
+                  list.append(prefix, statements),
+                )
+              {
+                True ->
+                  case simple_inline_driver(function, subject, position) {
+                    option.Some(inlined) ->
+                      option.Some(list.append(
+                        prefix,
+                        replace_usage(statements, function.name, inlined),
+                      ))
+                    option.None ->
+                      find_driver_in_statements(
+                        rest,
+                        list.append(prefix, [statement]),
+                      )
+                  }
+                False ->
+                  find_driver_in_statements(
+                    rest,
+                    list.append(prefix, [statement]),
+                  )
+              }
+            _, _ ->
+              find_driver_in_statements(rest, list.append(prefix, [statement]))
+          }
+        _ -> find_driver_in_statements(rest, list.append(prefix, [statement]))
+      }
+  }
+}
+
+// Inlines a single-use case driver without touching nested drivers (they stay
+// closures, keeping their captures scoped). A driver whose cases end in
+// `return GleamTco(...)` is a tail-recursion driver owned by
+// `resolve_tail_calls`, so it is left alone.
+fn simple_inline_driver(
+  function: python.Function,
+  subject: python.Expression,
+  position: DriverPosition,
+) -> option.Option(List(python.Statement)) {
+  case function.body {
+    [python.Match(match_subject, cases)] ->
+      case simple_inline_cases(cases, position) {
+        option.Some(inlined_cases) ->
+          case position {
+            DriverPositionOther -> option.None
+            _ ->
+              option.Some(inline_match_statements(
+                match_subject,
+                subject,
+                inlined_cases,
+              ))
+          }
+        option.None -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+fn simple_inline_cases(
+  cases: List(python.MatchCase),
+  position: DriverPosition,
+) -> option.Option(List(python.MatchCase)) {
+  list.fold(cases, option.Some([]), fn(acc, match_case) {
+    case acc {
+      option.None -> option.None
+      option.Some(inlined) ->
+        case simple_inline_case(match_case, position) {
+          option.Some(rewritten) ->
+            option.Some(list.append(inlined, [rewritten]))
+          option.None -> option.None
+        }
+    }
+  })
+}
+
+fn simple_inline_case(
+  match_case: python.MatchCase,
+  position: DriverPosition,
+) -> option.Option(python.MatchCase) {
+  let python.MatchCase(pattern, guard, body) = match_case
+  case list.reverse(body) {
+    [python.Return(python.Call(python.Variable("GleamTco"), _)), ..] ->
+      option.None
+    [python.Return(value), ..preceding] ->
+      case position {
+        DriverPositionReturn ->
+          option.Some(python.MatchCase(
+            pattern,
+            guard,
+            list.append(list.reverse(preceding), [python.Return(value)]),
+          ))
+        DriverPositionAssign(target) ->
+          option.Some(python.MatchCase(
+            pattern,
+            guard,
+            list.append(list.reverse(preceding), [
+              python.SimpleAssignment(target, value),
+            ]),
+          ))
+        DriverPositionOther -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+// Whether inlining the driver can leak a name into the enclosing scope that
+// another statement references. The names an inlined match binds are the
+// pattern captures and the binds of each case body (all of which Python leaves
+// in the enclosing function scope). A reference to one of those names from any
+// other statement, or from the match subject itself, would change meaning or
+// (for a subject reference) become an unbound local, so the driver is not
+// inlined.
+fn driver_leak_safe(
+  function: python.Function,
+  subject: python.Expression,
+  statements: List(python.Statement),
+) -> Bool {
+  case driver_leaked_names(function) {
+    [] -> True
+    leaked -> {
+      let others = statements_without_driver_and_use(statements, function.name)
+      list.all(leaked, fn(name) {
+        !expression_references(subject, name)
+        && !list.any(others, fn(statement) {
+          list.contains(
+            deep_statement_refs(statement, set.new(), set.new()),
+            name,
+          )
+        })
+      })
+    }
+  }
+}
+
+fn driver_leaked_names(function: python.Function) -> List(String) {
+  case function.body {
+    [python.Match(_, cases)] -> {
+      let pattern_names =
+        cases
+        |> list.map(fn(match_case) { pattern_binds(match_case.pattern) })
+        |> list.flatten
+      let body_names =
+        cases
+        |> list.map(fn(match_case) {
+          match_case.body |> list.map(statement_binds) |> list.flatten
+        })
+        |> list.flatten
+      pattern_names |> list.append(body_names) |> list.unique
+    }
+    _ -> []
+  }
+}
+
+// The statements of a scope other than a driver's own definition and its call
+// site.
+fn statements_without_driver_and_use(
+  statements: List(python.Statement),
+  name: String,
+) -> List(python.Statement) {
+  list.filter(statements, fn(statement) {
+    case statement {
+      python.FunctionDef(function) if function.name == name -> False
+      python.SimpleAssignment(
+        _,
+        python.Call(python.Variable(callee), [python.UnlabelledField(_)]),
+      )
+        if callee == name
+      -> False
+      python.Return(python.Call(
+        python.Variable(callee),
+        [python.UnlabelledField(_)],
+      ))
+        if callee == name
+      -> False
+      _ -> True
+    }
+  })
+}
+
+fn recurse_nested_scopes(
+  statements: List(python.Statement),
+) -> List(python.Statement) {
+  list.map(statements, fn(statement) {
+    case statement {
+      python.Match(subject, cases) ->
+        python.Match(
+          subject: subject,
+          cases: list.map(cases, fn(match_case) {
+            let python.MatchCase(pattern, guard, body) = match_case
+            python.MatchCase(pattern, guard, inline_scope(body))
+          }),
+        )
+      python.While(condition, body) ->
+        python.While(condition: condition, body: inline_scope(body))
+      python.If(condition, body) ->
+        python.If(condition: condition, body: inline_scope(body))
+      python.FunctionDef(function) ->
+        // A function that is part of the tail-recursion trampoline (it returns
+        // or passes a `GleamTco` marker) is opaque to this pass: inlining
+        // drivers inside its case bodies would break the enclosing
+        // `isinstance` dispatch.
+        case statement_contains_gleam_tco(statement) {
+          True -> statement
+          False ->
+            python.FunctionDef(
+              python.Function(..function, body: inline_scope(function.body)),
+            )
+        }
+      _ -> statement
+    }
+  })
+}
+
+// Whether a statement tree references the `GleamTco` marker, which only the
+// tail-recursion machinery produces. Such statements are part of the trampoline
+// and must not be rewritten by the case-driver inliner.
+fn statement_contains_gleam_tco(statement: python.Statement) -> Bool {
+  case statement {
+    python.Expression(expression) -> expression_contains_gleam_tco(expression)
+    python.Return(expression) -> expression_contains_gleam_tco(expression)
+    python.SimpleAssignment(_, value) -> expression_contains_gleam_tco(value)
+    python.MultipleAssignment(_, value) -> expression_contains_gleam_tco(value)
+    python.FunctionDef(function) ->
+      list.any(function.body, statement_contains_gleam_tco)
+    python.Match(subject, cases) ->
+      expression_contains_gleam_tco(subject)
+      || list.any(cases, fn(match_case) {
+        let python.MatchCase(_, guard, body) = match_case
+        let guard_contains = case guard {
+          option.Some(expression) -> expression_contains_gleam_tco(expression)
+          option.None -> False
+        }
+        guard_contains || list.any(body, statement_contains_gleam_tco)
+      })
+    python.While(_, body) -> list.any(body, statement_contains_gleam_tco)
+    python.If(_, body) -> list.any(body, statement_contains_gleam_tco)
+  }
+}
+
+fn expression_contains_gleam_tco(expression: python.Expression) -> Bool {
+  case expression {
+    python.String(_) -> False
+    python.Number(_) -> False
+    python.Bool(_) -> False
+    python.Nil -> False
+    python.Variable(_) -> False
+    python.ModuleRef(_) -> False
+    python.Tuple(elements) -> list.any(elements, expression_contains_gleam_tco)
+    python.Negate(e) -> expression_contains_gleam_tco(e)
+    python.Not(e) -> expression_contains_gleam_tco(e)
+    python.Panic(e) -> expression_contains_gleam_tco(e)
+    python.Todo(e) -> expression_contains_gleam_tco(e)
+    python.Lambda(_, body) -> expression_contains_gleam_tco(body)
+    python.List(elements) -> list.any(elements, expression_contains_gleam_tco)
+    python.ListWithRest(elements, rest) ->
+      list.any(elements, expression_contains_gleam_tco)
+      || expression_contains_gleam_tco(rest)
+    python.TupleIndex(tuple, _) -> expression_contains_gleam_tco(tuple)
+    python.FieldAccess(container, _) -> expression_contains_gleam_tco(container)
+    python.Call(python.Variable("GleamTco"), _) -> True
+    python.Call(function, arguments) ->
+      expression_contains_gleam_tco(function)
+      || list.any(arguments, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_contains_gleam_tco(item)
+          python.LabelledField(_, item) -> expression_contains_gleam_tco(item)
+        }
+      })
+    python.RecordUpdate(record, fields) ->
+      expression_contains_gleam_tco(record)
+      || list.any(fields, fn(field) {
+        case field {
+          python.UnlabelledField(item) -> expression_contains_gleam_tco(item)
+          python.LabelledField(_, item) -> expression_contains_gleam_tco(item)
+        }
+      })
+    python.BinaryOperator(_, left, right) ->
+      expression_contains_gleam_tco(left)
+      || expression_contains_gleam_tco(right)
+    python.Slice(container, start, end) ->
+      expression_contains_gleam_tco(container)
+      || expression_contains_gleam_tco(start)
+      || {
+        case end {
+          option.Some(e) -> expression_contains_gleam_tco(e)
+          option.None -> False
+        }
+      }
+    python.AssignmentExpression(_, value) ->
+      expression_contains_gleam_tco(value)
+    python.IsNotNone(e) -> expression_contains_gleam_tco(e)
+    python.BitString(_) -> False
+    python.Dict(_) -> False
+  }
+}

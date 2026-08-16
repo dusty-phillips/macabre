@@ -28,13 +28,11 @@ pub fn tail_call_through_use_callback_test() {
 from gleam_builtins import *
 
 def split(tokens):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(head, rest):
-                return Ok((head, rest,))
-            case EmptyGleamList():
-                return Error(None)
-    return _fn_case_0(tokens)
+    match tokens:
+        case GleamList(head, rest):
+            return Ok((head, rest,))
+        case EmptyGleamList():
+            return Error(None)
 
 
 def process(acc, tokens):
@@ -229,13 +227,11 @@ pub fn tail_call_through_use_callback_test_2() {
 from gleam_builtins import *
 
 def parse(token):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 0:
-                return Error(None)
-            case _:
-                return Ok(token)
-    return _fn_case_0(token)
+    match token:
+        case 0:
+            return Error(None)
+        case _:
+            return Ok(token)
 
 
 def sum_until(tokens, acc):
@@ -243,9 +239,9 @@ def sum_until(tokens, acc):
         match _case_subject:
             case EmptyGleamList():
                 return acc
-            case GleamList(token, rest):
+            case GleamList(token, rest_0):
                 def _fn_def_0(value):
-                    return GleamTco((rest, acc + value,))
+                    return GleamTco((rest_0, acc + value,))
                 return result.try_(parse(token), _fn_def_0)
     while True:
         _result = _fn_case_0(tokens)
@@ -273,13 +269,11 @@ pub fn non_tail_call_not_optimized_test() {
 from gleam_builtins import *
 
 def factorial(n):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 0:
-                return 1
-            case _:
-                return n * factorial(n - 1)
-    return _fn_case_0(n)
+    match n:
+        case 0:
+            return 1
+        case _:
+            return n * factorial(n - 1)
 
 
 def main():
@@ -312,17 +306,15 @@ pub fn recursion_inside_fold_callback_not_tco_test() {
 from gleam_builtins import *
 
 def walk(items, depth):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case EmptyGleamList():
-                return Ok(depth)
-            case GleamList(item, rest):
-                def _fn_def_0(state, next):
-                    def _fn_def_0(d):
-                        return walk(GleamList(next, EmptyGleamList()), d + 1)
-                    return result.try_(state, _fn_def_0)
-                return list.fold(rest, Ok(depth), _fn_def_0)
-    return _fn_case_0(items)
+    match items:
+        case EmptyGleamList():
+            return Ok(depth)
+        case GleamList(item, rest):
+            def _fn_def_0(state, next):
+                def _fn_def_0(d):
+                    return walk(GleamList(next, EmptyGleamList()), d + 1)
+                return result.try_(state, _fn_def_0)
+            return list.fold(rest, Ok(depth), _fn_def_0)
 
 
 import gleam.result

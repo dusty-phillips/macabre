@@ -17,13 +17,11 @@ pub fn option_none_value_and_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case Some(x):
-                return x
-            case None:
-                return 0
-    return _fn_case_0(Some(1))
+    match Some(1):
+        case Some(x):
+            return x
+        case None:
+            return 0
 
 
 import gleam.option
@@ -56,13 +54,11 @@ from gleam_builtins import *
 
 def main():
     value = None
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case None:
-                return True
-            case Some(_):
-                return False
-    return _fn_case_0(value)
+    match value:
+        case None:
+            return True
+        case Some(_):
+            return False
 
 
 import gleam.option
@@ -95,13 +91,11 @@ from gleam_builtins import *
 
 def main():
     value = None
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case None:
-                return True
-            case Some(_):
-                return False
-    return _fn_case_0(value)
+    match value:
+        case None:
+            return True
+        case Some(_):
+            return False
 
 
 import gleam.option

@@ -153,14 +153,12 @@ def expression_unit():
 
 def expression_loop(values):
     def _fn_def_0(expression):
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case 1:
-                    values_0 = GleamList(expression, values)
-                    return values_0
-                case _:
-                    return values
-        return _fn_case_0(expression)
+        match expression:
+            case 1:
+                values_0 = GleamList(expression, values)
+                return values_0
+            case _:
+                return values
     return result.try_(expression_unit(), _fn_def_0)"
 }
 
@@ -197,20 +195,16 @@ def expression_unit():
 
 def expression_loop(values):
     def _fn_def_0(expression):
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case 1:
-                    values_0 = GleamList(expression, values)
-                    def _fn_case_0(_case_subject):
-                        match _case_subject:
-                            case (Some(updated), _, _):
-                                return updated
-                            case _:
-                                return values_0
-                    return _fn_case_0(handle_operator(Some(1), EmptyGleamList(), values_0))
-                case _:
-                    return values
-        return _fn_case_0(expression)
+        match expression:
+            case 1:
+                values_0 = GleamList(expression, values)
+                match handle_operator(Some(1), EmptyGleamList(), values_0):
+                    case (Some(updated), _, _):
+                        return updated
+                    case _:
+                        return values_0
+            case _:
+                return values
     return result.try_(expression_unit(), _fn_def_0)"
 }
 
@@ -341,26 +335,22 @@ pub fn use_callback_rebinding_case_pattern_bind_test() {
 from gleam_builtins import *
 
 def do_thing(x):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case EmptyGleamList():
-                return Ok((0, x,))
-            case _:
-                return Ok((1, x,))
-    return _fn_case_0(x)
+    match x:
+        case EmptyGleamList():
+            return Ok((0, x,))
+        case _:
+            return Ok((1, x,))
 
 
 def parse(tokens):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, tokens_0):
-                def _fn_def_0(use_capture_0):
-                    return_type, tokens_1 = use_capture_0
-                    return Ok((Some(return_type), tokens_1,))
-                return do_thing(tokens_0, _fn_def_0)
-            case _:
-                return Ok((None, tokens,))
-    return _fn_case_0(tokens)
+    match tokens:
+        case GleamList(1, tokens_0):
+            def _fn_def_0(use_capture_0):
+                return_type, tokens_1 = use_capture_0
+                return Ok((Some(return_type), tokens_1,))
+            return do_thing(tokens_0, _fn_def_0)
+        case _:
+            return Ok((None, tokens,))
 
 
 __all__ = [\"parse\"]
@@ -401,35 +391,29 @@ pub fn use_callback_rebinding_nested_case_pattern_bind_test() {
 from gleam_builtins import *
 
 def do_thing(x):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case EmptyGleamList():
-                return Ok((0, x,))
-            case _:
-                return Ok((1, x,))
-    return _fn_case_0(x)
+    match x:
+        case EmptyGleamList():
+            return Ok((0, x,))
+        case _:
+            return Ok((1, x,))
 
 
 def fields(tokens):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, GleamList(2, tokens_0)):
-                def _fn_def_0(use_capture_0):
-                    t, tokens_1 = use_capture_0
-                    return Ok((t, tokens_1,))
-                return do_thing(tokens_0, _fn_def_0)
-            case _:
-                def _fn_case_0(_case_subject):
-                    match _case_subject:
-                        case EmptyGleamList():
-                            return Error(None)
-                        case _:
-                            def _fn_def_1(use_capture_0):
-                                t, tokens = use_capture_0
-                                return Ok((t, tokens,))
-                            return do_thing(tokens, _fn_def_1)
-                return _fn_case_0(tokens)
-    return _fn_case_0(tokens)
+    match tokens:
+        case GleamList(1, GleamList(2, tokens_0)):
+            def _fn_def_0(use_capture_0):
+                t, tokens_1 = use_capture_0
+                return Ok((t, tokens_1,))
+            return do_thing(tokens_0, _fn_def_0)
+        case _:
+            match tokens:
+                case EmptyGleamList():
+                    return Error(None)
+                case _:
+                    def _fn_def_1(use_capture_0):
+                        t, tokens = use_capture_0
+                        return Ok((t, tokens,))
+                    return do_thing(tokens, _fn_def_1)
 
 
 __all__ = [\"fields\"]
@@ -475,21 +459,17 @@ def with_seq(a, b):
 
 
 def rebind(key, val):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1:
-                return val
-            case _:
-                return val
-    prop = _fn_case_0(key)
+    match key:
+        case 1:
+            prop = val
+        case _:
+            prop = val
     def _fn_def_0(slot):
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case Ok(old):
-                    return with_seq(prop, old)
-                case Error(None):
-                    return prop
-        prop_0 = _fn_case_0(slot)
+        match slot:
+            case Ok(old):
+                prop_0 = with_seq(prop, old)
+            case Error(None):
+                prop_0 = prop
         return with_seq(prop_0, slot)
     return update(slot, _fn_def_0)
 

@@ -14,11 +14,9 @@ pub fn single_int_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1:
-                return \"one\"
-    return _fn_case_0(1)
+    match 1:
+        case 1:
+            return \"one\"
 
 
 __all__ = [\"main\"]
@@ -38,11 +36,9 @@ pub fn single_float_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1.0:
-                return \"one\"
-    return _fn_case_0(1.0)
+    match 1.0:
+        case 1.0:
+            return \"one\"
 
 
 __all__ = [\"main\"]
@@ -62,11 +58,9 @@ pub fn single_string_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case \"hello\":
-                return \"one\"
-    return _fn_case_0(\"hello\")
+    match \"hello\":
+        case \"hello\":
+            return \"one\"
 
 
 __all__ = [\"main\"]
@@ -86,11 +80,9 @@ pub fn variable_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case greet:
-                return greet + \" world\"
-    return _fn_case_0(\"hello\")
+    match \"hello\":
+        case greet:
+            return greet + \" world\"
 
 
 __all__ = [\"main\"]
@@ -110,11 +102,9 @@ pub fn tuple_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (1, 2):
-                return \"one\"
-    return _fn_case_0((1, 2,))
+    match (1, 2,):
+        case (1, 2):
+            return \"one\"
 
 
 __all__ = [\"main\"]
@@ -134,11 +124,9 @@ pub fn pattern_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1 as x:
-                return 2 + x
-    return _fn_case_0(1)
+    match 1:
+        case 1 as x:
+            return 2 + x
 
 
 __all__ = [\"main\"]
@@ -158,11 +146,9 @@ pub fn grouped_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (1, x):
-                return x + 50
-    return _fn_case_0((1, 2,))
+    match (1, 2,):
+        case (1, x):
+            return x + 50
 
 
 __all__ = [\"main\"]
@@ -182,11 +168,9 @@ pub fn alternate_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1 | 2:
-                return 5
-    return _fn_case_0(1)
+    match 1:
+        case 1 | 2:
+            return 5
 
 
 __all__ = [\"main\"]
@@ -206,11 +190,9 @@ pub fn alternate_grouped_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (1, 2) | (2, 3):
-                return 5
-    return _fn_case_0((1, 2,))
+    match (1, 2,):
+        case (1, 2) | (2, 3):
+            return 5
 
 
 __all__ = [\"main\"]
@@ -230,13 +212,12 @@ pub fn alternate_bitstring_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"1\",))) is not None:
-                return 5
-            case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"2\",))) is not None:
-                return 5
-    return _fn_case_0(gleam_bitstring_segments_to_bytes((1, [])))
+    _case_subject = gleam_bitstring_segments_to_bytes((1, []))
+    match _case_subject:
+        case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"1\",))) is not None:
+            return 5
+        case _ if (_bitstring_binds := gleam_match_bitstring(_case_subject, (\"int\", \"2\",))) is not None:
+            return 5
 
 
 __all__ = [\"main\"]
@@ -260,13 +241,11 @@ pub fn case_block_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 1:
-                x = 1
-                y = 2
-                return x + y
-    return _fn_case_0(1)
+    match 1:
+        case 1:
+            x = 1
+            y = 2
+            return x + y
 
 
 __all__ = [\"main\"]
@@ -286,11 +265,9 @@ pub fn case_empty_list_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case EmptyGleamList():
-                return 1
-    return _fn_case_0(EmptyGleamList())
+    match EmptyGleamList():
+        case EmptyGleamList():
+            return 1
 
 
 __all__ = [\"main\"]
@@ -310,11 +287,9 @@ pub fn case_single_element_list_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, EmptyGleamList()):
-                return 1
-    return _fn_case_0(GleamList(1, EmptyGleamList()))
+    match GleamList(1, EmptyGleamList()):
+        case GleamList(1, EmptyGleamList()):
+            return 1
 
 
 __all__ = [\"main\"]
@@ -334,11 +309,9 @@ pub fn case_multi_element_list_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
-                return 1
-    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
+    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+        case GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+            return 1
 
 
 __all__ = [\"main\"]
@@ -360,11 +333,9 @@ pub fn case_empty_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case rest:
-                return 1
-    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
+    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+        case rest:
+            return 1
 
 
 __all__ = [\"main\"]
@@ -384,11 +355,9 @@ pub fn single_element_with_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, rest):
-                return 1
-    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
+    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+        case GleamList(1, rest):
+            return 1
 
 
 __all__ = [\"main\"]
@@ -408,11 +377,9 @@ pub fn multi_element_with_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, GleamList(2, rest)):
-                return 1
-    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
+    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+        case GleamList(1, GleamList(2, rest)):
+            return 1
 
 
 __all__ = [\"main\"]
@@ -432,11 +399,9 @@ pub fn unnamed_rest_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case GleamList(1, GleamList(2, _)):
-                return 1
-    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
+    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+        case GleamList(1, GleamList(2, _)):
+            return 1
 
 
 __all__ = [\"main\"]
@@ -458,17 +423,15 @@ pub fn case_guard_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 0:
-                return \"Just zero\"
-            case x if x < 0:
-                return \"So negative\"
-            case x if gleam_int_rem(x, 2) == 0:
-                return \"Positively even\"
-            case _:
-                return \"Somewhat odd\"
-    return _fn_case_0(num)
+    match num:
+        case 0:
+            return \"Just zero\"
+        case x if x < 0:
+            return \"So negative\"
+        case x if gleam_int_rem(x, 2) == 0:
+            return \"Positively even\"
+        case _:
+            return \"Somewhat odd\"
 
 
 __all__ = [\"main\"]
@@ -510,13 +473,11 @@ class Active:
 
 
 def check(state):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case Idle():
-                return True
-            case Active():
-                return False
-    return _fn_case_0(state)
+    match state:
+        case Idle():
+            return True
+        case Active():
+            return False
 
 
 __all__ = [\"Idle\", \"Active\"]
@@ -541,15 +502,13 @@ pub fn arm_binding_shadowing_reference_before_binding_test() {
 from gleam_builtins import *
 
 def next(lexer):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case _ if lexer > 0:
-                before = lexer
-                lexer_0, name = tuple(lexer, 1)
-                return before + lexer_0
-            case _:
-                return lexer
-    return _fn_case_0(lexer)"
+    match lexer:
+        case _ if lexer > 0:
+            before = lexer
+            lexer_0, name = tuple(lexer, 1)
+            return before + lexer_0
+        case _:
+            return lexer"
 }
 
 // A pattern capture colliding with a module-qualified constructor pattern in
@@ -574,15 +533,13 @@ pub fn pattern_capture_colliding_with_module_pattern_test() {
 from gleam_builtins import *
 
 def do_lex():
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case (lexer, None):
-                return 0
-            case (_, Some(token.EndOfFile())):
-                return 1
-            case (lexer, Some(token_0)):
-                return token_0
-    return _fn_case_0((1, Some(2),))
+    match (1, Some(2),):
+        case (lexer, None):
+            return 0
+        case (_, Some(token.EndOfFile())):
+            return 1
+        case (lexer, Some(token_0)):
+            return token_0
 
 
 import glexer.token
@@ -614,13 +571,11 @@ fn comment(kind: Int) -> #(String, Int) {
 from gleam_builtins import *
 
 def comment(kind):
-    def _fn_case_0(_case_subject):
-        match _case_subject:
-            case 0:
-                return token.CommentModule(\"x\")
-            case _:
-                return token.CommentNormal(\"y\")
-    token_1 = _fn_case_0(kind)
+    match kind:
+        case 0:
+            token_1 = token.CommentModule(\"x\")
+        case _:
+            token_1 = token.CommentNormal(\"y\")
     return (token_1, kind,)
 
 
