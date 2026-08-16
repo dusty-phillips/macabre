@@ -6,11 +6,15 @@ import compiler/python
 import gleam/dict
 import gleam/int
 import gleam/list
+import gleam/string
 import gleam/string_tree.{type StringTree}
 import python_prelude
 
-pub fn generate(module: python.Module) -> String {
-  let field_names = module_field_names(module)
+pub fn generate(
+  module: python.Module,
+  constructor_arities: dict.Dict(String, List(String)),
+) -> String {
+  let field_names = module_field_names(module, constructor_arities)
   string_tree.new()
   |> string_tree.append(python_prelude.prelude)
   |> string_tree.append_tree(statements.generate_module_header(
@@ -77,6 +81,7 @@ pub fn generate(module: python.Module) -> String {
 // since unqualified references then resolve to the local class.
 fn module_field_names(
   module: python.Module,
+  constructor_arities: dict.Dict(String, List(String)),
 ) -> dict.Dict(String, List(String)) {
   let seeded =
     dict.from_list([
@@ -84,25 +89,38 @@ fn module_field_names(
       #("Error", ["value"]),
       #("Some", ["_0"]),
     ])
-  list.fold(module.custom_types, seeded, fn(acc, custom_type) {
-    list.fold(custom_type.variants, acc, fn(acc, variant) {
-      let #(_, names) =
-        variant.fields
-        |> list.fold(#(0, []), fn(state, field) {
-          let #(index, acc) = state
-          case field {
-            python.UnlabelledField(_) -> #(
-              index + 1,
-              list.append(acc, ["_" <> int.to_string(index)]),
-            )
-            python.LabelledField(label, _) -> #(
-              index,
-              list.append(acc, [internal.python_name(label)]),
-            )
-          }
-        })
-      dict.insert(acc, variant.name, names)
+  let own =
+    list.fold(module.custom_types, seeded, fn(acc, custom_type) {
+      list.fold(custom_type.variants, acc, fn(acc, variant) {
+        let #(_, names) =
+          variant.fields
+          |> list.fold(#(0, []), fn(state, field) {
+            let #(index, acc) = state
+            case field {
+              python.UnlabelledField(_) -> #(
+                index + 1,
+                list.append(acc, ["_" <> int.to_string(index)]),
+              )
+              python.LabelledField(label, _) -> #(
+                index,
+                list.append(acc, [internal.python_name(label)]),
+              )
+            }
+          })
+        dict.insert(acc, variant.name, names)
+      })
     })
+  // Package-wide qualified keys (e.g. `types.CallableType`, `option.Some`)
+  // let patterns that reference another module's constructors use named
+  // attribute access too. Bare keys are ignored: an unqualified name can
+  // only resolve to this module's own constructors (already in `own`), so a
+  // package-wide bare key would be ambiguous.
+  constructor_arities
+  |> dict.fold(own, fn(acc, name, names) {
+    case string.contains(name, ".") {
+      True -> dict.insert(acc, name, names)
+      False -> acc
+    }
   })
 }
 

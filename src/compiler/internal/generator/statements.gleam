@@ -587,9 +587,11 @@ fn build_constructor_branch(
 }
 
 // Reads the i-th constructor field of a matched value. An unqualified
-// reference to one of the module's own constructors has a known field name,
-// so a plain attribute read is emitted; otherwise the name comes from the
-// runtime `__match_args__` tuple.
+// reference to one of the module's own constructors has a known field name;
+// a qualified reference (`types.CallableType`, `option.Some`) is looked up
+// through the package-wide field map. Either way a plain attribute read is
+// emitted; unknown constructors fall back to the runtime `__match_args__`
+// tuple.
 fn constructor_field(
   subject: python.Expression,
   module: option.Option(String),
@@ -597,17 +599,17 @@ fn constructor_field(
   index: Int,
   field_names: dict.Dict(String, List(String)),
 ) -> python.Expression {
-  case module {
-    option.None ->
-      case dict.get(field_names, constructor) {
-        Ok(names) ->
-          case nth(names, index) {
-            Ok(name) -> python.FieldAccess(subject, name)
-            Error(_) -> getattr_field(subject, index)
-          }
+  let names = case module {
+    option.None -> dict.get(field_names, constructor)
+    option.Some(binding) -> dict.get(field_names, binding <> "." <> constructor)
+  }
+  case names {
+    Ok(all_names) ->
+      case nth(all_names, index) {
+        Ok(name) -> python.FieldAccess(subject, name)
         Error(_) -> getattr_field(subject, index)
       }
-    option.Some(_) -> getattr_field(subject, index)
+    Error(_) -> getattr_field(subject, index)
   }
 }
 

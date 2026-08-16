@@ -138,7 +138,7 @@ pub fn compile_module_with_metadata(
     module_source,
     submodule_names,
   )
-  |> generator.generate
+  |> generator.generate(constructor_arities)
 }
 
 pub fn compile_package(
