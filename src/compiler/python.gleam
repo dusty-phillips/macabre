@@ -26,6 +26,7 @@ pub type BinaryOperator {
   GreaterThan
   GreaterThanEqual
   Modulo
+  Is
 }
 
 pub type Constant {

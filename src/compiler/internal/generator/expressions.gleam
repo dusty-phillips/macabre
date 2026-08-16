@@ -198,6 +198,7 @@ fn generate_binop(
     python.LessThanEqual -> " <= "
     python.GreaterThan -> " > "
     python.GreaterThanEqual -> " >= "
+    python.Is -> " is "
     python.Divide -> "gleam_float_div"
     python.DivideInt -> "gleam_int_div"
     python.Modulo -> "gleam_int_rem"

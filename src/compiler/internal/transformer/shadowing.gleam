@@ -3286,10 +3286,13 @@ fn build_list_loop(
   }
   [
     python.While(
-      python.Call(python.Variable("isinstance"), [
-        python.UnlabelledField(python.Variable(subject_name)),
-        python.UnlabelledField(python.Variable("GleamList")),
-      ]),
+      python.BinaryOperator(
+        python.Is,
+        python.Call(python.Variable("type"), [
+          python.UnlabelledField(python.Variable(subject_name)),
+        ]),
+        python.Variable("GleamList"),
+      ),
       list.append(bindings, cons_body),
     ),
     python.Return(base_value),
