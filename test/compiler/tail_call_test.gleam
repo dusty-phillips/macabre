@@ -135,15 +135,18 @@ pub fn tail_call_inside_nested_case_test() {
 from gleam_builtins import *
 
 def count_if(list, predicate, acc):
-    while type(list) is GleamList:
-        first = list.value
-        rest_0 = list.tail
-        if predicate(first):
-            list = rest_0
-            acc = acc + 1
-        else:
-            list = rest_0
-    return acc
+    while True:
+        _case_subject = list
+        match _case_subject:
+            case EmptyGleamList():
+                return acc
+            case GleamList(first, rest_0):
+                _case_subject = predicate(first)
+                if _case_subject:
+                    list = rest_0
+                    acc = acc + 1
+                else:
+                    list = rest_0
 
 
 def main():
@@ -178,16 +181,19 @@ pub fn nested_case_result_feeds_tail_call_test() {
 from gleam_builtins import *
 
 def filter_loop(list, predicate, acc):
-    while type(list) is GleamList:
-        first_0 = list.value
-        rest = list.tail
-        if predicate(first_0):
-            new_acc = GleamList(first_0, acc)
-        else:
-            new_acc = acc
-        list = rest
-        acc = new_acc
-    return list.reverse(acc)
+    while True:
+        _case_subject = list
+        match _case_subject:
+            case EmptyGleamList():
+                return list.reverse(acc)
+            case GleamList(first_0, rest):
+                _case_subject = predicate(first_0)
+                if _case_subject:
+                    new_acc = GleamList(first_0, acc)
+                else:
+                    new_acc = acc
+                list = rest
+                acc = new_acc
 
 
 def main():

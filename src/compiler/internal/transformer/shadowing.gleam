@@ -1981,12 +1981,23 @@ fn inline_match_statements(
 ) -> List(python.Statement) {
   case match_subject {
     python.Variable(subject_name) ->
-      case subject_referenced(inlined_cases, subject_name) {
-        True -> [
+      case subject {
+        // Complex subjects (a `dict.get` call, for example) are bound to the
+        // driver parameter first so the match dispatches on a simple variable
+        // and the generator can emit a `type(x) is T` chain rather than a
+        // match statement. A simple subject is matched directly.
+        python.Variable(_) | python.FieldAccess(_, _) ->
+          case subject_referenced(inlined_cases, subject_name) {
+            True -> [
+              python.SimpleAssignment(subject_name, subject),
+              python.Match(subject: match_subject, cases: inlined_cases),
+            ]
+            False -> [python.Match(subject: subject, cases: inlined_cases)]
+          }
+        _ -> [
           python.SimpleAssignment(subject_name, subject),
           python.Match(subject: match_subject, cases: inlined_cases),
         ]
-        False -> [python.Match(subject: subject, cases: inlined_cases)]
       }
     _ -> [python.Match(subject: subject, cases: inlined_cases)]
   }

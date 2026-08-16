@@ -370,7 +370,8 @@ def token_0(lexer, tok, source, offset):
 
 
 def main():
-    match Some(token.Name(\"x\")):
+    _case_subject = Some(token.Name(\"x\"))
+    match _case_subject:
         case Some(token.Name(name)):
             return name
 

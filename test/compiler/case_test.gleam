@@ -14,7 +14,8 @@ pub fn single_int_case_test() {
 from gleam_builtins import *
 
 def main():
-    match 1:
+    _case_subject = 1
+    match _case_subject:
         case 1:
             return \"one\"
 
@@ -36,7 +37,8 @@ pub fn single_float_case_test() {
 from gleam_builtins import *
 
 def main():
-    match 1.0:
+    _case_subject = 1.0
+    match _case_subject:
         case 1.0:
             return \"one\"
 
@@ -58,7 +60,8 @@ pub fn single_string_case_test() {
 from gleam_builtins import *
 
 def main():
-    match \"hello\":
+    _case_subject = \"hello\"
+    match _case_subject:
         case \"hello\":
             return \"one\"
 
@@ -80,7 +83,8 @@ pub fn variable_case_test() {
 from gleam_builtins import *
 
 def main():
-    match \"hello\":
+    _case_subject = \"hello\"
+    match _case_subject:
         case greet:
             return greet + \" world\"
 
@@ -102,7 +106,8 @@ pub fn tuple_case_test() {
 from gleam_builtins import *
 
 def main():
-    match (1, 2,):
+    _case_subject = (1, 2,)
+    match _case_subject:
         case (1, 2):
             return \"one\"
 
@@ -124,7 +129,8 @@ pub fn pattern_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    match 1:
+    _case_subject = 1
+    match _case_subject:
         case 1 as x:
             return 2 + x
 
@@ -146,7 +152,8 @@ pub fn grouped_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    match (1, 2,):
+    _case_subject = (1, 2,)
+    match _case_subject:
         case (1, x):
             return x + 50
 
@@ -168,7 +175,8 @@ pub fn alternate_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    match 1:
+    _case_subject = 1
+    match _case_subject:
         case 1 | 2:
             return 5
 
@@ -190,7 +198,8 @@ pub fn alternate_grouped_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    match (1, 2,):
+    _case_subject = (1, 2,)
+    match _case_subject:
         case (1, 2) | (2, 3):
             return 5
 
@@ -241,7 +250,8 @@ pub fn case_block_test() {
 from gleam_builtins import *
 
 def main():
-    match 1:
+    _case_subject = 1
+    match _case_subject:
         case 1:
             x = 1
             y = 2
@@ -265,7 +275,8 @@ pub fn case_empty_list_test() {
 from gleam_builtins import *
 
 def main():
-    match EmptyGleamList():
+    _case_subject = EmptyGleamList()
+    match _case_subject:
         case EmptyGleamList():
             return 1
 
@@ -287,7 +298,8 @@ pub fn case_single_element_list_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, EmptyGleamList()):
+    _case_subject = GleamList(1, EmptyGleamList())
+    match _case_subject:
         case GleamList(1, EmptyGleamList()):
             return 1
 
@@ -309,7 +321,8 @@ pub fn case_multi_element_list_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+    _case_subject = GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))
+    match _case_subject:
         case GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
             return 1
 
@@ -333,7 +346,8 @@ pub fn case_empty_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+    _case_subject = GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))
+    match _case_subject:
         case rest:
             return 1
 
@@ -355,7 +369,8 @@ pub fn single_element_with_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+    _case_subject = GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))
+    match _case_subject:
         case GleamList(1, rest):
             return 1
 
@@ -377,7 +392,8 @@ pub fn multi_element_with_rest_case_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+    _case_subject = GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))
+    match _case_subject:
         case GleamList(1, GleamList(2, rest)):
             return 1
 
@@ -399,7 +415,8 @@ pub fn unnamed_rest_test() {
 from gleam_builtins import *
 
 def main():
-    match GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
+    _case_subject = GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))
+    match _case_subject:
         case GleamList(1, GleamList(2, _)):
             return 1
 
@@ -532,7 +549,8 @@ pub fn pattern_capture_colliding_with_module_pattern_test() {
 from gleam_builtins import *
 
 def do_lex():
-    match (1, Some(2),):
+    _case_subject = (1, Some(2),)
+    match _case_subject:
         case (lexer, None):
             return 0
         case (_, Some(token.EndOfFile())):

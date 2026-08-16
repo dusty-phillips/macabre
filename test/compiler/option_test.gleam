@@ -17,7 +17,8 @@ pub fn option_none_value_and_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    match Some(1):
+    _case_subject = Some(1)
+    match _case_subject:
         case Some(x):
             return x
         case None:

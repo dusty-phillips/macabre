@@ -205,7 +205,8 @@ class Box:
 
 
 def main():
-    match Box(5):
+    _case_subject = Box(5)
+    match _case_subject:
         case Box(value=value):
             value = value
 
@@ -251,7 +252,8 @@ pub fn leading_zero_int_pattern_test() {
 from gleam_builtins import *
 
 def main():
-    match 5:
+    _case_subject = 5
+    match _case_subject:
         case 5:
             return True
         case _:

@@ -198,7 +198,8 @@ def expression_loop(values):
         match expression:
             case 1:
                 values_0 = GleamList(expression, values)
-                match handle_operator(Some(1), EmptyGleamList(), values_0):
+                _case_subject = handle_operator(Some(1), EmptyGleamList(), values_0)
+                match _case_subject:
                     case (Some(updated), _, _):
                         return updated
                     case _:
