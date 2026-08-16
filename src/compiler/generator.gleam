@@ -69,10 +69,22 @@ pub fn generate(module: python.Module) -> String {
 // as `types.generate_custom_type` emits them. Constructor patterns on these
 // types can then extract fields with plain attribute access instead of the
 // slower positional `getattr(subject, subject.__match_args__[i])`.
+//
+// The map is seeded with the runtime classes that are globally unique and
+// never redefined: the prelude's `Ok`/`Error` and `option`'s `Some`, whose
+// dataclass field names are fixed. A module that declares a type with the
+// same name shadows the seed (its own variant fields win), which is correct
+// since unqualified references then resolve to the local class.
 fn module_field_names(
   module: python.Module,
 ) -> dict.Dict(String, List(String)) {
-  list.fold(module.custom_types, dict.new(), fn(acc, custom_type) {
+  let seeded =
+    dict.from_list([
+      #("Ok", ["value"]),
+      #("Error", ["value"]),
+      #("Some", ["_0"]),
+    ])
+  list.fold(module.custom_types, seeded, fn(acc, custom_type) {
     list.fold(custom_type.variants, acc, fn(acc, variant) {
       let #(_, names) =
         variant.fields

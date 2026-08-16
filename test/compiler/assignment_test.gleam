@@ -71,7 +71,7 @@ from gleam_builtins import *
 def main():
     def _fn_match_0(_case_subject):
         if type(_case_subject) is Some:
-            x = getattr(_case_subject, _case_subject.__match_args__[0])
+            x = _case_subject._0
             return x
         else:
             raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"Pattern match failed, no pattern matched the value.\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
@@ -95,7 +95,7 @@ from gleam_builtins import *
 def main():
     def _fn_match_0(_case_subject):
         if type(_case_subject) is Some:
-            x = getattr(_case_subject, _case_subject.__match_args__[0])
+            x = _case_subject._0
             return x
         else:
             raise GleamPanic({\"gleam_error\": \"let_assert\", \"message\": \"expected Some\", \"file\": \"\", \"module\": \"\", \"function\": \"main\", \"line\": 0, \"value\": _case_subject, \"start\": 20, \"end\": 48, \"pattern_start\": 31, \"pattern_end\": 38})
