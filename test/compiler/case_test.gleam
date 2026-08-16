@@ -290,7 +290,7 @@ def main():
         match _case_subject:
             case EmptyGleamList():
                 return 1
-    return _fn_case_0(to_gleam_list([]))
+    return _fn_case_0(EmptyGleamList())
 
 
 __all__ = [\"main\"]
@@ -314,7 +314,7 @@ def main():
         match _case_subject:
             case GleamList(1, EmptyGleamList()):
                 return 1
-    return _fn_case_0(to_gleam_list([1]))
+    return _fn_case_0(GleamList(1, EmptyGleamList()))
 
 
 __all__ = [\"main\"]
@@ -338,7 +338,7 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))
+    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
 
 
 __all__ = [\"main\"]
@@ -364,7 +364,7 @@ def main():
         match _case_subject:
             case rest:
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))
+    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
 
 
 __all__ = [\"main\"]
@@ -388,7 +388,7 @@ def main():
         match _case_subject:
             case GleamList(1, rest):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))
+    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
 
 
 __all__ = [\"main\"]
@@ -412,7 +412,7 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, rest)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))
+    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
 
 
 __all__ = [\"main\"]
@@ -436,7 +436,7 @@ def main():
         match _case_subject:
             case GleamList(1, GleamList(2, _)):
                 return 1
-    return _fn_case_0(to_gleam_list([1, 2, 3]))
+    return _fn_case_0(GleamList(1, GleamList(2, GleamList(3, EmptyGleamList()))))
 
 
 __all__ = [\"main\"]
@@ -494,11 +494,19 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Active:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def check(state):
@@ -537,11 +545,7 @@ def next(lexer):
         match _case_subject:
             case _ if lexer > 0:
                 before = lexer
-                def _fn_match_0(_case_subject):
-                    match _case_subject:
-                        case (lexer, name):
-                            return (lexer, name,)
-                lexer_0, name = _fn_match_0(tuple(lexer, 1))
+                lexer_0, name = tuple(lexer, 1)
                 return before + lexer_0
             case _:
                 return lexer
@@ -657,33 +661,29 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Let:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class LetAssert:
     _0: Option[str]
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def assignment(kind, tokens, start):
     def _fn_def_0(use_capture_0):
-        def _fn_match_0(_case_subject):
-            match _case_subject:
-                case (pattern, tokens):
-                    return (pattern, tokens,)
-        pattern, tokens = _fn_match_0(use_capture_0)
+        pattern, tokens = use_capture_0
         def _fn_def_0(use_capture_0):
-            def _fn_match_0(_case_subject):
-                match _case_subject:
-                    case (annotation, tokens):
-                        return (annotation, tokens,)
-            annotation, tokens_0 = _fn_match_0(use_capture_0)
+            annotation, tokens_0 = use_capture_0
             def _fn_def_0(_, tokens_0):
                 def _fn_def_0(use_capture_0):
-                    def _fn_match_0(_case_subject):
-                        match _case_subject:
-                            case (value, tokens):
-                                return (value, tokens,)
-                    value, tokens_0_0 = _fn_match_0(use_capture_0)
+                    value, tokens_0_0 = use_capture_0
                     def _fn_case_1(_case_subject):
                         match _case_subject:
                             case (LetAssert(None), GleamList(0, tokens_0_0_0)):
@@ -691,11 +691,7 @@ def assignment(kind, tokens, start):
                             case (LetAssert(_), _) | (Let(), _):
                                 return Ok((kind, tokens_0_0, start,))
                     def _fn_def_0(use_capture_0):
-                        def _fn_match_0(_case_subject):
-                            match _case_subject:
-                                case (new_kind, tokens, end):
-                                    return (new_kind, tokens, end,)
-                        new_kind, tokens_1, end = _fn_match_0(use_capture_0)
+                        new_kind, tokens_1, end = use_capture_0
                         return (new_kind, tokens_1, end,)
                     return result.try_(_fn_case_1((kind, tokens_0_0,)), _fn_def_0)
                 return result.try_(Ok((0, tokens_0,)), _fn_def_0)

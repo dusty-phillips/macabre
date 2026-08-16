@@ -47,7 +47,7 @@ pub type Person {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Person:\n    \"\"\"A type with docs.\"\"\"\n    name: str\n    age: int\n\n\n\n\n\n__all__ = [\"Person\"]\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Person:\n    \"\"\"A type with docs.\"\"\"\n    name: str\n    age: int\n    \n    def __hash__(self):\n        return gleam_hash(self)\n    \n\n\n\n\n\n__all__ = [\"Person\"]\n"
 }
 
 pub fn multi_variant_type_doc_test() {
@@ -62,7 +62,7 @@ pub type Shape {
 }
 ",
     )
-    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: float\n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n\n\n\n\n\n__all__ = [\"Circle\", \"Square\"]\n"
+    == "from __future__ import annotations\nfrom gleam_builtins import *\n\n\"\"\"Module docs.\"\"\"\n\n@dataclasses.dataclass(frozen=True)\nclass Circle:\n    \"\"\"A type with docs.\"\"\"\n    radius: float\n    \n    def __hash__(self):\n        return gleam_hash(self)\n    \n\n@dataclasses.dataclass(frozen=True)\nclass Square:\n    side: int\n    \n    def __hash__(self):\n        return gleam_hash(self)\n    \n\n\n\n\n\n__all__ = [\"Circle\", \"Square\"]\n"
 }
 
 pub fn empty_body_docstring_test() {

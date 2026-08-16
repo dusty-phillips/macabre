@@ -19,6 +19,10 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Wrap:
     _0: int
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def f():
@@ -47,11 +51,19 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Idle:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Active:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def f():
@@ -143,6 +155,10 @@ class Thing:
     label: str
     location: int
     item: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def main():

@@ -113,11 +113,7 @@ def use_thing(func):
 
 def main():
     def _fn_def_0(use_capture_0):
-        def _fn_match_0(_case_subject):
-            match _case_subject:
-                case (a, b):
-                    return (a, b,)
-        a, b = _fn_match_0(use_capture_0)
+        a, b = use_capture_0
         return \"hi\"
     return use_thing(_fn_def_0)
 
@@ -128,7 +124,7 @@ __all__ = [\"main\"]
 
 // An assignment inside a case arm of a use callback that shadows an enclosing
 // scope's name (and references it in its right hand side) must be renamed,
-// e.g. glance's `expression_loop` where `values = to_gleam_list([e], values)`
+// e.g. glance's `expression_loop` where `values = GleamList(e, values)`
 // shadows the `values` parameter.
 pub fn case_arm_assignment_shadowing_enclosing_scope_test() {
   let assert Ok(module) =
@@ -160,7 +156,7 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_0 = to_gleam_list([expression], values)
+                    values_0 = GleamList(expression, values)
                     return values_0
                 case _:
                     return values
@@ -204,14 +200,14 @@ def expression_loop(values):
         def _fn_case_0(_case_subject):
             match _case_subject:
                 case 1:
-                    values_0 = to_gleam_list([expression], values)
+                    values_0 = GleamList(expression, values)
                     def _fn_case_0(_case_subject):
                         match _case_subject:
                             case (Some(updated), _, _):
                                 return updated
                             case _:
                                 return values_0
-                    return _fn_case_0(handle_operator(Some(1), to_gleam_list([]), values_0))
+                    return _fn_case_0(handle_operator(Some(1), EmptyGleamList(), values_0))
                 case _:
                     return values
         return _fn_case_0(expression)
@@ -309,7 +305,7 @@ from gleam_builtins import *
 def main():
     def _fn_def_0():
         return \"done\"
-    return list.try_fold(contents, to_gleam_list([]), _fn_def_0)
+    return list.try_fold(contents, EmptyGleamList(), _fn_def_0)
 
 
 __all__ = [\"main\"]
@@ -359,11 +355,7 @@ def parse(tokens):
         match _case_subject:
             case GleamList(1, tokens_0):
                 def _fn_def_0(use_capture_0):
-                    def _fn_match_0(_case_subject):
-                        match _case_subject:
-                            case (return_type, tokens):
-                                return (return_type, tokens,)
-                    return_type, tokens_1 = _fn_match_0(use_capture_0)
+                    return_type, tokens_1 = use_capture_0
                     return Ok((Some(return_type), tokens_1,))
                 return do_thing(tokens_0, _fn_def_0)
             case _:
@@ -423,11 +415,7 @@ def fields(tokens):
         match _case_subject:
             case GleamList(1, GleamList(2, tokens_0)):
                 def _fn_def_0(use_capture_0):
-                    def _fn_match_0(_case_subject):
-                        match _case_subject:
-                            case (t, tokens):
-                                return (t, tokens,)
-                    t, tokens_1 = _fn_match_0(use_capture_0)
+                    t, tokens_1 = use_capture_0
                     return Ok((t, tokens_1,))
                 return do_thing(tokens_0, _fn_def_0)
             case _:
@@ -437,11 +425,7 @@ def fields(tokens):
                             return Error(None)
                         case _:
                             def _fn_def_1(use_capture_0):
-                                def _fn_match_0(_case_subject):
-                                    match _case_subject:
-                                        case (t, tokens):
-                                            return (t, tokens,)
-                                t, tokens = _fn_match_0(use_capture_0)
+                                t, tokens = use_capture_0
                                 return Ok((t, tokens,))
                             return do_thing(tokens, _fn_def_1)
                 return _fn_case_0(tokens)

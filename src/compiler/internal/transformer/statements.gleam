@@ -180,95 +180,124 @@ fn transform_destructuring_assignment(
   }
   let value_result = transform_expression(message_result.context, value)
 
-  let #(statements, fresh_pool) = case binds, kind {
-    [], glance.Let ->
-      // A pattern that binds nothing, e.g. `let _ = foo`. Just evaluate the
-      // expression.
+  let #(statements, fresh_pool) = case tuple_unpack_names(pattern), kind {
+    // A `let #(a, b) = expr` where every element is a plain variable or
+    // discard: Python unpacks tuples natively, so emit `a, b = expr` directly
+    // instead of a helper closure + call + match. This is the most common
+    // destructure in the compiler (store/type threading), and each helper
+    // closure is a function call plus a match dispatch.
+    option.Some(names), glance.Let -> {
+      let assignment = case names {
+        [] -> [python.Expression(value_result.expression)]
+        [single] -> [python.SimpleAssignment(single, value_result.expression)]
+        multiple -> [
+          python.MultipleAssignment(multiple, value_result.expression),
+        ]
+      }
       #(
         list.append(
           list.append(message_result.statements, value_result.statements),
-          [python.Expression(value_result.expression)],
-        ),
-        value_result.context.fresh_pool,
-      )
-    _, _ -> {
-      let pattern_result = case
-        patterns.transform_alternative_patterns(
-          [[pattern]],
-          False,
-          context.module_bindings,
-        )
-      {
-        [pattern_result] -> pattern_result
-        _ -> panic as "Expected a single pattern in destructuring assignment"
-      }
-      let return_value = case binds {
-        [] -> python.Nil
-        [single] -> python.Variable(single)
-        multiple -> python.Tuple(list.map(multiple, python.Variable))
-      }
-      let matched_case =
-        python.MatchCase(
-          pattern_result.pattern,
-          pattern_result.guard,
-          list.append(pattern_result.body_prepend, [python.Return(return_value)]),
-        )
-      let cases = case kind {
-        glance.Let -> [matched_case]
-        glance.LetAssert(_) -> [
-          matched_case,
-          python.MatchCase(python.PatternWildcard, option.None, [
-            python.Expression(
-              python.Panic(let_assert_payload(
-                message_result.context,
-                location,
-                pattern,
-                value,
-                option.unwrap(
-                  message_result.expression,
-                  python.String(
-                    "Pattern match failed, no pattern matched the value.",
-                  ),
-                ),
-              )),
-            ),
-          ]),
-        ]
-      }
-      let function_name = "_fn_match_" <> int.to_string(context.next_case_id)
-      let function =
-        python.Function(
-          function_name,
-          [python.NameParam("_case_subject")],
-          [
-            python.Match(
-              subject: python.Variable("_case_subject"),
-              cases: cases,
-            ),
-          ],
-          False,
-          option.None,
-          [],
-        )
-      let call =
-        python.Call(python.Variable(function_name), [
-          python.UnlabelledField(value_result.expression),
-        ])
-      let assignment = case binds {
-        [] -> [python.Expression(call)]
-        [single] -> [python.SimpleAssignment(single, call)]
-        multiple -> [python.MultipleAssignment(multiple, call)]
-      }
-      #(
-        list.append(
-          list.append(
-            list.append(message_result.statements, value_result.statements),
-            [python.FunctionDef(function)],
-          ),
           assignment,
         ),
         value_result.context.fresh_pool,
       )
+    }
+    _, _ -> {
+      let #(statements, fresh_pool) = case binds, kind {
+        [], glance.Let ->
+          // A pattern that binds nothing, e.g. `let _ = foo`. Just evaluate
+          // the expression.
+          #(
+            list.append(
+              list.append(message_result.statements, value_result.statements),
+              [python.Expression(value_result.expression)],
+            ),
+            value_result.context.fresh_pool,
+          )
+        _, _ -> {
+          let pattern_result = case
+            patterns.transform_alternative_patterns(
+              [[pattern]],
+              False,
+              context.module_bindings,
+            )
+          {
+            [pattern_result] -> pattern_result
+            _ -> panic as "Expected a single pattern in destructuring assignment"
+          }
+          let return_value = case binds {
+            [] -> python.Nil
+            [single] -> python.Variable(single)
+            multiple -> python.Tuple(list.map(multiple, python.Variable))
+          }
+          let matched_case =
+            python.MatchCase(
+              pattern_result.pattern,
+              pattern_result.guard,
+              list.append(pattern_result.body_prepend, [
+                python.Return(return_value),
+              ]),
+            )
+          let cases = case kind {
+            glance.Let -> [matched_case]
+            glance.LetAssert(_) -> [
+              matched_case,
+              python.MatchCase(python.PatternWildcard, option.None, [
+                python.Expression(
+                  python.Panic(let_assert_payload(
+                    message_result.context,
+                    location,
+                    pattern,
+                    value,
+                    option.unwrap(
+                      message_result.expression,
+                      python.String(
+                        "Pattern match failed, no pattern matched the value.",
+                      ),
+                    ),
+                  )),
+                ),
+              ]),
+            ]
+          }
+          let function_name =
+            "_fn_match_" <> int.to_string(context.next_case_id)
+          let function =
+            python.Function(
+              function_name,
+              [python.NameParam("_case_subject")],
+              [
+                python.Match(
+                  subject: python.Variable("_case_subject"),
+                  cases: cases,
+                ),
+              ],
+              False,
+              option.None,
+              [],
+            )
+          let call =
+            python.Call(python.Variable(function_name), [
+              python.UnlabelledField(value_result.expression),
+            ])
+          let assignment = case binds {
+            [] -> [python.Expression(call)]
+            [single] -> [python.SimpleAssignment(single, call)]
+            multiple -> [python.MultipleAssignment(multiple, call)]
+          }
+          #(
+            list.append(
+              list.append(
+                list.append(message_result.statements, value_result.statements),
+                [python.FunctionDef(function)],
+              ),
+              assignment,
+            ),
+            value_result.context.fresh_pool,
+          )
+        }
+      }
+      #(statements, fresh_pool)
     }
   }
 
@@ -281,6 +310,30 @@ fn transform_destructuring_assignment(
     ),
     statements: statements,
   )
+}
+
+// The names to bind when destructuring a tuple pattern of only plain variables
+// and discards. Returns `None` for any other pattern shape (nested patterns,
+// variants, lists, etc.) which still needs the match-helper closure.
+fn tuple_unpack_names(pattern: glance.Pattern) -> option.Option(List(String)) {
+  case pattern {
+    glance.PatternTuple(_, elements) ->
+      elements
+      |> list.fold(option.Some([]), fn(state, element) {
+        case state {
+          option.None -> option.None
+          option.Some(acc) ->
+            case element {
+              glance.PatternVariable(_, name) -> option.Some([name, ..acc])
+              glance.PatternDiscard(_, "") -> option.Some(["_", ..acc])
+              glance.PatternDiscard(_, name) -> option.Some([name, ..acc])
+              _ -> option.None
+            }
+        }
+      })
+      |> option.map(list.reverse)
+    _ -> option.None
+  }
 }
 
 // The base dict shared by every runtime panic payload:
@@ -2018,13 +2071,19 @@ fn transform_case(
 
   let function_name = "_fn_case_" <> int.to_string(context.next_case_id)
   let cases = clause_result.item |> list.reverse
+  // Statements hoisted out of clause guards (e.g. a block expression in a
+  // guard becomes a `_fn_block_N` call, with the block's function definition
+  // hoisted here) are locals of the generated match function: they may
+  // reference the pattern captures, which Python scopes to the function
+  // containing the match. They are emitted before the match so the guard can
+  // call them.
   let function =
     python.Function(
       function_name,
       [python.NameParam("_case_subject")],
-      [
+      list.append(clause_result.statements, [
         python.Match(subject: python.Variable("_case_subject"), cases: cases),
-      ],
+      ]),
       False,
       option.None,
       [],
@@ -2098,7 +2157,7 @@ fn fold_case_clause(
           ..statements_result.context,
           local_bindings: state.context.local_bindings,
         ),
-        state.statements,
+        list.append(state.statements, guard_return.statements),
         list.fold(match_cases, state.item, fn(item, match_case) {
           list.prepend(item, match_case)
         }),
@@ -2159,7 +2218,7 @@ fn fold_case_clause(
           ..body_result.context,
           local_bindings: state.context.local_bindings,
         ),
-        state.statements,
+        list.append(state.statements, guard_return.statements),
         list.fold(match_cases, state.item, fn(item, match_case) {
           list.prepend(item, match_case)
         }),

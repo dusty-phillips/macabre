@@ -45,24 +45,10 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
       |> string_tree.append(")")
 
     python.List(elements) ->
-      string_tree.from_string("to_gleam_list([")
-      |> string_tree.append_tree(internal.generate_plural(
-        elements,
-        generate_expression,
-        ", ",
-      ))
-      |> string_tree.append("])")
+      build_gleam_list(elements, string_tree.from_string("EmptyGleamList()"))
 
     python.ListWithRest(elements, rest) ->
-      string_tree.from_string("to_gleam_list([")
-      |> string_tree.append_tree(internal.generate_plural(
-        elements,
-        generate_expression,
-        ", ",
-      ))
-      |> string_tree.append("], ")
-      |> string_tree.append_tree(generate_expression(rest))
-      |> string_tree.append(")")
+      build_gleam_list(elements, generate_expression(rest))
 
     python.Tuple(expressions) ->
       case expressions {
@@ -375,4 +361,24 @@ fn strip_leading_zeroes(literal: String) -> String {
 
 fn is_zero_or_underscore(grapheme: String) -> Bool {
   grapheme == "0" || grapheme == "_"
+}
+
+// Builds a Gleam list literal as directly nested cons cells rather than going
+// through `to_gleam_list`. `[a, b, ..rest]` becomes `GleamList(a, GleamList(b,
+// rest))`, avoiding the intermediate Python list and the helper call. The tail
+// (either `rest` or `EmptyGleamList()` for a non-spliced literal) is the
+// innermost cell.
+fn build_gleam_list(
+  elements: List(python.Expression),
+  tail: StringTree,
+) -> StringTree {
+  elements
+  |> list.reverse
+  |> list.fold(tail, fn(acc, element) {
+    string_tree.from_string("GleamList(")
+    |> string_tree.append_tree(generate_expression(element))
+    |> string_tree.append(", ")
+    |> string_tree.append_tree(acc)
+    |> string_tree.append(")")
+  })
 }

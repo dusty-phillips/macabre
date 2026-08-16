@@ -174,7 +174,9 @@ fn load_glimpse_package(
 // loaded module (the root module may live under a different path, and test and
 // dev modules are additional entry points). So the full module set is sorted
 // topologically and each module is checked individually.
-fn typecheck_package(package: glimpse.Package) -> Result(glimpse.Package, errors.Error) {
+fn typecheck_package(
+  package: glimpse.Package,
+) -> Result(glimpse.Package, errors.Error) {
   // An empty package (no root module named after the project and nothing
   // importing any other module) has nothing to check.
   case dict.is_empty(package.modules) {
@@ -192,9 +194,9 @@ fn typecheck_package(package: glimpse.Package) -> Result(glimpse.Package, errors
         use glimpse_module <- result.try(
           dict.get(package.modules, module_name)
           |> result.replace_error(
-            errors.GlimpseImportError(
-              glimpse_error.MissingImportError(module_name),
-            ),
+            errors.GlimpseImportError(glimpse_error.MissingImportError(
+              module_name,
+            )),
           ),
         )
         use #(new_module, env) <- result.try(
@@ -243,9 +245,7 @@ fn topo_sort_recurse(
         set.filter(remaining, fn(module_name) {
           case dict.get(graph, module_name) {
             Ok(dependencies) ->
-              list.all(dependencies, fn(dep) {
-                !set.contains(remaining, dep)
-              })
+              list.all(dependencies, fn(dep) { !set.contains(remaining, dep) })
             Error(_) -> True
           }
         })
@@ -258,11 +258,7 @@ fn topo_sort_recurse(
             |> list.first
             |> result.unwrap("")
           let remaining = set.delete(remaining, next)
-          topo_sort_recurse(
-            graph,
-            remaining,
-            list.prepend(result, next),
-          )
+          topo_sort_recurse(graph, remaining, list.prepend(result, next))
         }
       }
     }

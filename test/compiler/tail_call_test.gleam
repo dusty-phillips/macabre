@@ -38,15 +38,15 @@ def split(tokens):
 
 
 def process(acc, tokens):
+    def _fn_def_0(first, rest):
+        def _fn_case_0(_case_subject):
+            match _case_subject:
+                case EmptyGleamList():
+                    return acc
+                case _:
+                    return GleamTco((GleamList(first, acc), rest,))
+        return _fn_case_0(rest)
     while True:
-        def _fn_def_0(first, rest):
-            def _fn_case_0(_case_subject):
-                match _case_subject:
-                    case EmptyGleamList():
-                        return acc
-                    case _:
-                        return GleamTco((to_gleam_list([first], acc), rest,))
-            return _fn_case_0(rest)
         _result = result.try_(split(tokens), _fn_def_0)
         match isinstance(_result, GleamTco):
             case True:
@@ -72,13 +72,13 @@ pub fn single_parameter_tail_call_test() {
 from gleam_builtins import *
 
 def countdown(n):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 0:
+                return 0
+            case _:
+                return GleamTco((n - 1,))
     while True:
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case 0:
-                    return 0
-                case _:
-                    return GleamTco((n - 1,))
         _result = _fn_case_0(n)
         match isinstance(_result, GleamTco):
             case True:
@@ -108,13 +108,13 @@ pub fn multiple_parameter_tail_call_test() {
 from gleam_builtins import *
 
 def drop_until(n, acc):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 0:
+                return acc
+            case _:
+                return GleamTco((n - 1, GleamList(n, acc),))
     while True:
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case 0:
-                    return acc
-                case _:
-                    return GleamTco((n - 1, to_gleam_list([n], acc),))
         _result = _fn_case_0(n)
         match isinstance(_result, GleamTco):
             case True:
@@ -124,7 +124,7 @@ def drop_until(n, acc):
 
 
 def main():
-    return drop_until(3, to_gleam_list([]))"
+    return drop_until(3, EmptyGleamList())"
 }
 
 pub fn non_tail_call_not_optimized_test() {
@@ -190,7 +190,7 @@ def walk(items, depth):
             case GleamList(item, rest):
                 def _fn_def_0(state, next):
                     def _fn_def_0(d):
-                        return walk(to_gleam_list([next]), d + 1)
+                        return walk(GleamList(next, EmptyGleamList()), d + 1)
                     return result.try_(state, _fn_def_0)
                 return list.fold(rest, Ok(depth), _fn_def_0)
     return _fn_case_0(items)

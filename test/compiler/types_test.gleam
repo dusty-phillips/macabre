@@ -24,6 +24,10 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Bar:
     a: int
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -46,10 +50,18 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Bar:
     a: int
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Baz:
     a: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -70,7 +82,11 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -92,11 +108,19 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Baz:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -118,6 +142,10 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Foo:
     point: typing.Tuple[int, int]
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -140,6 +168,10 @@ ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
 class Foo:
     item: ELEM
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -163,10 +195,18 @@ ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
 class Bar:
     item: ELEM
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Baz:
     elem: ELEM
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -193,11 +233,19 @@ ELEM = typing.TypeVar('ELEM')
 @dataclasses.dataclass(frozen=True)
 class Foo:
     item: ELEM
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 @dataclasses.dataclass(frozen=True)
 class Bar:
     foo: Foo[str]
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -220,6 +268,10 @@ from gleam_builtins import *
 class Foo:
     _0: int
     _1: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -242,6 +294,10 @@ from gleam_builtins import *
 class Foo:
     a: int
     _0: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 
@@ -263,6 +319,10 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Foo:
     callback: typing.Callable[[int], int]
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 

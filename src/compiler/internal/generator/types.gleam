@@ -81,12 +81,8 @@ fn generate_type_variant_body(
   docstring: option.Option(String),
 ) -> StringTree {
   let docstring = internal.generate_docstring(docstring)
-  case variant.fields, docstring {
-    [], _ ->
-      case string_tree.is_empty(docstring) {
-        True -> string_tree.from_string("pass")
-        False -> docstring
-      }
+  let fields = case variant.fields, docstring {
+    [], _ -> string_tree.new()
     fields, _ -> {
       let fields = generate_type_fields(fields)
       case string_tree.is_empty(docstring) {
@@ -98,6 +94,13 @@ fn generate_type_variant_body(
       }
     }
   }
+  // Hash by value rather than by the frozen dataclass's generated `__hash__`,
+  // which cannot hash `Dict` fields. This keeps records usable as dict keys
+  // (and in tuples used as keys), matching Erlang where any term is hashable.
+  fields
+  |> string_tree.append("\n\n")
+  |> string_tree.append("def __hash__(self):\n")
+  |> string_tree.append("    return gleam_hash(self)\n")
 }
 
 fn generate_type_fields(fields: List(python.Field(python.Type))) -> StringTree {

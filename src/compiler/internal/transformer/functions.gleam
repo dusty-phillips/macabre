@@ -161,18 +161,18 @@ pub fn transform_top_level_function(
     |> list.map(fn(alias) { alias <> "_0" })
   let context =
     transformer.TransformerContext(..context, module_reserved: module_reserved)
+  let body_result =
+    statements.transform_statement_block_with_context(context, function.body)
   let body =
     fold_result.reversed_binds
     |> list.reverse
-    |> list.append(
-      statements.transform_statement_block_with_context(context, function.body).statements,
-    )
+    |> list.append(body_result.statements)
   let #(parameters, body, fresh_pool) =
     shadowing.resolve_module_shadowing(
       body,
       parameters,
       module_aliases,
-      context.fresh_pool,
+      body_result.context.fresh_pool,
     )
   let #(body, _) =
     body

@@ -495,6 +495,10 @@ class Thing:
     label: str
     location: int
     item: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def make(name, t):
@@ -574,15 +578,27 @@ from gleam_builtins import *
 
 @dataclasses.dataclass(frozen=True)
 class Normal:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Doc:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Module:
-    pass
+    
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def make():

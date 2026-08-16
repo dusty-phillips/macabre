@@ -1076,12 +1076,28 @@ fn resolve_nested_binds(
 ) -> #(python.Statement, dict.Dict(String, Int)) {
   case statement {
     python.FunctionDef(function) -> {
+      // A closure captures the enclosing scope's bindings that are in scope at
+      // its definition point. A rename for a name the enclosing block binds
+      // LATER than this closure (e.g. `let fun = fn() { fun }` rebinding a
+      // parameter the closure body references) must not apply here: the
+      // closure's reference points at the earlier binding (the parameter), so
+      // it keeps the original name; only references after the binding use the
+      // fresh name. Names already bound by earlier statements of the enclosing
+      // block (`bound`) are captured and use their rename.
+      let block_renames =
+        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
+      // A parameter must be renamed with exactly the renames the body's
+      // references are renamed with (`block_renames`): the parameter shadows
+      // any enclosing binding of the same name for the whole body, so its
+      // references point at the parameter and are renamed by the body fold. A
+      // rename for a name the block binds LATER than this closure renames the
+      // parameter but not the body's references to it, breaking them.
       let renamed_function =
         python.Function(
           ..function,
           parameters: list.map(function.parameters, rename_function_parameter(
             _,
-            renames,
+            block_renames,
           )),
         )
       // References inside the function body to the enclosing case's renamed
@@ -1100,16 +1116,6 @@ fn resolve_nested_binds(
           dict.filter(own_cross, fn(name, _) { set.contains(cross_scope, name) }),
         )
         |> dict.filter(fn(name, _) { !set.contains(function_binds, name) })
-      // A closure captures the enclosing scope's bindings that are in scope at
-      // its definition point. A rename for a name the enclosing block binds
-      // LATER than this closure (e.g. `let fun = fn() { fun }` rebinding a
-      // parameter the closure body references) must not apply here: the
-      // closure's reference points at the earlier binding (the parameter), so
-      // it keeps the original name; only references after the binding use the
-      // fresh name. Names already bound by earlier statements of the enclosing
-      // block (`bound`) are captured and use their rename.
-      let block_renames =
-        dict.filter(renames, fn(name, _) { set.contains(bound, name) })
       let #(body, pool) =
         nested_resolve_fold(
           renamed_function.body,
@@ -1777,19 +1783,23 @@ fn rename_expression_field(
 // rewrite direct self-recursive tail calls into a `while True:` loop.
 //
 //     def drop_comments(input, acc, state):
+//         def _fn_case_0(_case_subject):
+//             match _case_subject:
+//                 case GleamList(g, input):
+//                     return _Tco((input, to_gleam_list([g], acc), state))
+//                 case None:
+//                     return list.reverse(acc)
 //         while True:
-//             def _fn_case_0(_case_subject):
-//                 match _case_subject:
-//                     case GleamList(g, input):
-//                         return _Tco((input, to_gleam_list([g], acc), state))
-//                     case None:
-//                         return list.reverse(acc)
 //             _result = _fn_case_0(input)
 //             match isinstance(_result, _Tco):
 //                 case True:
 //                     input, acc, state = _result.args
 //                 case False:
 //                     return _result
+//
+// The driver closures are hoisted above the loop: recreating them on every
+// iteration is pure overhead (each `def` re-allocates a closure object), and
+// they only bind names, so moving them out is behaviour-preserving.
 //
 // The `_Tco` marker propagates up through any nested `_fn_def_N`/`_fn_case_N`
 // driver functions (they just pass it through their return chain) until it
@@ -1854,7 +1864,14 @@ pub fn resolve_tail_calls(
                 ],
               ),
             ])
-          [python.While(python.Bool("True"), loop_body)]
+          let #(drivers, body) =
+            list.partition(loop_body, fn(statement) {
+              case statement {
+                python.FunctionDef(_) -> True
+                _ -> False
+              }
+            })
+          list.append(drivers, [python.While(python.Bool("True"), body)])
         }
         option.None -> rewritten
       }

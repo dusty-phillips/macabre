@@ -5,6 +5,13 @@ import sys
 import typing
 import struct
 
+# Compiled Gleam programs can recurse much deeper than Python's default
+# recursion limit (1000 frames): a deeply nested `use <- result.try(...)`
+# chain alone costs several frames per nesting level. Raise the limit so
+# programs that are well-formed for Erlang (which has a growable stack) also
+# run under CPython.
+sys.setrecursionlimit(20000)
+
 class GleamPanic(BaseException):
     pass
 
@@ -106,6 +113,36 @@ class EmptyGleamList:
     def __hash__(self):
         return 0
 
+
+# Gleam values are all hashable (like Erlang terms), but Python's `dict` is
+# not, so a record or tuple containing a `Dict` cannot be hashed by the
+# generated dataclass alone. `gleam_hash` hashes any value by a canonical,
+# value-based form: dicts become frozensets of items, lists/tuples become
+# tuples, and records become `(class, fields...)`. Equal values (including
+# dicts with different insertion orders) always hash the same.
+def _gleam_hash_key(value):
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
+        return value
+    if isinstance(value, dict):
+        return frozenset(
+            (_gleam_hash_key(k), _gleam_hash_key(v)) for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_gleam_hash_key(v) for v in value)
+    if isinstance(value, GleamList):
+        items = []
+        while isinstance(value, GleamList):
+            items.append(_gleam_hash_key(value.value))
+            value = value.tail
+        return (\"GleamList\", tuple(items))
+    if dataclasses.is_dataclass(value):
+        return (type(value),) + tuple(
+            _gleam_hash_key(getattr(value, field.name))
+            for field in dataclasses.fields(value))
+    return (type(value), value)
+
+
+def gleam_hash(value):
+    return hash(_gleam_hash_key(value))
 
 
 def to_gleam_list(elements: list[GleamListElem], tail: GleamList | None=None):

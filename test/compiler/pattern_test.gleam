@@ -205,6 +205,10 @@ from gleam_builtins import *
 @dataclasses.dataclass(frozen=True)
 class Box:
     value: int
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def main():

@@ -130,7 +130,7 @@ pub fn empty_list_expression_test() {
 from gleam_builtins import *
 
 def main():
-    return to_gleam_list([])"
+    return EmptyGleamList()"
 }
 
 pub fn list_expression_with_contents_test() {
@@ -143,7 +143,7 @@ pub fn list_expression_with_contents_test() {
 from gleam_builtins import *
 
 def main():
-    return to_gleam_list([1, 2, 3])"
+    return GleamList(1, GleamList(2, GleamList(3, EmptyGleamList())))"
 }
 
 pub fn list_expression_with_tail_test() {
@@ -156,7 +156,7 @@ pub fn list_expression_with_tail_test() {
 from gleam_builtins import *
 
 def main():
-    return to_gleam_list([1, 2], to_gleam_list([3, 4]))"
+    return GleamList(1, GleamList(2, GleamList(3, GleamList(4, EmptyGleamList()))))"
 }
 
 pub fn true_expression_test() {
@@ -734,6 +734,10 @@ from gleam_builtins import *
 class Bar:
     a: int
     b: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def main():
@@ -762,6 +766,10 @@ from gleam_builtins import *
 class Bar:
     a: int
     b: str
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def main():

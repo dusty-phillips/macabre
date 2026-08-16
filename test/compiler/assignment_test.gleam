@@ -50,11 +50,7 @@ pub fn tuple_assignment_test() {
 from gleam_builtins import *
 
 def main():
-    def _fn_match_0(_case_subject):
-        match _case_subject:
-            case (a, b):
-                return (a, b,)
-    a, b = _fn_match_0((\"one\", \"two\",))
+    a, b = (\"one\", \"two\",)
 
 
 __all__ = [\"main\"]
@@ -121,8 +117,8 @@ pub fn rebind_reference_before_binding_test() {
 from gleam_builtins import *
 
 def sequences(initial):
-    growing = to_gleam_list([0], initial)
-    growing_0 = to_gleam_list([1], growing)
+    growing = GleamList(0, initial)
+    growing_0 = GleamList(1, growing)
     return growing_0
 
 
@@ -177,21 +173,21 @@ pub fn case_subject_before_rebind_test() {
 from gleam_builtins import *
 
 def repeat_loop(times, doubling_acc, acc):
+    def _fn_case_0(_case_subject):
+        match _case_subject:
+            case 0:
+                return acc
+            case _:
+                return acc + doubling_acc
+    def _fn_case_1(_case_subject):
+        match _case_subject:
+            case True:
+                return acc_0
+            case False:
+                return GleamTco((times_0, doubling_acc + doubling_acc, acc_0,))
     while True:
-        def _fn_case_0(_case_subject):
-            match _case_subject:
-                case 0:
-                    return acc
-                case _:
-                    return acc + doubling_acc
         acc_0 = _fn_case_0(gleam_int_rem(times, 2))
         times_0 = gleam_int_div(times, 2)
-        def _fn_case_1(_case_subject):
-            match _case_subject:
-                case True:
-                    return acc_0
-                case False:
-                    return GleamTco((times_0, doubling_acc + doubling_acc, acc_0,))
         _result = _fn_case_1(times_0 <= 0)
         match isinstance(_result, GleamTco):
             case True:
@@ -241,10 +237,18 @@ E = typing.TypeVar('E')
 @dataclasses.dataclass(frozen=True)
 class Ok:
     _0: A
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 @dataclasses.dataclass(frozen=True)
 class Error:
     _0: E
+    
+    def __hash__(self):
+        return gleam_hash(self)
+    
 
 
 def result_try(value):
@@ -267,5 +271,40 @@ def repro(input):
 
 
 __all__ = [\"repro\", \"Ok\", \"Error\"]
+"
+}
+
+// A `let` binding that shadows a parameter, combined with a nested function
+// that rebinds the same name while referencing it on its own right hand side,
+// must mint distinct Python names for the two bindings. The nested function's
+// body resolves its own shadowing first, minting a fresh name from the shared
+// pool; the enclosing function's shadowing must then use the pool advanced by
+// that mint, or both bindings collapse onto the same name and the nested
+// function's RHS reference resolves to its own (unbound) local.
+pub fn use_callback_rebind_of_parameter_shadow_test() {
+  let assert Ok(module) =
+    "pub fn repro(environment: Int) -> Result(Int, Nil) {
+    let environment = environment + 1
+    let callback = fn(value: Int) -> Result(Int, Nil) {
+      let environment = environment + value
+      Ok(environment)
+    }
+    callback(environment)
+  }
+  "
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def repro(environment):
+    environment_1 = environment + 1
+    def _fn_def_0(value):
+        environment_0 = environment_1 + value
+        return Ok(environment_0)
+    callback = _fn_def_0
+    return callback(environment_1)
+
+
+__all__ = [\"repro\"]
 "
 }
