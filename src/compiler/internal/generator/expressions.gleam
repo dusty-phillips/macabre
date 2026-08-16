@@ -79,15 +79,15 @@ pub fn generate_expression(expression: python.Expression) -> StringTree {
 
     python.RecordUpdate(record, fields) ->
       string_tree.new()
-      |> string_tree.append("dataclasses.replace(")
+      |> string_tree.append("gleam_record_replace(")
       |> string_tree.append_tree(generate_expression(record))
-      |> string_tree.append(", ")
+      |> string_tree.append(", {")
       |> string_tree.append_tree(internal.generate_plural(
         fields,
         generate_record_update_fields,
         ", ",
       ))
-      |> string_tree.append(")")
+      |> string_tree.append("})")
 
     python.Lambda(arguments, body) -> {
       string_tree.from_string("(lambda ")
@@ -164,8 +164,9 @@ fn generate_record_update_fields(
       panic as "Unlabeled fields are not expected on record updates"
     python.LabelledField(label, expression) ->
       string_tree.new()
+      |> string_tree.append("\"")
       |> string_tree.append(label |> internal.python_name)
-      |> string_tree.append("=")
+      |> string_tree.append("\": ")
       |> string_tree.append_tree(generate_expression(expression))
   }
 }

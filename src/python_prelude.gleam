@@ -134,15 +134,27 @@ def _gleam_hash_key(value):
             items.append(_gleam_hash_key(value.value))
             value = value.tail
         return (\"GleamList\", tuple(items))
-    if dataclasses.is_dataclass(value):
+    fields = getattr(type(value), \"__dataclass_fields__\", None)
+    if fields is not None:
         return (type(value),) + tuple(
-            _gleam_hash_key(getattr(value, field.name))
-            for field in dataclasses.fields(value))
+            _gleam_hash_key(getattr(value, name)) for name in fields)
     return (type(value), value)
 
 
 def gleam_hash(value):
     return hash(_gleam_hash_key(value))
+
+
+# A record update. `dataclasses.replace` is far slower: it builds a kwargs
+# dict for every field and calls `__init__`. Bypassing the constructor with a
+# `__dict__` copy (mutated directly, which the frozen dataclass `__setattr__`
+# cannot intercept) is equivalent for the plain dataclasses the compiler
+# generates, which have no custom `__init__`.
+def gleam_record_replace(record, changes):
+    new = type(record).__new__(type(record))
+    object.__setattr__(new, \"__dict__\", record.__dict__.copy())
+    new.__dict__.update(changes)
+    return new
 
 
 def to_gleam_list(elements: list[GleamListElem], tail: GleamList | None=None):

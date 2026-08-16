@@ -742,7 +742,7 @@ class Bar:
 
 def main():
     foo = Bar(1, \"who\")
-    bar = dataclasses.replace(foo, b=\"you\")
+    bar = gleam_record_replace(foo, {\"b\": \"you\"})
 
 
 __all__ = [\"main\", \"Bar\"]
