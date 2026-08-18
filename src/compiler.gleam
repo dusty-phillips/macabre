@@ -280,18 +280,22 @@ fn variant_field_names(fields: List(glance.VariantField)) -> List(String) {
 fn package_arities(
   modules: dict.Dict(String, glimpse.Module),
 ) -> dict.Dict(String, List(String)) {
-  modules
-  |> dict.fold(dict.new(), fn(acc, module_name, module) {
-    let prefix =
-      module_name
-      |> string.split("/")
-      |> list.last
-      |> result.unwrap(module_name)
-    module_arities(module.module)
-    |> dict.fold(acc, fn(acc, name, field_names) {
-      dict.insert(acc, prefix <> "." <> name, field_names)
+  let entries =
+    modules
+    |> dict.fold([], fn(acc, module_name, module) {
+      let prefix =
+        module_name
+        |> string.split("/")
+        |> list.last
+        |> result.unwrap(module_name)
+      module_arities(module.module)
+      |> dict.fold(acc, fn(acc, name, field_names) {
+        [#(prefix <> "." <> name, field_names), ..acc]
+      })
     })
-  })
+  entries
+  |> list.reverse
+  |> dict.from_list
   |> add_import_alias_arities(modules)
 }
 
@@ -303,13 +307,15 @@ fn package_arities(
 fn package_bare_arities(
   modules: dict.Dict(String, glimpse.Module),
 ) -> dict.Dict(String, List(String)) {
-  modules
-  |> dict.fold(dict.new(), fn(acc, _module_name, module) {
-    module_arities(module.module)
-    |> dict.fold(acc, fn(acc, name, field_names) {
-      dict.insert(acc, name, field_names)
+  let entries =
+    modules
+    |> dict.fold([], fn(acc, _module_name, module) {
+      module_arities(module.module)
+      |> dict.fold(acc, fn(acc, name, field_names) {
+        [#(name, field_names), ..acc]
+      })
     })
-  })
+  entries |> list.reverse |> dict.from_list
 }
 
 // References to constructors of an aliased import (e.g.
@@ -319,24 +325,26 @@ fn add_import_alias_arities(
   acc: dict.Dict(String, List(String)),
   modules: dict.Dict(String, glimpse.Module),
 ) -> dict.Dict(String, List(String)) {
-  modules
-  |> dict.fold(acc, fn(acc, _module_name, module) {
-    list.fold(module.module.imports, acc, fn(acc, definition) {
-      case definition {
-        glance.Definition(_, glance.Import(_, module_path, alias, _, _)) ->
-          case dict.get(modules, module_path) {
-            Error(_) -> acc
-            Ok(imported_module) -> {
-              let binding = import_binding_name(module_path, alias)
-              module_arities(imported_module.module)
-              |> dict.fold(acc, fn(acc, name, field_names) {
-                dict.insert(acc, binding <> "." <> name, field_names)
-              })
+  let new_entries =
+    modules
+    |> dict.fold([], fn(entries, _module_name, module) {
+      list.fold(module.module.imports, entries, fn(entries, definition) {
+        case definition {
+          glance.Definition(_, glance.Import(_, module_path, alias, _, _)) ->
+            case dict.get(modules, module_path) {
+              Error(_) -> entries
+              Ok(imported_module) -> {
+                let binding = import_binding_name(module_path, alias)
+                module_arities(imported_module.module)
+                |> dict.fold(entries, fn(entries, name, field_names) {
+                  [#(binding <> "." <> name, field_names), ..entries]
+                })
+              }
             }
-          }
-      }
+        }
+      })
     })
-  })
+  dict.from_list(list.append(dict.to_list(acc), list.reverse(new_entries)))
 }
 
 fn import_binding_name(
@@ -373,39 +381,19 @@ fn function_signatures(
   modules: dict.Dict(String, glimpse.Module),
   current_module_name: String,
 ) -> internal.FunctionSignatures {
-  modules
-  |> dict.fold(dict.new(), fn(acc, module_name, module) {
-    let prefix =
-      module_name
-      |> string.split("/")
-      |> list.last
-      |> result.unwrap(module_name)
-    let qualified_entries =
-      module.module.functions
-      |> list.map(fn(function) {
-        #(
-          prefix <> "." <> function.definition.name,
-          function.definition.parameters
-            |> list.map(fn(parameter) {
-              #(parameter.label, assignment_name(parameter.name))
-            }),
-        )
-      })
-      |> list.append(
-        module.module.constants
-        |> list.map(fn(constant) {
-          // A constant is a nullary value, so it has no parameter names; the
-          // key just marks the name as a module member so module-qualified
-          // references (e.g. `decode.string`) resolve to the module.
-          #(prefix <> "." <> constant.definition.name, [])
-        }),
-      )
-    let local_entries = case module_name == current_module_name {
-      True ->
+  let entries =
+    modules
+    |> dict.fold([], fn(acc, module_name, module) {
+      let prefix =
+        module_name
+        |> string.split("/")
+        |> list.last
+        |> result.unwrap(module_name)
+      let qualified_entries =
         module.module.functions
         |> list.map(fn(function) {
           #(
-            function.definition.name,
+            prefix <> "." <> function.definition.name,
             function.definition.parameters
               |> list.map(fn(parameter) {
                 #(parameter.label, assignment_name(parameter.name))
@@ -414,16 +402,37 @@ fn function_signatures(
         })
         |> list.append(
           module.module.constants
-          |> list.map(fn(constant) { #(constant.definition.name, []) }),
+          |> list.map(fn(constant) {
+            // A constant is a nullary value, so it has no parameter names; the
+            // key just marks the name as a module member so module-qualified
+            // references (e.g. `decode.string`) resolve to the module.
+            #(prefix <> "." <> constant.definition.name, [])
+          }),
         )
-      False -> []
-    }
-    list.append(qualified_entries, local_entries)
-    |> list.fold(acc, fn(acc, entry) {
-      let #(key, params) = entry
-      dict.insert(acc, key, params)
+      let local_entries = case module_name == current_module_name {
+        True ->
+          module.module.functions
+          |> list.map(fn(function) {
+            #(
+              function.definition.name,
+              function.definition.parameters
+                |> list.map(fn(parameter) {
+                  #(parameter.label, assignment_name(parameter.name))
+                }),
+            )
+          })
+          |> list.append(
+            module.module.constants
+            |> list.map(fn(constant) { #(constant.definition.name, []) }),
+          )
+        False -> []
+      }
+      list.append(qualified_entries, local_entries)
+      |> list.fold(acc, fn(acc, entry) { [entry, ..acc] })
     })
-  })
+  entries
+  |> list.reverse
+  |> dict.from_list
   |> add_import_alias_signatures(modules)
   |> add_unqualified_import_signatures(modules, current_module_name)
 }
@@ -437,20 +446,21 @@ fn add_unqualified_import_signatures(
   modules: dict.Dict(String, glimpse.Module),
   current_module_name: String,
 ) -> internal.FunctionSignatures {
-  case dict.get(modules, current_module_name) {
-    Error(_) -> acc
+  let new_entries = case dict.get(modules, current_module_name) {
+    Error(_) -> []
     Ok(current_module) ->
-      list.fold(current_module.module.imports, acc, fn(acc, definition) {
+      current_module.module.imports
+      |> list.fold([], fn(entries, definition) {
         case definition {
           glance.Definition(
             _,
             glance.Import(_, module_path, _, _, unqualified_values),
           ) ->
             case dict.get(modules, module_path) {
-              Error(_) -> acc
+              Error(_) -> entries
               Ok(imported_module) -> {
                 let imported_functions = imported_module.module.functions
-                list.fold(unqualified_values, acc, fn(acc, unqualified) {
+                list.fold(unqualified_values, entries, fn(entries, unqualified) {
                   case unqualified {
                     glance.UnqualifiedImport(name, alias) -> {
                       let binding = case alias {
@@ -462,9 +472,8 @@ fn add_unqualified_import_signatures(
                           function.definition.name == name
                         })
                       {
-                        Ok(function) ->
-                          dict.insert(
-                            acc,
+                        Ok(function) -> [
+                          #(
                             binding,
                             function.definition.parameters
                               |> list.map(fn(parameter) {
@@ -473,8 +482,10 @@ fn add_unqualified_import_signatures(
                                   assignment_name(parameter.name),
                                 )
                               }),
-                          )
-                        Error(_) -> acc
+                          ),
+                          ..entries
+                        ]
+                        Error(_) -> entries
                       }
                     }
                   }
@@ -484,6 +495,7 @@ fn add_unqualified_import_signatures(
         }
       })
   }
+  dict.from_list(list.append(dict.to_list(acc), list.reverse(new_entries)))
 }
 
 // `use` callbacks resolve against the aliased module name (e.g.
@@ -493,34 +505,38 @@ fn add_import_alias_signatures(
   acc: internal.FunctionSignatures,
   modules: dict.Dict(String, glimpse.Module),
 ) -> internal.FunctionSignatures {
-  modules
-  |> dict.fold(acc, fn(acc, _module_name, module) {
-    list.fold(module.module.imports, acc, fn(acc, definition) {
-      case definition {
-        glance.Definition(_, glance.Import(_, module_path, alias, _, _)) ->
-          case dict.get(modules, module_path) {
-            Error(_) -> acc
-            Ok(imported_module) -> {
-              let binding = import_binding_name(module_path, alias)
-              list.fold(
-                imported_module.module.functions,
-                acc,
-                fn(acc, function) {
-                  dict.insert(
-                    acc,
-                    binding <> "." <> function.definition.name,
-                    function.definition.parameters
-                      |> list.map(fn(parameter) {
-                        #(parameter.label, assignment_name(parameter.name))
-                      }),
-                  )
-                },
-              )
+  let new_entries =
+    modules
+    |> dict.fold([], fn(entries, _module_name, module) {
+      list.fold(module.module.imports, entries, fn(entries, definition) {
+        case definition {
+          glance.Definition(_, glance.Import(_, module_path, alias, _, _)) ->
+            case dict.get(modules, module_path) {
+              Error(_) -> entries
+              Ok(imported_module) -> {
+                let binding = import_binding_name(module_path, alias)
+                list.fold(
+                  imported_module.module.functions,
+                  entries,
+                  fn(entries, function) {
+                    [
+                      #(
+                        binding <> "." <> function.definition.name,
+                        function.definition.parameters
+                          |> list.map(fn(parameter) {
+                            #(parameter.label, assignment_name(parameter.name))
+                          }),
+                      ),
+                      ..entries
+                    ]
+                  },
+                )
+              }
             }
-          }
-      }
+        }
+      })
     })
-  })
+  dict.from_list(list.append(dict.to_list(acc), list.reverse(new_entries)))
 }
 
 pub fn has_main_function(
