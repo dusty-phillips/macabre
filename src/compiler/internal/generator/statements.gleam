@@ -428,6 +428,9 @@ type ConstructorBranch {
     class: StringTree,
     // Name bindings produced by the case's fields, as statements.
     bindings: List(python.Statement),
+    // Extra conditions a branch must satisfy, such as a field equal to a
+    // literal (e.g. `GenericTypeVariable(name, True)`).
+    conditions: List(python.Expression),
     body: List(python.Statement),
   )
 }
@@ -581,21 +584,60 @@ fn build_constructor_branch(
         |> option.unwrap("")
         |> string_tree.from_string
         |> string_tree.append(name)
-      let bindings =
+      let #(bindings, conditions) =
         arguments
-        |> list.index_fold([], fn(acc, argument, index) {
+        |> list.index_fold(#([], []), fn(acc, argument, index) {
+          let #(bindings, conditions) = acc
           case argument {
-            python.UnlabelledField(python.PatternVariable(bound)) ->
-              list.append(acc, [
+            python.UnlabelledField(python.PatternVariable(bound)) -> #(
+              list.append(bindings, [
                 python.SimpleAssignment(
                   bound,
                   constructor_field(subject, module, name, index, field_names),
                 ),
-              ])
+              ]),
+              conditions,
+            )
+            python.UnlabelledField(python.PatternConstructor(_, literal, [])) ->
+              case literal {
+                "True" | "False" -> #(
+                  bindings,
+                  list.append(conditions, [
+                    python.BinaryOperator(
+                      python.Equal,
+                      constructor_field(
+                        subject,
+                        module,
+                        name,
+                        index,
+                        field_names,
+                      ),
+                      python.Bool(literal),
+                    ),
+                  ]),
+                )
+                "None" -> #(
+                  bindings,
+                  list.append(conditions, [
+                    python.BinaryOperator(
+                      python.Equal,
+                      constructor_field(
+                        subject,
+                        module,
+                        name,
+                        index,
+                        field_names,
+                      ),
+                      python.Nil,
+                    ),
+                  ]),
+                )
+                _ -> acc
+              }
             _ -> acc
           }
         })
-      option.Some(ConstructorBranch(class, bindings, body))
+      option.Some(ConstructorBranch(class, bindings, conditions, body))
     }
   }
 }
@@ -656,6 +698,12 @@ fn argument_is_simple(argument: python.Field(python.Pattern)) -> Bool {
   case argument {
     python.UnlabelledField(python.PatternVariable(_)) -> True
     python.UnlabelledField(python.PatternWildcard) -> True
+    // A field matched against the `True`/`False`/`None` literal (e.g. a
+    // `GenericTypeVariable(name, True)` case) is simple: it compiles to a
+    // field-equality condition rather than a Python pattern.
+    python.UnlabelledField(python.PatternConstructor(_, "True", [])) -> True
+    python.UnlabelledField(python.PatternConstructor(_, "False", [])) -> True
+    python.UnlabelledField(python.PatternConstructor(_, "None", [])) -> True
     _ -> False
   }
 }
@@ -674,6 +722,13 @@ fn generate_constructor_chain(
         _ -> "elif"
       }
       let subject_tree = expressions.generate_expression(subject)
+      let class_and_conditions =
+        branch.conditions
+        |> list.fold(branch.class, fn(tree, condition) {
+          tree
+          |> string_tree.append(" and ")
+          |> string_tree.append_tree(expressions.generate_expression(condition))
+        })
       let body_tree =
         branch.bindings
         |> list.append(branch.body)
@@ -685,7 +740,7 @@ fn generate_constructor_chain(
       |> string_tree.append(" type(")
       |> string_tree.append_tree(subject_tree)
       |> string_tree.append(") is ")
-      |> string_tree.append_tree(branch.class)
+      |> string_tree.append_tree(class_and_conditions)
       |> string_tree.append(":\n")
       |> string_tree.append_tree(body_tree)
     })
