@@ -290,6 +290,13 @@ pub fn transform_module_with_metadata(
         ]
       }
     })
+  let module_paths =
+    list.fold(input.imports, dict.new(), fn(paths, import_) {
+      case import_ {
+        glance.Definition(_, glance.Import(_, module, alias, _, _)) ->
+          dict.insert(paths, module_binding_name(module, alias), module)
+      }
+    })
   let module_bindings = compute_module_bindings(input, submodule_names)
   let #(leading_comments, comments_by_start, trailing_comments) =
     comments.assign_leading_comments(top_level_spans(input), module_comments)
@@ -309,6 +316,7 @@ pub fn transform_module_with_metadata(
             ..internal.empty_context(),
             function_signatures: function_signatures,
             module_aliases: module_aliases,
+            module_paths: option.Some(module_paths),
             constructor_arities:,
             module_bindings: option.Some(module_bindings),
             external_functions: option.Some(external_functions),
@@ -330,6 +338,7 @@ pub fn transform_module_with_metadata(
         function,
         function_signatures,
         module_aliases,
+        module_paths,
         constructor_arities,
         option.Some(module_bindings),
         option.Some(external_functions),
@@ -460,6 +469,7 @@ fn transform_function_or_external(
   function: glance.Definition(glance.Function),
   function_signatures: option.Option(internal.FunctionSignatures),
   module_aliases: List(String),
+  module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
   external_functions: option.Option(List(String)),
@@ -489,6 +499,7 @@ fn transform_function_or_external(
                 function,
                 function_signatures,
                 module_aliases,
+                module_paths,
                 constructor_arities,
                 module_bindings,
                 external_functions,
@@ -505,6 +516,7 @@ fn transform_function_or_external(
             function,
             function_signatures,
             module_aliases,
+            module_paths,
             constructor_arities,
             module_bindings,
             external_functions,
@@ -526,6 +538,7 @@ fn compile_normal_function(
   function: glance.Definition(glance.Function),
   function_signatures: option.Option(internal.FunctionSignatures),
   module_aliases: List(String),
+  module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
   external_functions: option.Option(List(String)),
@@ -542,6 +555,7 @@ fn compile_normal_function(
       function.definition,
       function_signatures,
       module_aliases,
+      module_paths,
       constructor_arities,
       module_bindings,
       external_functions,

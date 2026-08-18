@@ -112,6 +112,7 @@ pub fn transform_top_level_function(
   function: glance.Function,
   function_signatures: option.Option(transformer.FunctionSignatures),
   module_aliases: List(String),
+  module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
   external_functions: option.Option(List(String)),
@@ -132,6 +133,7 @@ pub fn transform_top_level_function(
       ..transformer.empty_context(),
       function_signatures: function_signatures,
       module_aliases: module_aliases,
+      module_paths: option.Some(module_paths),
       constructor_arities: constructor_arities,
       external_functions: external_functions,
       external_qualified: external_qualified,
@@ -187,7 +189,8 @@ pub fn transform_top_level_function(
     body: body
       |> shadowing.resolve_tail_calls(function.name, parameters)
       |> shadowing.inline_case_drivers
-      |> shadowing.optimize_list_loops,
+      |> shadowing.optimize_list_loops
+      |> shadowing.inline_fold_loops(option.Some(module_paths)),
     public: public,
     docstring: option.None,
     comments: [],

@@ -392,6 +392,19 @@ fn rename_module_statement(
         pool,
       )
     }
+    python.For(targets, iterable, body) -> {
+      let #(renamed_body, pool) =
+        rename_module_shadowed(body, renaming, used, pool)
+      #(
+        python.For(
+          targets,
+          rename_expression(iterable, renaming, set.new()),
+          renamed_body,
+        ),
+        renaming,
+        pool,
+      )
+    }
   }
 }
 
@@ -451,7 +464,8 @@ fn top_level_binds(statement: python.Statement) -> List(String) {
     | python.FunctionDef(_)
     | python.Match(_, _)
     | python.While(_, _)
-    | python.If(_, _) -> []
+    | python.If(_, _)
+    | python.For(_, _, _) -> []
   }
 }
 
@@ -525,7 +539,8 @@ fn rename_binding_targets(
     | python.FunctionDef(_)
     | python.Match(_, _)
     | python.While(_, _)
-    | python.If(_, _) -> #(statement, renames, own_cross, pool)
+    | python.If(_, _)
+    | python.For(_, _, _) -> #(statement, renames, own_cross, pool)
   }
 }
 
@@ -910,6 +925,7 @@ fn statement_binds(statement: python.Statement) -> List(String) {
     python.Match(_, _) -> []
     python.While(_, body) -> list.flatten(list.map(body, statement_binds))
     python.If(_, body) -> list.flatten(list.map(body, statement_binds))
+    python.For(_, _, body) -> list.flatten(list.map(body, statement_binds))
   }
 }
 
@@ -932,6 +948,9 @@ fn statement_refs(
       |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
     python.If(condition, body) ->
       expression_refs(condition, in_scope)
+      |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
+    python.For(_, iterable, body) ->
+      expression_refs(iterable, in_scope)
       |> list.append(list.flatten(list.map(body, statement_refs(_, in_scope))))
   }
 }
@@ -975,6 +994,9 @@ fn deep_statement_refs(
       |> list.append(body_refs_in_order(body, in_scope))
     python.If(condition, body) ->
       expression_refs(condition, in_scope)
+      |> list.append(body_refs_in_order(body, in_scope))
+    python.For(_, iterable, body) ->
+      expression_refs(iterable, in_scope)
       |> list.append(body_refs_in_order(body, in_scope))
   }
 }
@@ -1644,6 +1666,23 @@ fn rename_statement(
         pool,
       )
     }
+    python.For(targets, iterable, body) -> {
+      let #(body, pool) =
+        list.fold(body, #([], pool), fn(acc, statement) {
+          let #(out, pool) = acc
+          let #(renamed, pool) =
+            rename_statement(statement, renames, in_scope, set.new(), pool)
+          #([renamed, ..out], pool)
+        })
+      #(
+        python.For(
+          targets,
+          rename_expression(iterable, current_renames, in_scope),
+          list.reverse(body),
+        ),
+        pool,
+      )
+    }
     python.If(condition, body) -> {
       let #(body, pool) =
         list.fold(body, #([], pool), fn(acc, statement) {
@@ -2039,6 +2078,8 @@ fn statement_references(statement: python.Statement, name: String) -> Bool {
       list.any(body, fn(s) { statement_references(s, name) })
     python.If(_, body) ->
       list.any(body, fn(s) { statement_references(s, name) })
+    python.For(_, _, body) ->
+      list.any(body, fn(s) { statement_references(s, name) })
     python.FunctionDef(_) -> False
   }
 }
@@ -2420,6 +2461,8 @@ fn statement_invokes_driver(statement: python.Statement, name: String) -> Bool {
     python.While(_, body) ->
       list.any(body, fn(s) { statement_invokes_driver(s, name) })
     python.If(_, body) ->
+      list.any(body, fn(s) { statement_invokes_driver(s, name) })
+    python.For(_, _, body) ->
       list.any(body, fn(s) { statement_invokes_driver(s, name) })
   }
 }
@@ -3061,6 +3104,7 @@ fn statement_contains_gleam_tco(statement: python.Statement) -> Bool {
       })
     python.While(_, body) -> list.any(body, statement_contains_gleam_tco)
     python.If(_, body) -> list.any(body, statement_contains_gleam_tco)
+    python.For(_, _, body) -> list.any(body, statement_contains_gleam_tco)
   }
 }
 
@@ -3308,4 +3352,1151 @@ fn build_list_loop(
     ),
     python.Return(base_value),
   ]
+}
+
+// Inlines `list.fold` / `dict.fold` calls whose callback is an anonymous
+// `_fn_def_N` into a `while`/`for` loop in the caller, removing the stdlib
+// call and the per-element closure dispatch:
+//
+//     x = list.fold(items, 0, _fn_def_3)
+//
+// becomes
+//
+//     _gleam_fold_list = items
+//     _gleam_fold_acc = 0
+//     while type(_gleam_fold_list) is GleamList:
+//         _gleam_fold_item = _gleam_fold_list.value
+//         _gleam_fold_rest = _gleam_fold_list.tail
+//         _gleam_fold_list = _gleam_fold_rest
+//         <callback params bound to loop vars>
+//         <callback body, returns rewritten to `_gleam_fold_acc = ...`>
+//     x = _gleam_fold_acc
+//
+// Python's `while`/`for` bodies do not scope their locals, so splicing the
+// callback body leaks its binds (params, lets, case captures, the callback's
+// own name) into the enclosing function scope. Like `inline_case_drivers`, a
+// fold is only inlined when none of those leaked names are referenced by any
+// other statement of the scope, so a later use cannot silently pick up the
+// leaked value.
+pub fn inline_fold_loops(
+  statements: List(python.Statement),
+  module_paths: option.Option(dict.Dict(String, String)),
+) -> List(python.Statement) {
+  case module_paths {
+    option.None -> statements
+    option.Some(paths) -> {
+      let #(inlined, _) =
+        inline_fold_scope(statements, option.Some(paths), 0, statements)
+      inlined
+    }
+  }
+}
+
+// Every inlined fold's loop-local names must be unique within the scope they
+// are spliced into: a fold nested inside another fold's callback would
+// otherwise clobber the outer loop's `_gleam_fold_*` locals (and rebind its
+// callback parameters) with the same names. `serial` is bumped once per
+// inlined fold so each gets a distinct set.
+fn inline_fold_scope(
+  statements: List(python.Statement),
+  module_paths: option.Option(dict.Dict(String, String)),
+  serial: Int,
+  enclosing: List(python.Statement),
+) -> #(List(python.Statement), Int) {
+  case find_and_inline_fold(statements, module_paths, serial, enclosing) {
+    option.Some(#(inlined, serial)) ->
+      inline_fold_scope(inlined, module_paths, serial, enclosing)
+    option.None ->
+      recurse_fold_scopes(statements, module_paths, serial, enclosing)
+  }
+}
+
+type FoldCall {
+  FoldCall(
+    path: String,
+    callback: String,
+    collection: python.Expression,
+    initial: python.Expression,
+  )
+}
+
+type FoldTarget {
+  FoldAssign(List(String))
+  FoldReturn
+  // The fold's result is an intermediate value consumed by an enclosing
+  // expression (e.g. `result.try_(list.fold(...), next)`). The loop's
+  // accumulator variable is referenced directly in place of the fold call.
+  FoldTemp
+}
+
+// Where a detected fold sits inside its statement's value expression.
+type WrapperLocation {
+  // The statement's value expression is the fold call itself.
+  WrapperRoot
+  // The fold is the `index`-th argument of a call whose other arguments /
+  // call target are described by `over`.
+  WrapperArgument(index: Int, over: WrapperLocation)
+  // The fold is the call target (function position) of a call whose
+  // arguments are described by `over` (fold calls do not appear there, but the
+  // path is kept uniform).
+  WrapperFunction(over: WrapperLocation)
+}
+
+// Rewrites the first inlinable fold call found among the top-level statements
+// into its loop, replacing the fold statement and removing the callback def.
+// Returns the rewritten statements together with the next `serial`, bumping it
+// when an inline actually happens.
+fn find_and_inline_fold(
+  statements: List(python.Statement),
+  module_paths: option.Option(dict.Dict(String, String)),
+  serial: Int,
+  enclosing: List(python.Statement),
+) -> option.Option(#(List(python.Statement), Int)) {
+  fold_inline_in_statements(statements, [], module_paths, serial, enclosing)
+}
+
+fn fold_inline_in_statements(
+  statements: List(python.Statement),
+  prefix: List(python.Statement),
+  module_paths: option.Option(dict.Dict(String, String)),
+  serial: Int,
+  enclosing: List(python.Statement),
+) -> option.Option(#(List(python.Statement), Int)) {
+  case statements {
+    [] -> option.None
+    [statement, ..rest] ->
+      case statement_value(statement) {
+        option.None ->
+          fold_inline_in_statements(
+            rest,
+            list.append(prefix, [statement]),
+            module_paths,
+            serial,
+            enclosing,
+          )
+        option.Some(expression) ->
+          case find_fold_place(expression, module_paths) {
+            option.None ->
+              fold_inline_in_statements(
+                rest,
+                list.append(prefix, [statement]),
+                module_paths,
+                serial,
+                enclosing,
+              )
+            option.Some(#(call, location)) ->
+              case
+                fold_callback_def(
+                  list.append(prefix, statements),
+                  call.callback,
+                )
+              {
+                option.None ->
+                  fold_inline_in_statements(
+                    rest,
+                    list.append(prefix, [statement]),
+                    module_paths,
+                    serial,
+                    enclosing,
+                  )
+                option.Some(function) -> {
+                  let others =
+                    list.filter(list.append(prefix, statements), fn(other) {
+                      case other {
+                        python.FunctionDef(other_function)
+                          if other_function.name == call.callback
+                        -> False
+                        _ -> True
+                      }
+                    })
+                  // For a fold nested in a wrapper expression the loop's
+                  // accumulator is the result: the wrapper reads it directly,
+                  // so no extra finish statement is produced.
+                  let target = case location {
+                    WrapperRoot -> statement_target(statement)
+                    _ -> FoldTemp
+                  }
+                  let names = fold_names(call.path, serial)
+                  case
+                    build_fold_inline(
+                      function,
+                      call,
+                      others,
+                      serial,
+                      enclosing,
+                      target,
+                    )
+                  {
+                    option.None ->
+                      fold_inline_in_statements(
+                        rest,
+                        list.append(prefix, [statement]),
+                        module_paths,
+                        serial,
+                        enclosing,
+                      )
+                    option.Some(inlined) -> {
+                      let rebuilt = case location {
+                        WrapperRoot -> option.None
+                        _ ->
+                          option.Some(replace_statement_value(
+                            statement,
+                            replace_fold_place(
+                              expression,
+                              location,
+                              python.Variable(names.acc),
+                            ),
+                          ))
+                      }
+                      option.Some(#(
+                        list.append(
+                          list.filter(prefix, fn(other) {
+                            case other {
+                              python.FunctionDef(other_function)
+                                if other_function.name == call.callback
+                              -> False
+                              _ -> True
+                            }
+                          }),
+                          list.append(
+                            list.append(inlined, case rebuilt {
+                              option.Some(rebuilt_statement) -> [
+                                rebuilt_statement,
+                              ]
+                              option.None -> []
+                            }),
+                            list.filter(rest, fn(other) {
+                              case other {
+                                python.FunctionDef(other_function)
+                                  if other_function.name == call.callback
+                                -> False
+                                _ -> True
+                              }
+                            }),
+                          ),
+                        ),
+                        serial + 1,
+                      ))
+                    }
+                  }
+                }
+              }
+          }
+      }
+  }
+}
+
+// The value expression of a statement, when the statement can host a fold.
+fn statement_value(
+  statement: python.Statement,
+) -> option.Option(python.Expression) {
+  case statement {
+    python.SimpleAssignment(_, value) -> option.Some(value)
+    python.MultipleAssignment(_, value) -> option.Some(value)
+    python.Return(value) -> option.Some(value)
+    _ -> option.None
+  }
+}
+
+fn statement_target(statement: python.Statement) -> FoldTarget {
+  case statement {
+    python.SimpleAssignment(name, _) -> FoldAssign([name])
+    python.MultipleAssignment(names, _) -> FoldAssign(names)
+    python.Return(_) -> FoldReturn
+    _ -> FoldTemp
+  }
+}
+
+fn replace_statement_value(
+  statement: python.Statement,
+  expression: python.Expression,
+) -> python.Statement {
+  case statement {
+    python.SimpleAssignment(name, _) ->
+      python.SimpleAssignment(name, expression)
+    python.MultipleAssignment(names, _) ->
+      python.MultipleAssignment(names, expression)
+    python.Return(_) -> python.Return(expression)
+    _ -> statement
+  }
+}
+
+// Inlines a fold call. The callback's parameters and body-local names are
+// spliced into the enclosing function scope (Python loops do not scope their
+// locals), so any that collide with a name the surrounding statements
+// reference are renamed to fresh `_gleam_fold`-suffixed names first. The
+// callback body is internally shadow-unambiguous (it passed the shadowing
+// passes as a standalone function), so a plain global substitution of the
+// colliding names is correct there. Names the callback merely reads from the
+// enclosing scope are not renamed: they are the same variables after the
+// splice.
+fn build_fold_inline(
+  function: python.Function,
+  call: FoldCall,
+  others: List(python.Statement),
+  serial: Int,
+  enclosing: List(python.Statement),
+  target: FoldTarget,
+) -> option.Option(List(python.Statement)) {
+  let FoldNames(_, acc_name, _, _) = fold_names(call.path, serial)
+  let parameter_names =
+    list.filter_map(function.parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) -> Ok(name)
+        python.DiscardParam(_) -> Error(Nil)
+      }
+    })
+  let referenced =
+    fold_referenced(others)
+    |> list.append(fold_enclosing_refs(enclosing, call.callback))
+    |> list.unique
+  let body_binds = flatten_body_leaked(function.body)
+  let renames =
+    parameter_names
+    |> list.append(body_binds)
+    |> list.append(fold_loop_names(call.path, serial))
+    |> list.append([function.name])
+    |> list.filter(fn(name) { list.contains(referenced, name) })
+    |> list.fold(dict.new(), fn(acc, name) {
+      let fresh = fold_fresh(name, referenced, acc)
+      dict.insert(acc, name, fresh)
+    })
+  let parameters =
+    list.map(function.parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) ->
+          python.NameParam(result.unwrap(dict.get(renames, name), name))
+        python.DiscardParam(_) -> parameter
+      }
+    })
+  let body =
+    function.body
+    |> list.map(fn(statement) {
+      statement_substitute(statement, renames)
+      |> replace_statement_returns(acc_name)
+    })
+  build_fold_loop(parameters, body, call, serial, target)
+}
+
+// The names the surrounding statements reference, so the splice can avoid
+// clobbering any of them.
+fn fold_referenced(statements: List(python.Statement)) -> List(String) {
+  statements
+  |> list.map(fn(statement) {
+    deep_statement_refs(statement, set.new(), set.new())
+  })
+  |> list.flatten
+  |> list.unique
+}
+
+// Every name used anywhere in the enclosing function body, regardless of the
+// function scoping (a nested callback's `in_scope` does not matter here). A
+// fold spliced into a nested scope leaks its callback parameters down to the
+// whole enclosing function, so any use of the same name elsewhere - even
+// inside another nested function - must force a rename. Only variable uses
+// count: a name a nested function merely binds is not a use until it appears
+// as a `Variable`. The callback being removed (`skip`) is ignored wherever it
+// sits in the tree, since its body is spliced away rather than referenced.
+fn fold_enclosing_refs(
+  statements: List(python.Statement),
+  skip: String,
+) -> List(String) {
+  statements
+  |> list.map(fn(statement) { raw_statement_refs(statement, skip) })
+  |> list.flatten
+  |> list.unique
+}
+
+fn raw_statement_refs(
+  statement: python.Statement,
+  skip: String,
+) -> List(String) {
+  let refs = expression_refs(_, set.new())
+  case statement {
+    python.Expression(expression) | python.Return(expression) ->
+      refs(expression)
+    python.SimpleAssignment(_, value) -> refs(value)
+    python.MultipleAssignment(_, value) -> refs(value)
+    python.FunctionDef(function) ->
+      case function.name == skip {
+        True -> []
+        False ->
+          list.flatten(list.map(function.body, raw_statement_refs(_, skip)))
+      }
+    python.Match(subject, cases) ->
+      list.append(
+        refs(subject),
+        list.flatten(
+          list.map(cases, fn(match_case) {
+            let python.MatchCase(_, guard, body) = match_case
+            list.append(
+              option.unwrap(option.map(guard, refs), []),
+              list.flatten(list.map(body, raw_statement_refs(_, skip))),
+            )
+          }),
+        ),
+      )
+    python.While(condition, body) ->
+      list.append(
+        refs(condition),
+        list.flatten(list.map(body, raw_statement_refs(_, skip))),
+      )
+    python.If(condition, body) ->
+      list.append(
+        refs(condition),
+        list.flatten(list.map(body, raw_statement_refs(_, skip))),
+      )
+    python.For(_, iterable, body) ->
+      list.append(
+        refs(iterable),
+        list.flatten(list.map(body, raw_statement_refs(_, skip))),
+      )
+  }
+}
+
+// A fresh replacement name for a colliding callback name. Always distinct
+// from the referenced names and from other replacements.
+fn fold_fresh(
+  name: String,
+  referenced: List(String),
+  renames: dict.Dict(String, String),
+) -> String {
+  let exists = fn(candidate) {
+    list.contains(referenced, candidate)
+    || list.contains(dict.values(renames), candidate)
+  }
+  let base = name <> "_gleam_fold"
+  case exists(base) {
+    False -> base
+    True -> fold_next_fresh(base, 1, exists)
+  }
+}
+
+fn fold_next_fresh(base: String, n: Int, exists: fn(String) -> Bool) -> String {
+  let candidate = base <> "_" <> int.to_string(n)
+  case exists(candidate) {
+    True -> fold_next_fresh(base, n + 1, exists)
+    False -> candidate
+  }
+}
+
+// The callback definition for a fold call, when its arity matches the fold's
+// callback signature (2 args for `gleam/list.fold`, 3 for `gleam/dict.fold`).
+fn fold_callback_def(
+  statements: List(python.Statement),
+  callback: String,
+) -> option.Option(python.Function) {
+  case statements {
+    [] -> option.None
+    [statement, ..rest] ->
+      case statement {
+        python.FunctionDef(function) if function.name == callback -> {
+          let param_count = list.length(function.parameters)
+          case param_count {
+            2 -> option.Some(function)
+            3 -> option.Some(function)
+            _ -> {
+              fold_callback_def(rest, callback)
+            }
+          }
+        }
+        _ -> fold_callback_def(rest, callback)
+      }
+  }
+}
+
+// A statement that assigns a variable from (or returns) a call to the stdlib
+// `list.fold` / `dict.fold` with an anonymous `_fn_def_N` callback.
+fn fold_call_from(
+  function: python.Expression,
+  arguments: List(python.Field(python.Expression)),
+  module_paths: option.Option(dict.Dict(String, String)),
+) -> option.Option(FoldCall) {
+  let path = case function {
+    python.FieldAccess(python.ModuleRef(module), "fold") ->
+      case module_paths {
+        option.Some(paths) -> dict.get(paths, module)
+        option.None -> Error(Nil)
+      }
+    _ -> Error(Nil)
+  }
+  case path {
+    Ok("gleam/list") | Ok("gleam/dict") ->
+      case arguments {
+        [
+          python.UnlabelledField(collection),
+          python.UnlabelledField(initial),
+          python.UnlabelledField(python.Variable(callback)),
+        ] ->
+          option.Some(FoldCall(
+            path: result.unwrap(path, ""),
+            callback: callback,
+            collection: collection,
+            initial: initial,
+          ))
+        _ -> option.None
+      }
+    _ -> option.None
+  }
+}
+
+// Finds the leftmost fold call anywhere inside an expression: either the
+// expression itself is the fold (`WrapperRoot`), or the fold is nested in the
+// arguments of an enclosing call (`WrapperArgument`). The statement value from
+// a `use`-desugared recursion is typically `result.try_(list.fold(...), fn)`,
+// where the fold sits one argument deep and would otherwise never be inlined.
+fn find_fold_place(
+  expression: python.Expression,
+  module_paths: option.Option(dict.Dict(String, String)),
+) -> option.Option(#(FoldCall, WrapperLocation)) {
+  case expression {
+    python.Call(function, arguments) ->
+      case fold_call_from(function, arguments, module_paths) {
+        option.Some(call) -> option.Some(#(call, WrapperRoot))
+        option.None ->
+          find_fold_in_arguments(function, arguments, 0, module_paths)
+      }
+    _ -> option.None
+  }
+}
+
+fn find_fold_in_arguments(
+  function: python.Expression,
+  arguments: List(python.Field(python.Expression)),
+  index: Int,
+  module_paths: option.Option(dict.Dict(String, String)),
+) -> option.Option(#(FoldCall, WrapperLocation)) {
+  case arguments {
+    [] ->
+      find_fold_place(function, module_paths)
+      |> option.map(fn(pair) {
+        let #(call, location) = pair
+        #(call, WrapperFunction(location))
+      })
+    [argument, ..rest] -> {
+      let contained = case argument {
+        python.UnlabelledField(item) -> find_fold_place(item, module_paths)
+        python.LabelledField(_, item) -> find_fold_place(item, module_paths)
+      }
+      case contained {
+        option.Some(pair) -> {
+          let #(call, location) = pair
+          option.Some(#(call, WrapperArgument(index, location)))
+        }
+        option.None ->
+          find_fold_in_arguments(function, rest, index + 1, module_paths)
+      }
+    }
+  }
+}
+
+// Rebuilds an expression with `replacement` standing in for the detected fold.
+fn replace_fold_place(
+  expression: python.Expression,
+  location: WrapperLocation,
+  replacement: python.Expression,
+) -> python.Expression {
+  case location {
+    WrapperRoot -> replacement
+    WrapperArgument(index, over) ->
+      case expression {
+        python.Call(function, arguments) ->
+          python.Call(
+            function,
+            list.index_map(arguments, fn(field, call_index) {
+              case call_index == index {
+                True -> replace_field_place(field, over, replacement)
+                False -> field
+              }
+            }),
+          )
+        _ -> expression
+      }
+    WrapperFunction(over) ->
+      case expression {
+        python.Call(function, arguments) ->
+          python.Call(
+            replace_fold_place(function, over, replacement),
+            arguments,
+          )
+        _ -> expression
+      }
+  }
+}
+
+fn replace_field_place(
+  field: python.Field(python.Expression),
+  location: WrapperLocation,
+  replacement: python.Expression,
+) -> python.Field(python.Expression) {
+  case field {
+    python.UnlabelledField(item) ->
+      python.UnlabelledField(replace_fold_place(item, location, replacement))
+    python.LabelledField(label, item) ->
+      python.LabelledField(
+        label,
+        replace_fold_place(item, location, replacement),
+      )
+  }
+}
+
+fn flatten_body_leaked(statements: List(python.Statement)) -> List(String) {
+  list.flatten(list.map(statements, statement_leaked_names))
+}
+
+fn statement_leaked_names(statement: python.Statement) -> List(String) {
+  case statement {
+    python.SimpleAssignment(name, _) -> [name]
+    python.MultipleAssignment(names, _) -> names
+    python.Match(_, cases) ->
+      list.flatten(
+        list.map(cases, fn(match_case) {
+          let python.MatchCase(pattern, _, body) = match_case
+          list.append(pattern_binds(pattern), flatten_body_leaked(body))
+        }),
+      )
+    python.While(_, body) -> flatten_body_leaked(body)
+    python.If(_, body) -> flatten_body_leaked(body)
+    python.For(_, _, body) -> flatten_body_leaked(body)
+    python.FunctionDef(function) -> [function.name]
+    python.Expression(_) | python.Return(_) -> []
+  }
+}
+
+// Substitutes a set of renames throughout a statement tree, renaming every
+// occurrence of a mapped name (references, binding targets, patterns, nested
+// function names and parameters).
+fn statement_substitute(
+  statement: python.Statement,
+  renames: dict.Dict(String, String),
+) -> python.Statement {
+  case statement {
+    python.Expression(expression) ->
+      python.Expression(expression_substitute(expression, renames))
+    python.Return(expression) ->
+      python.Return(expression_substitute(expression, renames))
+    python.SimpleAssignment(name, value) ->
+      python.SimpleAssignment(
+        result.unwrap(dict.get(renames, name), name),
+        expression_substitute(value, renames),
+      )
+    python.MultipleAssignment(names, value) ->
+      python.MultipleAssignment(
+        names
+          |> list.map(fn(name) { result.unwrap(dict.get(renames, name), name) }),
+        expression_substitute(value, renames),
+      )
+    python.Match(subject, cases) ->
+      python.Match(
+        subject: expression_substitute(subject, renames),
+        cases: list.map(cases, fn(match_case) {
+          let python.MatchCase(pattern, guard, body) = match_case
+          python.MatchCase(
+            pattern_substitute(pattern, renames),
+            option.map(guard, expression_substitute(_, renames)),
+            body |> list.map(fn(s) { statement_substitute(s, renames) }),
+          )
+        }),
+      )
+    python.While(condition, body) ->
+      python.While(
+        condition: expression_substitute(condition, renames),
+        body: body |> list.map(fn(s) { statement_substitute(s, renames) }),
+      )
+    python.If(condition, body) ->
+      python.If(
+        condition: expression_substitute(condition, renames),
+        body: body |> list.map(fn(s) { statement_substitute(s, renames) }),
+      )
+    python.For(targets, iterable, body) ->
+      python.For(
+        targets: targets
+          |> list.map(fn(name) { result.unwrap(dict.get(renames, name), name) }),
+        iterable: expression_substitute(iterable, renames),
+        body: body |> list.map(fn(s) { statement_substitute(s, renames) }),
+      )
+    python.FunctionDef(function) ->
+      python.FunctionDef(
+        python.Function(
+          ..function,
+          name: result.unwrap(dict.get(renames, function.name), function.name),
+          parameters: list.map(function.parameters, fn(parameter) {
+            case parameter {
+              python.NameParam(name) ->
+                python.NameParam(result.unwrap(dict.get(renames, name), name))
+              python.DiscardParam(_) -> parameter
+            }
+          }),
+          body: function.body
+            |> list.map(fn(s) { statement_substitute(s, renames) }),
+        ),
+      )
+  }
+}
+
+fn expression_substitute(
+  expression: python.Expression,
+  renames: dict.Dict(String, String),
+) -> python.Expression {
+  case expression {
+    python.Variable(name) ->
+      python.Variable(result.unwrap(dict.get(renames, name), name))
+    python.ModuleRef(_)
+    | python.String(_)
+    | python.Number(_)
+    | python.Bool(_)
+    | python.Nil
+    | python.Dict(_) -> expression
+    python.Tuple(elements) ->
+      python.Tuple(list.map(elements, expression_substitute(_, renames)))
+    python.Negate(inner) -> python.Negate(expression_substitute(inner, renames))
+    python.Not(inner) -> python.Not(expression_substitute(inner, renames))
+    python.Panic(inner) -> python.Panic(expression_substitute(inner, renames))
+    python.Todo(inner) -> python.Todo(expression_substitute(inner, renames))
+    python.Lambda(args, body) ->
+      python.Lambda(
+        args
+          |> list.map(fn(arg) {
+            case arg {
+              python.Variable(name) ->
+                python.Variable(result.unwrap(dict.get(renames, name), name))
+              _ -> arg
+            }
+          }),
+        expression_substitute(body, renames),
+      )
+    python.List(elements) ->
+      python.List(list.map(elements, expression_substitute(_, renames)))
+    python.ListWithRest(elements, rest) ->
+      python.ListWithRest(
+        list.map(elements, expression_substitute(_, renames)),
+        expression_substitute(rest, renames),
+      )
+    python.TupleIndex(tuple, index) ->
+      python.TupleIndex(expression_substitute(tuple, renames), index)
+    python.FieldAccess(container, label) ->
+      python.FieldAccess(expression_substitute(container, renames), label)
+    python.Call(function, arguments) ->
+      python.Call(
+        expression_substitute(function, renames),
+        list.map(arguments, fn(field) {
+          case field {
+            python.UnlabelledField(item) ->
+              python.UnlabelledField(expression_substitute(item, renames))
+            python.LabelledField(label, item) ->
+              python.LabelledField(label, expression_substitute(item, renames))
+          }
+        }),
+      )
+    python.RecordUpdate(record, fields) ->
+      python.RecordUpdate(
+        expression_substitute(record, renames),
+        list.map(fields, fn(field) {
+          case field {
+            python.UnlabelledField(item) ->
+              python.UnlabelledField(expression_substitute(item, renames))
+            python.LabelledField(label, item) ->
+              python.LabelledField(label, expression_substitute(item, renames))
+          }
+        }),
+      )
+    python.BinaryOperator(operator, left, right) ->
+      python.BinaryOperator(
+        operator,
+        expression_substitute(left, renames),
+        expression_substitute(right, renames),
+      )
+    python.Slice(container, start, end) ->
+      python.Slice(
+        expression_substitute(container, renames),
+        expression_substitute(start, renames),
+        option.map(end, expression_substitute(_, renames)),
+      )
+    python.AssignmentExpression(name, value) ->
+      python.AssignmentExpression(
+        result.unwrap(dict.get(renames, name), name),
+        expression_substitute(value, renames),
+      )
+    python.IsNotNone(inner) ->
+      python.IsNotNone(expression_substitute(inner, renames))
+    python.BitString(segments) ->
+      python.BitString(
+        list.map(segments, fn(segment) {
+          let python.BitStringSegment(value, options) = segment
+          python.BitStringSegment(
+            expression_substitute(value, renames),
+            options,
+          )
+        }),
+      )
+  }
+}
+
+fn pattern_substitute(
+  pattern: python.Pattern,
+  renames: dict.Dict(String, String),
+) -> python.Pattern {
+  case pattern {
+    python.PatternWildcard
+    | python.PatternInt(_)
+    | python.PatternFloat(_)
+    | python.PatternString(_) -> pattern
+    python.PatternVariable(name) ->
+      python.PatternVariable(result.unwrap(dict.get(renames, name), name))
+    python.PatternAssignment(pattern, name) ->
+      python.PatternAssignment(
+        pattern_substitute(pattern, renames),
+        result.unwrap(dict.get(renames, name), name),
+      )
+    python.PatternTuple(value) ->
+      python.PatternTuple(list.map(value, pattern_substitute(_, renames)))
+    python.PatternList(elems, rest) ->
+      python.PatternList(
+        list.map(elems, pattern_substitute(_, renames)),
+        option.map(rest, pattern_substitute(_, renames)),
+      )
+    python.PatternAlternate(patterns) ->
+      python.PatternAlternate(
+        list.map(patterns, pattern_substitute(_, renames)),
+      )
+    python.PatternConstructor(module, constructor, arguments) ->
+      python.PatternConstructor(
+        module,
+        constructor,
+        list.map(arguments, fn(field) {
+          case field {
+            python.UnlabelledField(item) ->
+              python.UnlabelledField(pattern_substitute(item, renames))
+            python.LabelledField(label, item) ->
+              python.LabelledField(label, pattern_substitute(item, renames))
+          }
+        }),
+      )
+  }
+}
+
+// The loop-local variable names for a fold of a given module path, suffixed by
+// the fold's `serial` so nested folds do not collide. These are only ever
+// referenced inside the loop they are bound in, so they are added to the
+// leaked set for the collision check (a callback body naming one accidentally
+// would read a loop local instead of its own value).
+fn fold_loop_names(path: String, serial: Int) -> List(String) {
+  let FoldNames(list_name, acc_name, item_name, rest_name) =
+    fold_names(path, serial)
+  [list_name, acc_name, item_name, rest_name]
+}
+
+type FoldNames {
+  FoldNames(
+    // The name of the collection walk variable (the list being consumed or
+    // the dict being iterated).
+    list: String,
+    // The accumulated result.
+    acc: String,
+    // The element/key being processed.
+    item: String,
+    // The remaining collection / value being processed.
+    rest: String,
+  )
+}
+
+fn fold_names(path: String, serial: Int) -> FoldNames {
+  let suffix = case serial {
+    0 -> ""
+    _ -> "_" <> int.to_string(serial)
+  }
+  case path {
+    "gleam/list" ->
+      FoldNames(
+        list: "_gleam_fold_list" <> suffix,
+        acc: "_gleam_fold_acc" <> suffix,
+        item: "_gleam_fold_item" <> suffix,
+        rest: "_gleam_fold_rest" <> suffix,
+      )
+    "gleam/dict" ->
+      FoldNames(
+        list: "_gleam_fold_dict" <> suffix,
+        acc: "_gleam_fold_acc" <> suffix,
+        item: "_gleam_fold_key" <> suffix,
+        rest: "_gleam_fold_value" <> suffix,
+      )
+    _ -> FoldNames("", "", "", "")
+  }
+}
+
+// Builds the loop for a fold call, binding the callback's parameters to the
+// loop locals and rewriting the callback body's returns into accumulator
+// assignments. Returns `None` when the callback is unusable (e.g. a callback
+// parameter count that does not match the fold's arity).
+// The names of the anonymous callbacks of any `list.fold`/`dict.fold` call
+// still present in a statement list. Their definitions must stay siblings of
+// the calls so the recursive fold inline can find them.
+fn fold_callback_names(statements: List(python.Statement)) -> List(String) {
+  statements
+  |> list.map(fold_callback_names_statement)
+  |> list.flatten
+  |> list.unique
+}
+
+fn fold_callback_names_statement(statement: python.Statement) -> List(String) {
+  case statement {
+    python.SimpleAssignment(_, value) | python.Return(value) ->
+      fold_callback_names_expression(value)
+    _ -> []
+  }
+}
+
+fn fold_callback_names_expression(
+  expression: python.Expression,
+) -> List(String) {
+  case expression {
+    python.Call(python.FieldAccess(python.ModuleRef(_), "fold"), arguments) ->
+      case arguments {
+        [_, _, python.UnlabelledField(python.Variable(name))] -> [name]
+        _ -> []
+      }
+    python.Call(function, arguments) ->
+      fold_callback_names_expression(function)
+      |> list.append(
+        list.flatten(
+          list.map(arguments, fn(field) {
+            case field {
+              python.UnlabelledField(item) ->
+                fold_callback_names_expression(item)
+              python.LabelledField(_, item) ->
+                fold_callback_names_expression(item)
+            }
+          }),
+        ),
+      )
+    _ -> []
+  }
+}
+
+fn build_fold_loop(
+  parameters: List(python.FunctionParameter),
+  body: List(python.Statement),
+  call: FoldCall,
+  serial: Int,
+  target: FoldTarget,
+) -> option.Option(List(python.Statement)) {
+  let names = fold_names(call.path, serial)
+  let acc_name = names.acc
+  let parameter_names =
+    list.filter_map(parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) -> Ok(name)
+        python.DiscardParam(_) -> Error(Nil)
+      }
+    })
+  // Nested functions defined by the callback body are pure closures: they
+  // capture enclosing names by reference and are only ever *called* inside the
+  // loop, never defined meaningfully per iteration. Hoisting them out of the
+  // loop avoids re-creating the function object on every element. A definition
+  // that is the callback of a `list.fold`/`dict.fold` call still in the body
+  // is kept in place: the recursive fold inline needs the definition as a
+  // sibling of its call.
+  let fold_callback_names = fold_callback_names(body)
+  let #(hoisted_defs, inline_body) =
+    list.fold(body, #([], []), fn(acc, statement) {
+      let #(defs, rest) = acc
+      case statement {
+        python.FunctionDef(function) ->
+          case list.contains(fold_callback_names, function.name) {
+            True -> #(defs, [statement, ..rest])
+            False -> #([statement, ..defs], rest)
+          }
+        _ -> #(defs, [statement, ..rest])
+      }
+    })
+  let hoisted_defs = list.reverse(hoisted_defs)
+  let inline_body = list.reverse(inline_body)
+  let loop = case call.path, parameter_names {
+    "gleam/list", [acc_param, item_param] -> [
+      python.SimpleAssignment(names.list, call.collection),
+      python.SimpleAssignment(names.acc, call.initial),
+      python.While(
+        python.BinaryOperator(
+          python.Is,
+          python.Call(python.Variable("type"), [
+            python.UnlabelledField(python.Variable(names.list)),
+          ]),
+          python.Variable("GleamList"),
+        ),
+        list.flatten([
+          [
+            python.SimpleAssignment(
+              names.item,
+              python.FieldAccess(python.Variable(names.list), "value"),
+            ),
+            python.SimpleAssignment(
+              names.rest,
+              python.FieldAccess(python.Variable(names.list), "tail"),
+            ),
+            python.SimpleAssignment(names.list, python.Variable(names.rest)),
+            python.SimpleAssignment(acc_param, python.Variable(names.acc)),
+            python.SimpleAssignment(item_param, python.Variable(names.item)),
+          ],
+          inline_body,
+        ]),
+      ),
+    ]
+    "gleam/dict", [acc_param, key_param, value_param] -> [
+      python.SimpleAssignment(names.list, call.collection),
+      python.SimpleAssignment(names.acc, call.initial),
+      python.For(
+        [names.item, names.rest],
+        python.Call(
+          python.FieldAccess(python.Variable(names.list), "items"),
+          [],
+        ),
+        list.flatten([
+          [
+            python.SimpleAssignment(acc_param, python.Variable(names.acc)),
+            python.SimpleAssignment(key_param, python.Variable(names.item)),
+            python.SimpleAssignment(value_param, python.Variable(names.rest)),
+          ],
+          inline_body,
+        ]),
+      ),
+    ]
+    _, _ -> []
+  }
+  let loop = list.append(hoisted_defs, loop)
+  let finish = case target {
+    FoldAssign(target_names) ->
+      case target_names {
+        [name] -> [python.SimpleAssignment(name, python.Variable(acc_name))]
+        _ -> [
+          python.MultipleAssignment(target_names, python.Variable(acc_name)),
+        ]
+      }
+    FoldReturn -> [python.Return(python.Variable(acc_name))]
+    FoldTemp -> []
+  }
+  case loop {
+    [] -> option.None
+    _ -> option.Some(list.append(loop, finish))
+  }
+}
+
+// Replaces `return <expr>` with `_gleam_fold_acc = <expr>` throughout a
+// statement tree (so the spliced callback body feeds the accumulator), leaving
+// nested function definitions untouched.
+fn replace_statement_returns(
+  statement: python.Statement,
+  acc_name: String,
+) -> python.Statement {
+  case statement {
+    python.Return(expression) -> python.SimpleAssignment(acc_name, expression)
+    python.Match(subject, cases) ->
+      python.Match(
+        subject: subject,
+        cases: list.map(cases, fn(match_case) {
+          let python.MatchCase(pattern, guard, body) = match_case
+          python.MatchCase(
+            pattern,
+            guard,
+            body |> list.map(fn(s) { replace_statement_returns(s, acc_name) }),
+          )
+        }),
+      )
+    python.While(condition, body) ->
+      python.While(
+        condition: condition,
+        body: body |> list.map(fn(s) { replace_statement_returns(s, acc_name) }),
+      )
+    python.If(condition, body) ->
+      python.If(
+        condition: condition,
+        body: body |> list.map(fn(s) { replace_statement_returns(s, acc_name) }),
+      )
+    python.For(targets, iterable, body) ->
+      python.For(
+        targets: targets,
+        iterable: iterable,
+        body: body |> list.map(fn(s) { replace_statement_returns(s, acc_name) }),
+      )
+    python.FunctionDef(_) -> statement
+    python.Expression(_)
+    | python.SimpleAssignment(_, _)
+    | python.MultipleAssignment(_, _) -> statement
+  }
+}
+
+// Re-applies the fold inline in nested scopes (case bodies, loop bodies,
+// nested function bodies) once no top-level fold can be inlined further. The
+// `serial` is threaded through so each inlined fold in any nested scope gets a
+// distinct set of loop-local names.
+fn recurse_fold_scopes(
+  statements: List(python.Statement),
+  module_paths: option.Option(dict.Dict(String, String)),
+  serial: Int,
+  enclosing: List(python.Statement),
+) -> #(List(python.Statement), Int) {
+  list.fold(statements, #([], serial), fn(pair, statement) {
+    let #(done, serial) = pair
+    case statement {
+      python.Match(subject, cases) -> {
+        let #(rewritten_cases, next_serial) =
+          list.fold(cases, #([], serial), fn(pair, match_case) {
+            let #(folded_cases, serial) = pair
+            let python.MatchCase(pattern, guard, body) = match_case
+            let #(folded, next_serial) =
+              inline_fold_scope(body, module_paths, serial, enclosing)
+            #(
+              list.append(folded_cases, [
+                python.MatchCase(pattern, guard, folded),
+              ]),
+              next_serial,
+            )
+          })
+        #(
+          list.append(done, [
+            python.Match(subject: subject, cases: rewritten_cases),
+          ]),
+          next_serial,
+        )
+      }
+      python.While(condition, body) -> {
+        let #(folded, next_serial) =
+          inline_fold_scope(body, module_paths, serial, enclosing)
+        #(
+          list.append(done, [
+            python.While(condition: condition, body: folded),
+          ]),
+          next_serial,
+        )
+      }
+      python.If(condition, body) -> {
+        let #(folded, next_serial) =
+          inline_fold_scope(body, module_paths, serial, enclosing)
+        #(
+          list.append(done, [python.If(condition: condition, body: folded)]),
+          next_serial,
+        )
+      }
+      python.For(targets, iterable, body) -> {
+        let #(folded, next_serial) =
+          inline_fold_scope(body, module_paths, serial, enclosing)
+        #(
+          list.append(done, [
+            python.For(targets: targets, iterable: iterable, body: folded),
+          ]),
+          next_serial,
+        )
+      }
+      python.FunctionDef(function) -> {
+        let #(folded, next_serial) =
+          inline_fold_scope(function.body, module_paths, serial, enclosing)
+        #(
+          list.append(done, [
+            python.FunctionDef(python.Function(..function, body: folded)),
+          ]),
+          next_serial,
+        )
+      }
+      _ -> #(list.append(done, [statement]), serial)
+    }
+  })
 }

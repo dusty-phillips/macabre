@@ -27,6 +27,11 @@ pub type TransformerContext {
     next_assert_id: Int,
     function_signatures: option.Option(FunctionSignatures),
     module_aliases: List(String),
+    // Maps each module binding name in scope to its full gleam module path
+    // (e.g. "list" -> "gleam/list"). Used to recognise stdlib loop calls for
+    // inlining. `None` when compiling a module in isolation (tests) where the
+    // import table is unknown.
+    module_paths: option.Option(dict.Dict(String, String)),
     module_reserved: List(String),
     constructor_arities: option.Option(dict.Dict(String, List(String))),
     module_bindings: option.Option(dict.Dict(String, String)),
@@ -62,6 +67,7 @@ pub fn empty_context() -> TransformerContext {
     next_assert_id: 0,
     function_signatures: option.None,
     module_aliases: [],
+    module_paths: option.None,
     module_reserved: [],
     constructor_arities: option.None,
     module_bindings: option.None,

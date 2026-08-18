@@ -312,11 +312,18 @@ def walk(items, depth):
         case EmptyGleamList():
             return Ok(depth)
         case GleamList(item, rest):
-            def _fn_def_0(state, next):
-                def _fn_def_0(d):
-                    return walk(GleamList(next, EmptyGleamList()), d + 1)
-                return result.try_(state, _fn_def_0)
-            return list.fold(rest, Ok(depth), _fn_def_0)
+            def _fn_def_0_gleam_fold_1(d):
+                return walk(GleamList(next, EmptyGleamList()), d + 1)
+            _gleam_fold_list = rest
+            _gleam_fold_acc = Ok(depth)
+            while type(_gleam_fold_list) is GleamList:
+                _gleam_fold_item = _gleam_fold_list.value
+                _gleam_fold_rest = _gleam_fold_list.tail
+                _gleam_fold_list = _gleam_fold_rest
+                state = _gleam_fold_acc
+                next = _gleam_fold_item
+                _gleam_fold_acc = result.try_(state, _fn_def_0_gleam_fold_1)
+            return _gleam_fold_acc
 
 
 import gleam.result

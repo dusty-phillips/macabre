@@ -173,6 +173,20 @@ pub fn generate_statement(
       |> string_tree.append_tree(
         generate_block(body, field_names) |> internal.indent(4),
       )
+    python.For(targets, iterable, body) ->
+      string_tree.new()
+      |> string_tree.append("for ")
+      |> string_tree.append_tree(
+        targets
+        |> list.map(string_tree.from_string)
+        |> internal.generate_plural(fn(tree) { tree }, ", "),
+      )
+      |> string_tree.append(" in ")
+      |> string_tree.append_tree(expressions.generate_expression(iterable))
+      |> string_tree.append(":\n")
+      |> string_tree.append_tree(
+        generate_block(body, field_names) |> internal.indent(4),
+      )
     python.FunctionDef(function) -> generate_function(function, field_names)
   }
 }
