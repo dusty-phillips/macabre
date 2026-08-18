@@ -384,7 +384,12 @@ pub fn manifest_dependency_parsing_test() {
     ))
   assert gleam_project.packages
     |> dict.get("local_thing")
-    == Ok(project.LocalPackage(path: "../local_thing"))
+    == Ok(
+      project.LocalPackage(path: filepath.join(
+        project_files.base_dir,
+        "../local_thing",
+      )),
+    )
 }
 
 pub fn module_with_submodules_written_as_init_test() {

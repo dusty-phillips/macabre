@@ -370,17 +370,43 @@ fn load_dependency_list(
     // straight from the config file.
     "macabre.toml" ->
       parse_gleam_dependencies_with_dev(toml, True)
+      |> rebase_local_deps(base_directory)
       |> result.map_error(errors.TomlFieldError(toml_path, _))
     _ -> {
       let manifest_path = filepath.join(base_directory, "manifest.toml")
       case simplifile.read(manifest_path) {
         Error(_) ->
           parse_gleam_dependencies_with_dev(toml, True)
+          |> rebase_local_deps(base_directory)
           |> result.map_error(errors.TomlFieldError(toml_path, _))
-        Ok(contents) -> parse_manifest(manifest_path, contents)
+        Ok(contents) ->
+          parse_manifest(manifest_path, contents)
+          |> rebase_local_deps(base_directory)
       }
     }
   }
+}
+
+// Local-path dependencies (e.g. a `testhelper = { path = "./testhelper" }`
+// dev dependency) are written relative to the directory that owns the config.
+// Rebase them against that directory so they resolve wherever the project is
+// compiled from.
+fn rebase_local_deps(
+  deps: Result(dict.Dict(String, Package), e),
+  base_directory: String,
+) -> Result(dict.Dict(String, Package), e) {
+  result.map(deps, fn(deps) {
+    dict.map_values(deps, fn(_name, package) {
+      case package {
+        LocalPackage(path) ->
+          case filepath.is_absolute(path) {
+            True -> package
+            False -> LocalPackage(filepath.join(base_directory, path))
+          }
+        other -> other
+      }
+    })
+  })
 }
 
 fn parse_manifest(
