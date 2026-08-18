@@ -141,7 +141,18 @@ def _gleam_hash_key(value):
     return (type(value), value)
 
 
+# Records are immutable, so their value-based hash never changes: cache the
+# computed hash on the instance to avoid re-walking the whole structure (and
+# any dicts/lists it contains) on every use of the record as a dict/set key.
 def gleam_hash(value):
+    fields = getattr(type(value), \"__dataclass_fields__\", None)
+    if fields is not None:
+        cached = value.__dict__.get(\"_gleam_hash_cache\")
+        if cached is not None:
+            return cached
+        result = hash(_gleam_hash_key(value))
+        object.__setattr__(value, \"_gleam_hash_cache\", result)
+        return result
     return hash(_gleam_hash_key(value))
 
 
@@ -154,6 +165,8 @@ def gleam_record_replace(record, changes):
     new = type(record).__new__(type(record))
     object.__setattr__(new, \"__dict__\", record.__dict__.copy())
     new.__dict__.update(changes)
+    # A changed record has different contents, so its cached hash is stale.
+    new.__dict__.pop(\"_gleam_hash_cache\", None)
     return new
 
 
