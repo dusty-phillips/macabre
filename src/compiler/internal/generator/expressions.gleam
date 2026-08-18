@@ -369,18 +369,33 @@ fn is_zero_or_underscore(grapheme: String) -> Bool {
 // through `to_gleam_list`. `[a, b, ..rest]` becomes `GleamList(a, GleamList(b,
 // rest))`, avoiding the intermediate Python list and the helper call. The tail
 // (either `rest` or `EmptyGleamList()` for a non-spliced literal) is the
-// innermost cell.
+// innermost cell. Very large literals fall back to `to_gleam_list([..])`:
+// hundreds of nested `GleamList(...)` calls exceed CPython's nesting limit and
+// fail to parse.
 fn build_gleam_list(
   elements: List(python.Expression),
   tail: StringTree,
 ) -> StringTree {
-  elements
-  |> list.reverse
-  |> list.fold(tail, fn(acc, element) {
-    string_tree.from_string("GleamList(")
-    |> string_tree.append_tree(generate_expression(element))
-    |> string_tree.append(", ")
-    |> string_tree.append_tree(acc)
-    |> string_tree.append(")")
-  })
+  case list.length(elements) > 100 {
+    True ->
+      string_tree.from_string("to_gleam_list([")
+      |> string_tree.append_tree(internal.generate_plural(
+        elements,
+        fn(element) { generate_expression(element) },
+        ", ",
+      ))
+      |> string_tree.append("], ")
+      |> string_tree.append_tree(tail)
+      |> string_tree.append(")")
+    False ->
+      elements
+      |> list.reverse
+      |> list.fold(tail, fn(acc, element) {
+        string_tree.from_string("GleamList(")
+        |> string_tree.append_tree(generate_expression(element))
+        |> string_tree.append(", ")
+        |> string_tree.append_tree(acc)
+        |> string_tree.append(")")
+      })
+  }
 }
