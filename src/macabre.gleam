@@ -73,21 +73,66 @@ pub fn run_test(directory: String) -> Nil {
   case load_and_compile(directory) {
     Error(error) -> filesystem.write_error(error)
     Ok(compiled_package) -> {
-      let test_module = compiled_package.project.name <> "_test.py"
       // The subprocess runs with the project directory as its working
       // directory, so the compiled test module is referenced relative to it.
-      let test_path =
-        compiled_package.project
-        |> project.build_dev_python_dir
+      let name = compiled_package.project.name
+      let absolute_python_dir =
+        project.build_dev_python_dir(compiled_package.project)
+      let python_dir =
+        absolute_python_dir
         |> string.remove_prefix(compiled_package.project.base_directory <> "/")
-        |> filepath.join(test_module)
-      case
-        shellout.command(run: "python3", with: [test_path], in: directory, opt: [
-          shellout.LetBeStdout,
-        ])
-      {
-        Ok(_) -> shellout.exit(0)
-        Error(#(status, _)) -> shellout.exit(status)
+      // The `<name>_test` module may be a plain module (`<name>_test.py`) or,
+      // when the test suite has submodules (e.g. `birdie_test/cli_test`), an
+      // emitted package (`<name>_test/__init__.py`). Pick whichever exists.
+      let is_package =
+        filesystem.is_directory(filepath.join(
+          absolute_python_dir,
+          name <> "_test",
+        ))
+      // A package test entry's own directory (not the build directory) is put
+      // on sys.path when it is run as a script, so import gleam_builtins and
+      // the stdlib by running it through runpy with the build directory on the
+      // path. Plain (single-file) test modules run directly as before.
+      case is_package {
+        Ok(True) -> {
+          let script =
+            "import sys, runpy; sys.path.insert(0, '"
+            <> python_dir
+            <> "'); runpy.run_path('"
+            <> python_dir
+            <> "/"
+            <> name
+            <> "_test/__init__.py', run_name='__main__')"
+          case
+            shellout.command(
+              run: "python3",
+              with: ["-c", script],
+              in: directory,
+              opt: [
+                shellout.LetBeStdout,
+              ],
+            )
+          {
+            Ok(_) -> shellout.exit(0)
+            Error(#(status, _)) -> shellout.exit(status)
+          }
+        }
+        _ -> {
+          let test_path = filepath.join(python_dir, name <> "_test.py")
+          case
+            shellout.command(
+              run: "python3",
+              with: [test_path],
+              in: directory,
+              opt: [
+                shellout.LetBeStdout,
+              ],
+            )
+          {
+            Ok(_) -> shellout.exit(0)
+            Error(#(status, _)) -> shellout.exit(status)
+          }
+        }
       }
     }
   }
