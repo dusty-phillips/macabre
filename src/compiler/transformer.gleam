@@ -251,6 +251,7 @@ pub fn transform_with_comments(
     "",
     "",
     set.new(),
+    dict.new(),
   )
 }
 
@@ -265,6 +266,7 @@ pub fn transform_module_with_metadata(
   file_path: String,
   module_source: String,
   submodule_names: set.Set(String),
+  mangled_submodules: dict.Dict(String, String),
 ) -> python.Module {
   // Private top-level values colliding with submodule import bindings are
   // renamed first, so the emitted `def` does not clobber the parent package
@@ -275,12 +277,11 @@ pub fn transform_module_with_metadata(
   // erlang/javascript-targeted code must never leak into python output.
   let input =
     glance.Module(
-      ..input,
       imports: list.filter(input.imports, keep_for_python),
-      constants: list.filter(input.constants, keep_for_python),
-      functions: list.filter(input.functions, keep_for_python),
       custom_types: list.filter(input.custom_types, keep_for_python),
       type_aliases: list.filter(input.type_aliases, keep_for_python),
+      constants: list.filter(input.constants, keep_for_python),
+      functions: list.filter(input.functions, keep_for_python),
     )
   let module_aliases =
     list.flat_map(input.imports, fn(import_) {
@@ -297,13 +298,14 @@ pub fn transform_module_with_metadata(
           dict.insert(paths, module_binding_name(module, alias), module)
       }
     })
-  let module_bindings = compute_module_bindings(input, submodule_names)
+  let module_bindings =
+    compute_module_bindings(input, submodule_names, mangled_submodules)
   let #(leading_comments, comments_by_start, trailing_comments) =
     comments.assign_leading_comments(top_level_spans(input), module_comments)
   let module =
     python.empty_module()
     |> list.fold(input.imports, _, fn(module, import_) {
-      transform_import(module, import_, module_bindings)
+      transform_import(module, import_, module_bindings, mangled_submodules)
     })
     |> list.fold(
       sort_constants(input.constants) |> list.reverse,
@@ -417,7 +419,13 @@ fn definition_spans(
 fn compute_module_bindings(
   input: glance.Module,
   submodule_names: set.Set(String),
+  mangled_submodules: dict.Dict(String, String),
 ) -> dict.Dict(String, String) {
+  // A binding needs renaming when it would be clobbered by an import in the
+  // generated Python: either the module defines a top-level value of that name
+  // (e.g. `qcheck/random` defines `int` and imports `gleam/int`), or a sibling
+  // submodule of the package attaches under that name (e.g. `bitty/string`
+  // clobbering a `from gleam import string` binding in `bitty`).
   let defined =
     list.append(
       list.append(
@@ -438,9 +446,38 @@ fn compute_module_bindings(
     case import_ {
       glance.Definition(_, glance.Import(_, module, alias, _, _)) -> {
         let binding = module_binding_name(module, alias)
-        case list.contains(defined, binding) {
-          True -> dict.insert(bindings, binding, binding <> "_module")
-          False -> dict.insert(bindings, binding, binding)
+        case dict.get(mangled_submodules, module) {
+          // A Python package cannot hold both `clip.arg` (a re-exported
+          // function) and `clip/arg` (a submodule), because importing the
+          // submodule attaches it to the parent package as `clip.arg`,
+          // shadowing the function. When the imported submodule's last segment
+          // collides with a top-level value of its parent, `mangled_submodules`
+          // maps its path to the mangled path used everywhere (`clip/arg_module`),
+          // matching the file written on disk. The binding name is the mangled
+          // path's last segment. An explicit alias is kept as-is (only the path
+          // is mangled), so a reference uses the name the `from` statement
+          // actually binds.
+          Ok(mangled_path) ->
+            case alias {
+              option.Some(_) -> dict.insert(bindings, binding, binding)
+              option.None ->
+                dict.insert(
+                  bindings,
+                  binding,
+                  mangled_path
+                    |> string.split("/")
+                    |> list.last
+                    |> result.unwrap(""),
+                )
+            }
+          _ -> {
+            // The import's file is unchanged; only the binding is aliased with
+            // an `as` so it is not clobbered.
+            case list.contains(defined, binding) {
+              True -> dict.insert(bindings, binding, binding <> "_module")
+              False -> dict.insert(bindings, binding, binding)
+            }
+          }
         }
       }
     }
@@ -657,6 +694,7 @@ fn transform_import(
   module: python.Module,
   import_: glance.Definition(glance.Import),
   module_bindings: dict.Dict(String, String),
+  mangled_submodules: dict.Dict(String, String),
 ) -> python.Module {
   let python_imports = case import_ {
     glance.Definition(
@@ -664,25 +702,40 @@ fn transform_import(
       glance.Import(_, module, alias, _unqualified_types, unqualified_values),
     ) -> {
       let binding = module_binding_name(module, alias)
-      let module_imports = transform_module_import(module, alias)
-      let module_imports = case dict.get(module_bindings, binding) {
-        Ok(binding_name) if binding_name != binding -> {
-          case module |> string.contains("/") {
-            True ->
-              // The plain `import a.b.c` statement must not gain an `as`
-              // alias (its attribute-walk binding form is unreliable), so
-              // only the `from a.b import c` binding entry is renamed.
-              list.map(module_imports, fn(import_) {
-                case import_ {
-                  python.QualifiedImport(_) -> import_
-                  other -> rename_module_import(other, binding_name)
-                }
-              })
-            False ->
-              list.map(module_imports, rename_module_import(_, binding_name))
+      // A submodule/parent collision (the submodule's last segment collides
+      // with a top-level value of its parent) has its import path mangled to
+      // match the file written on disk. A colliding binding from the module's
+      // own top-level value (e.g. `qcheck/random` defining `int` and importing
+      // `gleam/int`) is just an `as` alias on the `from` statement, leaving the
+      // imported module's file untouched.
+      let submodule_renamed = case dict.get(mangled_submodules, module) {
+        Ok(mangled) -> option.Some(mangled)
+        Error(_) -> option.None
+      }
+      let module_imports =
+        transform_module_import(module, alias, submodule_renamed)
+      let module_imports = case submodule_renamed {
+        option.Some(_) -> module_imports
+        option.None ->
+          case dict.get(module_bindings, binding) {
+            Ok(binding_name) if binding_name != binding -> {
+              case module |> string.contains("/") {
+                True ->
+                  // The plain `import a.b.c` statement must not gain an `as`
+                  // alias (its attribute-walk binding form is unreliable), so
+                  // only the `from a.b import c` binding entry is aliased.
+                  list.map(module_imports, fn(import_) {
+                    case import_ {
+                      python.QualifiedImport(_) -> import_
+                      other -> rename_module_import(other, binding_name)
+                    }
+                  })
+                False ->
+                  list.map(module_imports, rename_module_import(_, binding_name))
+              }
+            }
+            _ -> module_imports
           }
-        }
-        _ -> module_imports
       }
       let module_part =
         module
@@ -703,15 +756,20 @@ fn transform_import(
 fn transform_module_import(
   module: String,
   alias: option.Option(glance.AssignmentName),
+  renamed: option.Option(String),
 ) -> List(python.Import) {
   // A module path like `glexer/token` is emitted as a plain `import
-  // glexer.token` followed by `from glexer import token as ...`. The plain
-  // import loads the submodule and sets its attribute on the parent package
-  // (overwriting any shadowing value like a function `token` in glexer.gleam)
-  // without walking attributes itself, so it is immune to both parent
-  // shadowing and circular parent imports. The `from` statement then binds
-  // the last path segment directly by name.
-  let full_module = module |> string.replace("/", ".")
+  // glexer.token` followed by `from glexer import token`. The plain import
+  // loads the submodule and attaches it to the parent package under its own
+  // name. When the parent module also defines a top-level value with that
+  // name (e.g. `glexer.token` re-exported as a function `token`), the
+  // submodule would shadow that value, so `renamed` carries its mangled path
+  // (`glexer/token_module`) matching the file written on disk, keeping the
+  // parent's value reachable as `glexer.token`.
+  let full_module = case renamed {
+    option.Some(mangled_path) -> string.replace(mangled_path, "/", ".")
+    option.None -> string.replace(module, "/", ".")
+  }
   let parent_module =
     module
     |> string.split("/")
@@ -719,8 +777,11 @@ fn transform_module_import(
     |> list.drop(1)
     |> list.reverse
     |> string.join(with: ".")
-  let last_segment =
-    module |> string.split("/") |> list.last |> result.unwrap("")
+  let last_segment = case renamed {
+    option.Some(mangled_path) ->
+      mangled_path |> string.split("/") |> list.last |> result.unwrap("")
+    option.None -> module |> string.split("/") |> list.last |> result.unwrap("")
+  }
   case alias {
     option.None ->
       // A plain `import a.b.c` only binds `a` in Python, so a nested module
@@ -752,8 +813,9 @@ fn transform_module_import(
   }
 }
 
-// The import binding is renamed (with an `as` alias) when it would otherwise
-// collide with a top-level function or constant of the same name.
+// Rewrites an import's binding entry to a renamed binding (via an `as` alias),
+// leaving the imported module's file path untouched. Used when a module's own
+// top-level value collides with one of its import bindings.
 fn rename_module_import(
   import_: python.Import,
   binding: String,

@@ -93,12 +93,14 @@ pub fn compile_module_with_comments(
     "",
     "",
     set.new(),
+    dict.new(),
   )
 }
 
 pub fn compile_module_with_submodules(
   glance_module: glance.Module,
   submodule_names: set.Set(String),
+  mangled_submodules: dict.Dict(String, String),
 ) -> String {
   compile_module_with_metadata(
     glance_module,
@@ -111,6 +113,7 @@ pub fn compile_module_with_submodules(
     "",
     "",
     submodule_names,
+    mangled_submodules,
   )
 }
 
@@ -125,6 +128,7 @@ pub fn compile_module_with_metadata(
   file_path: String,
   module_source: String,
   submodule_names: set.Set(String),
+  mangled_submodules: dict.Dict(String, String),
 ) -> String {
   glance_module
   |> transformer.transform_module_with_metadata(
@@ -137,6 +141,7 @@ pub fn compile_module_with_metadata(
     file_path,
     module_source,
     submodule_names,
+    mangled_submodules,
   )
   |> generator.generate(constructor_arities)
 }
@@ -146,6 +151,11 @@ pub fn compile_package(
 ) -> package.CompiledPackage {
   let test_modules = set.from_list(project.test_module_names(package.project))
   let dev_modules = set.from_list(project.dev_module_names(package.project))
+  // A submodule `parent/seg` whose last segment collides with a top-level value
+  // of `parent` must be imported under a mangled name (e.g. `arg_module`) every
+  // place it is referenced, so its file on disk is written as `parent/seg_module.py`
+  // rather than clobbering `parent.seg` (the re-exported value) in Python.
+  let mangled_submodules = compute_mangled_submodules(package.package.modules)
   package.CompiledPackage(
     project: package.project,
     has_main: dict.get(package.package.modules, package.project.name)
@@ -198,6 +208,7 @@ pub fn compile_package(
           file_path,
           module_source,
           sibling_submodule_names(package.package.modules, module_name),
+          mangled_submodules,
         )
       }),
     external_import_files: package.external_import_files,
@@ -207,14 +218,16 @@ pub fn compile_package(
       })
       |> dict.keys
       |> set.from_list,
+    mangled_submodules: mangled_submodules,
   )
 }
 
 // The first path segment of every submodule of this module (e.g. for `bitty`,
 // the `bits`, `bytes`, `num`, `string` of `bitty/bits`, `bitty/bytes`, ...).
-// Importing `bitty.string` sets the `string` attribute on the `bitty` package,
-// so an import binding named `string` in `bitty.gleam` must be renamed to
-// avoid being clobbered (e.g. `from gleam import string`).
+// Importing such a submodule sets the segment as an attribute on the parent
+// package, clobbering any module-global binding of the same name in the parent
+// (e.g. `from gleam import string`), so a colliding import binding must be
+// renamed with an `as` alias.
 fn sibling_submodule_names(
   modules: dict.Dict(String, glimpse.Module),
   module_name: String,
@@ -230,6 +243,74 @@ fn sibling_submodule_names(
     |> list.first
   })
   |> set.from_list
+}
+
+// Maps every submodule `parent/seg` whose last segment collides with a public
+// top-level value of `parent` to its mangled path `parent/seg_module`. In
+// Python a package cannot hold both `parent.seg` (a re-exported value) and
+// `parent/seg` (a submodule), so the submodule is written as
+// `parent/seg_module.py` and imported under that mangled path everywhere.
+// Only public values count: a private value that collides with one of its own
+// import bindings is already renamed by `rename_private_value_collisions`.
+fn compute_mangled_submodules(
+  modules: dict.Dict(String, glimpse.Module),
+) -> dict.Dict(String, String) {
+  let public_names =
+    dict.fold(modules, dict.new(), fn(names, name, module) {
+      dict.insert(names, name, set.from_list(public_value_names(module.module)))
+    })
+  modules
+  |> dict.keys
+  |> list.filter_map(fn(name) {
+    let segments = string.split(name, "/")
+    case list.length(segments) > 1 {
+      True -> {
+        let parent =
+          string.join(
+            segments
+              |> list.reverse
+              |> list.drop(1)
+              |> list.reverse,
+            "/",
+          )
+        let seg = list.last(segments) |> result.unwrap("")
+        case dict.get(public_names, parent) {
+          Ok(names) ->
+            case set.contains(names, seg) {
+              True -> Ok(#(name, parent <> "/" <> seg <> "_module"))
+              False -> Error(Nil)
+            }
+          Error(_) -> Error(Nil)
+        }
+      }
+      False -> Error(Nil)
+    }
+  })
+  |> dict.from_list
+}
+
+fn public_value_names(module: glance.Module) -> List(String) {
+  let functions =
+    list.filter_map(module.functions, fn(function) {
+      case function {
+        glance.Definition(_, definition) ->
+          case definition.publicity {
+            glance.Public -> Ok(definition.name)
+            glance.Private -> Error(Nil)
+          }
+      }
+    })
+  let constants =
+    list.filter_map(module.constants, fn(constant) {
+      case constant {
+        glance.Definition(_, definition) ->
+          case definition.publicity {
+            glance.Public -> Ok(definition.name)
+            glance.Private -> Error(Nil)
+          }
+      }
+    })
+  list.append(functions, constants)
 }
 
 // Maps constructor names to their field names, in declaration order. Keys

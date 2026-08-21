@@ -256,12 +256,13 @@ pub fn module_binding_colliding_with_public_function_test() {
   pub fn token(lexer: Int, tok: String, source: String, offset: Int) -> String {
     tok
   }
-
   fn main() -> String {
     token(1, token.Name(\"x\"), \"\", 0)
   }"
     |> glance.module
-  assert compiler.compile_module(module) == "from __future__ import annotations
+  let mangled = dict.from_list([#("glexer/token", "glexer/token_module")])
+  assert compiler.compile_module_with_submodules(module, set.new(), mangled)
+    == "from __future__ import annotations
 from gleam_builtins import *
 
 def token(lexer, tok, source, offset):
@@ -272,8 +273,8 @@ def main():
     return token(1, token_module.Name(\"x\"), \"\", 0)
 
 
-import glexer.token
-from glexer import token as token_module
+import glexer.token_module
+from glexer import token_module
 
 
 
@@ -383,11 +384,11 @@ from glexer import token
 "
 }
 
-// An import binding that collides with a sibling submodule of the same
-// package must be renamed, so that importing the submodule later (e.g. a
-// test importing `bitty.string`) does not clobber the `from gleam import
-// string` binding in this module.
-pub fn module_binding_colliding_with_submodule_test() {
+// A submodule import whose last segment collides with a top-level value of its
+// parent (e.g. `gleam/string` while `gleam` defines `string`) must be renamed
+// everywhere it is referenced, and its import path mangled to match the file
+// written on disk, so the parent's re-exported value is not shadowed.
+pub fn colliding_submodule_import_renamed_test() {
   let assert Ok(module) =
     "import gleam/string
 
@@ -395,8 +396,12 @@ pub fn module_binding_colliding_with_submodule_test() {
     string.inspect(\"x\")
   }"
     |> glance.module
-  let submodules = set.from_list(["string", "bytes"])
-  assert compiler.compile_module_with_submodules(module, submodules)
+  let mangled = dict.from_list([#("gleam/string", "gleam/string_module")])
+  assert compiler.compile_module_with_submodules(
+      module,
+      set.from_list(["string"]),
+      mangled,
+    )
     == "from __future__ import annotations
 from gleam_builtins import *
 
@@ -404,14 +409,14 @@ def main():
     return string_module.inspect(\"x\")
 
 
-import gleam.string
-from gleam import string as string_module
+import gleam.string_module
+from gleam import string_module
 
 
 "
 }
 
-pub fn module_binding_not_colliding_with_submodule_test() {
+pub fn non_colliding_submodule_import_unchanged_test() {
   let assert Ok(module) =
     "import gleam/string
 
@@ -419,8 +424,11 @@ pub fn module_binding_not_colliding_with_submodule_test() {
     string.inspect(\"x\")
   }"
     |> glance.module
-  let submodules = set.from_list(["bits", "bytes"])
-  assert compiler.compile_module_with_submodules(module, submodules)
+  assert compiler.compile_module_with_submodules(
+      module,
+      set.from_list(["bits", "bytes"]),
+      dict.new(),
+    )
     == "from __future__ import annotations
 from gleam_builtins import *
 

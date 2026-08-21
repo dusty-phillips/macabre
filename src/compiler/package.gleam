@@ -43,6 +43,12 @@ pub type CompiledPackage {
     /// an `if __name__ == "__main__"` block appended when written, so they can
     /// be run directly as scripts.
     main_modules: set.Set(String),
+    /// Submodules `parent/seg` whose last segment collides with a public
+    /// top-level value of `parent`, mapped to their mangled path
+    /// `parent/seg_module`. The on-disk file and every import of the submodule
+    /// use the mangled path, so the parent's re-exported value is not shadowed
+    /// in Python.
+    mangled_submodules: dict.Dict(String, String),
   )
 }
 

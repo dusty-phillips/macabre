@@ -174,9 +174,7 @@ pub fn write_package(
             |> filepath.join(name)
             |> filepath.join("__init__.py")
           False ->
-            build_directory
-            |> filepath.join(name)
-            |> filesystem.replace_extension()
+            leaf_target(build_directory, name, package.mangled_submodules)
         }
         // Modules with a `main` are runnable as scripts: give them their own
         // `if __name__ == "__main__"` block (e.g. the test entry).
@@ -188,4 +186,26 @@ pub fn write_package(
       })
     })
   })
+}
+
+// A leaf module `parent/seg` written as `parent/seg.py` would be attached to
+// the parent package as `parent.seg`. When the parent module defines a public
+// value of that name (e.g. it re-exports the submodule's `seg` function), the
+// value would be shadowed, so `mangled_submodules` maps it to `parent/seg_module`
+// and the file is written under that name.
+fn leaf_target(
+  build_directory: String,
+  name: String,
+  mangled_submodules: dict.Dict(String, String),
+) -> String {
+  case dict.get(mangled_submodules, name) {
+    Ok(mangled_path) ->
+      build_directory
+      |> filepath.join(mangled_path)
+      |> filesystem.replace_extension()
+    Error(_) ->
+      build_directory
+      |> filepath.join(name)
+      |> filesystem.replace_extension()
+  }
 }
