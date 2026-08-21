@@ -57,7 +57,7 @@ pub fn format_error(error: Error) -> String {
       internal.format_glance_error(error, filename, contents)
     GlimpseImportError(error) -> format_glimpse_import_error(error)
     GlimpseTypeCheckError(module, error) ->
-      "Type check failed in " <> module <> ": " <> string.inspect(error)
+      internal.format_glimpse_type_check_error(module, error)
   }
 }
 
@@ -66,10 +66,16 @@ fn format_glimpse_import_error(
 ) -> String {
   case error {
     glimpse_error.CircularDependencyError(module_name) ->
-      "Circular dependency detected for module " <> module_name
+      "The module `"
+      <> module_name
+      <> "` forms a circular dependency with another module. Modules must not import each other directly or indirectly."
     glimpse_error.MissingImportError(module_name) ->
-      "Missing import " <> module_name
+      "The module `"
+      <> module_name
+      <> "` could not be found. Check the module name and that it is part of this package or one of its dependencies."
     glimpse_error.SrcImportingDevDependency(module_name) ->
-      "Source module imports dev dependency " <> module_name
+      "The module `"
+      <> module_name
+      <> "` is a dev-only dependency and cannot be imported from a source module. Move the import to a test or dev module."
   }
 }

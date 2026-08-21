@@ -1,7 +1,6 @@
 import compiler/python
 import gleam/bit_array
 import gleam/dict
-import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string

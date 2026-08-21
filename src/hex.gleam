@@ -15,13 +15,12 @@ pub fn fetch(
   // so they never change.
   case simplifile.is_directory(package_dir) {
     Ok(True) -> Ok(Nil)
-    _ -> fetch_fresh(package_dir, package_directory, name, version)
+    _ -> fetch_fresh(package_dir, name, version)
   }
 }
 
 fn fetch_fresh(
   package_dir: String,
-  package_directory: String,
   name: String,
   version: String,
 ) -> Result(Nil, errors.Error) {

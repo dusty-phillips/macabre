@@ -2703,26 +2703,6 @@ fn known_driver_callee(callee: python.Expression) -> Bool {
   || name == "result.lazy_unwrap"
 }
 
-fn marker_swallowing_callee(callee: python.Expression) -> Bool {
-  let name = case callee {
-    python.Variable(name) -> name
-    python.FieldAccess(python.ModuleRef(module), function_name) ->
-      module <> "." <> function_name
-    _ -> ""
-  }
-  name == "list.any"
-  || name == "list.all"
-  || name == "list.map"
-  || name == "list.filter"
-  || name == "list.find"
-  || name == "list.fold"
-  || name == "list.fold_right"
-  || name == "list.index_fold"
-  || name == "list.try_fold"
-  || name == "list.try_map"
-  || name == "list.flat_map"
-}
-
 fn is_tail_call(expression: python.Expression, function_name: String) -> Bool {
   case expression {
     python.Call(python.Variable(name), _) if name == function_name -> True

@@ -19,7 +19,6 @@ import gleam/set
 import gleam/string
 import glimpse
 import glimpse/error as glimpse_error
-import glimpse/internal/typecheck/types.{type Environment}
 import glimpse/target
 import glimpse/typecheck
 import simplifile

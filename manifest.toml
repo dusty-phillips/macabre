@@ -31,6 +31,7 @@ packages = [
 
 [requirements]
 argv = { version = ">= 1.1.0 and < 2.0.0" }
+filepath = { version = ">= 1.1.2 and < 2.0.0" }
 glance = { version = ">= 7.0.0 and < 8.0.0" }
 gleam_json = { version = ">= 3.0.0 and < 4.0.0" }
 gleam_stdlib = { version = ">= 1.0.0 and < 2.0.0" }
