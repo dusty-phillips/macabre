@@ -6,11 +6,7 @@ import gleam/option
 import gleam/string_tree.{type StringTree}
 
 pub fn generate_custom_type(custom_type: python.CustomType) -> StringTree {
-  // The `None` variant of the `Option` type is represented by the Python
-  // keyword `None` rather than a class, so it doesn't need a class
-  // definition.
-  let variants =
-    list.filter(custom_type.variants, fn(variant) { variant.name != "None" })
+  let variants = custom_type.variants
   case variants {
     // empty types get discarded
     [] -> string_tree.new()
@@ -69,7 +65,7 @@ fn generate_type_variant(
   string_tree.new()
   |> string_tree.append("@dataclasses.dataclass(frozen=True)\n")
   |> string_tree.append("class ")
-  |> string_tree.append(variant.name)
+  |> string_tree.append(variant.name |> internal.python_name)
   |> string_tree.append(":\n")
   |> string_tree.append_tree(
     generate_type_variant_body(variant, docstring) |> internal.indent(4),

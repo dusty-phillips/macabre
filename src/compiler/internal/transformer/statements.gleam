@@ -1001,8 +1001,6 @@ fn transform_expression(
     glance.Variable(_, "False") ->
       internal.empty_return(context, python.Bool("False"))
 
-    glance.Variable(_, "None") -> internal.empty_return(context, python.Nil)
-
     glance.Variable(_, "Nil") -> internal.empty_return(context, python.Nil)
 
     glance.Variable(_, string) ->
@@ -1103,42 +1101,78 @@ fn transform_expression(
     }
 
     glance.FieldAccess(_, container: expression, label:) ->
-      case label {
-        "None" -> internal.empty_return(context, python.Nil)
-        _ ->
-          case expression {
-            // A module-qualified variant reference, e.g. `order.Ascending`
-            // (a nullary value, emitted as an instance `order.Ascending()`)
-            // or `error.LoadError` (a non-nullary constructor used as a
-            // function value, emitted bare). The constructor arities map
-            // disambiguates.
-            glance.Variable(_, alias) ->
-              case list.contains(context.module_aliases, alias) {
+      case expression {
+        // A module-qualified variant reference, e.g. `order.Ascending`
+        // (a nullary value, emitted as an instance `order.Ascending()`)
+        // or `error.LoadError` (a non-nullary constructor used as a
+        // function value, emitted bare). The constructor arities map
+        // disambiguates.
+        glance.Variable(_, alias) ->
+          case list.contains(context.module_aliases, alias) {
+            True ->
+              case is_capitalized(label) {
+                // A module-qualified variant reference, e.g.
+                // `order.Ascending` (a nullary value, emitted as an
+                // instance `order.Ascending()`) or `error.LoadError` (a
+                // non-nullary constructor used as a function value,
+                // emitted bare). The constructor arities map
+                // disambiguates.
                 True ->
-                  case is_capitalized(label) {
-                    // A module-qualified variant reference, e.g.
-                    // `order.Ascending` (a nullary value, emitted as an
-                    // instance `order.Ascending()`) or `error.LoadError` (a
-                    // non-nullary constructor used as a function value,
-                    // emitted bare). The constructor arities map
-                    // disambiguates.
-                    True ->
-                      case constructor_arity(context, alias <> "." <> label) {
-                        option.Some(True) ->
-                          internal.empty_return(
+                  case constructor_arity(context, alias <> "." <> label) {
+                    option.Some(True) ->
+                      internal.empty_return(
+                        context,
+                        python.Call(
+                          python.FieldAccess(
+                            python.ModuleRef(internal.module_binding(
+                              context,
+                              alias,
+                            )),
+                            label,
+                          ),
+                          [],
+                        ),
+                      )
+                    _ ->
+                      internal.empty_return(
+                        context,
+                        python.FieldAccess(
+                          python.ModuleRef(internal.module_binding(
                             context,
-                            python.Call(
-                              python.FieldAccess(
-                                python.ModuleRef(internal.module_binding(
-                                  context,
-                                  alias,
-                                )),
-                                label,
-                              ),
-                              [],
-                            ),
-                          )
-                        _ ->
+                            alias,
+                          )),
+                          label,
+                        ),
+                      )
+                  }
+                // A module-qualified function used as a value, e.g.
+                // `patterns.collect_binds` passed to `list.map`. The
+                // module reference must not be treated as a variable,
+                // otherwise it collides with any parameter of the same
+                // name. Only emit a module reference when the module
+                // actually has this member (checked against the function
+                // signatures); otherwise this is a record field access on
+                // a local value, which must be renamed with it.
+                False ->
+                  case is_module_function(context, alias, label) {
+                    True ->
+                      // Real Gleam resolves `name.label` by typing
+                      // `name` as a value and attempting field access
+                      // first; only when the value has no such field
+                      // does it fall back to module access. So when the
+                      // alias is shadowed by a parameter, we check the
+                      // parameter's declared type: if it actually has a
+                      // field with this label, this is a field access on
+                      // the parameter (and must be renamed with it); if
+                      // the type is known and has no such field it is the
+                      // module-qualified function and stays a module
+                      // reference. Without a declared type the package's
+                      // field names are a fallback.
+                      case type_has_field(context, alias, label) {
+                        option.Some(True) ->
+                          transform_expression(context, expression)
+                          |> internal.map_return(python.FieldAccess(_, label))
+                        option.Some(False) ->
                           internal.empty_return(
                             context,
                             python.FieldAccess(
@@ -1149,56 +1183,20 @@ fn transform_expression(
                               label,
                             ),
                           )
-                      }
-                    // A module-qualified function used as a value, e.g.
-                    // `patterns.collect_binds` passed to `list.map`. The
-                    // module reference must not be treated as a variable,
-                    // otherwise it collides with any parameter of the same
-                    // name. Only emit a module reference when the module
-                    // actually has this member (checked against the function
-                    // signatures); otherwise this is a record field access on
-                    // a local value, which must be renamed with it.
-                    False ->
-                      case is_module_function(context, alias, label) {
-                        True ->
-                          // Real Gleam resolves `name.label` by typing
-                          // `name` as a value and attempting field access
-                          // first; only when the value has no such field
-                          // does it fall back to module access. So when the
-                          // alias is shadowed by a parameter and the label
-                          // is a record field somewhere in the package,
-                          // this is a field access on the parameter and
-                          // must be emitted as a variable reference so the
-                          // shadowing passes rename it with the parameter.
-                          // Otherwise it is a module-qualified function
-                          // used as a value, which stays a module reference.
-                          case is_record_field(context, label) {
+                        option.None -> {
+                          let shadowed =
+                            list.contains(
+                              context.module_reserved,
+                              alias <> "_0",
+                            )
+                            || list.contains(context.local_bindings, alias)
+                          case is_record_field(context, label) && shadowed {
                             True ->
-                              case
-                                list.contains(
-                                  context.module_reserved,
-                                  alias <> "_0",
-                                )
-                                || list.contains(context.local_bindings, alias)
-                              {
-                                True ->
-                                  transform_expression(context, expression)
-                                  |> internal.map_return(python.FieldAccess(
-                                    _,
-                                    label,
-                                  ))
-                                False ->
-                                  internal.empty_return(
-                                    context,
-                                    python.FieldAccess(
-                                      python.ModuleRef(internal.module_binding(
-                                        context,
-                                        alias,
-                                      )),
-                                      label,
-                                    ),
-                                  )
-                              }
+                              transform_expression(context, expression)
+                              |> internal.map_return(python.FieldAccess(
+                                _,
+                                label,
+                              ))
                             False ->
                               internal.empty_return(
                                 context,
@@ -1211,19 +1209,20 @@ fn transform_expression(
                                 ),
                               )
                           }
-                        False ->
-                          transform_expression(context, expression)
-                          |> internal.map_return(python.FieldAccess(_, label))
+                        }
                       }
+                    False ->
+                      transform_expression(context, expression)
+                      |> internal.map_return(python.FieldAccess(_, label))
                   }
-                False ->
-                  transform_expression(context, expression)
-                  |> internal.map_return(python.FieldAccess(_, label))
               }
-            _ ->
+            False ->
               transform_expression(context, expression)
               |> internal.map_return(python.FieldAccess(_, label))
           }
+        _ ->
+          transform_expression(context, expression)
+          |> internal.map_return(python.FieldAccess(_, label))
       }
 
     glance.BinaryOperator(_, glance.Pipe, left, right) ->
@@ -2547,6 +2546,10 @@ fn is_module_function(
 // record field name: if the alias is shadowed by a parameter, the access is
 // a field access on that parameter (real Gleam types the container as a
 // value first), not a module-qualified function reference.
+//
+// The `type:` keys of the arity map encode whole custom types' unions of
+// variant fields (see `type_arities`); they are not "a field somewhere", so
+// they are excluded here.
 fn is_record_field(
   context: internal.TransformerContext,
   label: String,
@@ -2554,7 +2557,83 @@ fn is_record_field(
   case context.constructor_arities {
     option.None -> False
     option.Some(arities) ->
-      dict.values(arities)
+      dict.values(filter_field_arities(arities))
       |> list.any(fn(fields) { list.contains(fields, label) })
+  }
+}
+
+fn filter_field_arities(
+  arities: dict.Dict(String, List(String)),
+) -> dict.Dict(String, List(String)) {
+  arities
+  |> dict.filter(fn(key, _fields) {
+    case string.starts_with(key, "type:") {
+      True -> False
+      False -> True
+    }
+  })
+}
+
+// Whether `alias` (a parameter in scope) has a declared type that carries a
+// field named `label`. `Some(True)`/`Some(False)` when the type is known,
+// `None` when there is no useful type information, in which case callers fall
+// back to the package-wide `is_record_field` heuristic.
+fn type_has_field(
+  context: internal.TransformerContext,
+  alias: String,
+  label: String,
+) -> option.Option(Bool) {
+  case dict.get(context.local_types, alias), context.constructor_arities {
+    Error(_), _ -> option.None
+    _, option.None -> option.None
+    Ok(glance.NamedType(name: name, module: module, ..)), option.Some(arities)
+    -> {
+      let keys = case module {
+        option.Some(binding) -> {
+          let prefix = module_prefix(context, binding)
+          ["type:" <> prefix <> "." <> name, "type:" <> name]
+        }
+        option.None -> ["type:" <> name]
+      }
+      type_fields_of(keys, arities, label)
+    }
+    Ok(_), option.Some(_) -> option.None
+  }
+}
+
+// Looks the `label` up in the fields of the first arity key that exists,
+// returning `None` when none of the keys are known types.
+fn type_fields_of(
+  keys: List(String),
+  arities: dict.Dict(String, List(String)),
+  label: String,
+) -> option.Option(Bool) {
+  case keys {
+    [] -> option.None
+    [key, ..rest] ->
+      case dict.get(arities, key) {
+        Ok(fields) -> option.Some(list.contains(fields, label))
+        Error(_) -> type_fields_of(rest, arities, label)
+      }
+  }
+}
+
+// The `<last_segment>` module prefix for a module binding name, e.g. `t` for
+// `import rada/testing as t` resolves to `testing`.
+fn module_prefix(
+  context: internal.TransformerContext,
+  binding: String,
+) -> String {
+  case context.module_paths {
+    option.None -> binding
+    option.Some(paths) ->
+      case dict.get(paths, binding) {
+        Ok(path) ->
+          path
+          |> string.split("/")
+          |> list.last
+          |> result.unwrap(path)
+        Error(_) -> binding
+      }
   }
 }

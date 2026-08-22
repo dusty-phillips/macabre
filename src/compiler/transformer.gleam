@@ -741,11 +741,8 @@ fn transform_import(
         module
         |> string.replace("/", ".")
 
-      // `None` is represented by the Python keyword `None` rather than a
-      // class defined in the option module, so importing it would fail.
       let unqualified =
         unqualified_values
-        |> list.filter(fn(unqual) { unqual.name != "None" })
         |> list.map(transform_unqualified_description(_, module_part))
       list.append(module_imports, unqualified)
     }

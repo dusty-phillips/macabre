@@ -269,17 +269,13 @@ fn generate_pattern(pattern: python.Pattern) -> StringTree {
       |> string_tree.join(" | ")
     python.PatternConstructor(module, constructor, arguments) ->
       case constructor, arguments, module {
-        // The Bool and Option constructors are represented in the Python
-        // runtime by the Python keywords `True`, `False`, and `None`, so
-        // patterns referencing them must not be rendered as constructor
-        // calls. This applies even to module qualified references (e.g.
-        // `option.None`), since at runtime an option's None value is the
-        // literal `None`. The exception is the compiler's own `python.Nil`
-        // AST node, which is a real class whose instances need a class
-        // pattern.
+        // The Bool constructors are represented in the Python runtime by the
+        // Python keywords `True` and `False`, so patterns referencing them
+        // must not be rendered as constructor calls. The compiler's own
+        // `python.Nil` AST node is a real value (`None`) whose nullary
+        // pattern needs no class pattern.
         "True", [], _ -> string_tree.from_string("True")
         "False", [], _ -> string_tree.from_string("False")
-        "None", [], _ -> string_tree.from_string("None")
         "Nil", [], option.None -> string_tree.from_string("None")
         // Nullary constructors are represented at runtime by an instance of
         // the constructor class (e.g. `File()`), so a pattern matches them
@@ -288,7 +284,7 @@ fn generate_pattern(pattern: python.Pattern) -> StringTree {
           module
           |> option.map(fn(mod) { string_tree.from_strings([mod, "."]) })
           |> option.unwrap(string_tree.new())
-          |> string_tree.append(constructor)
+          |> string_tree.append(constructor |> internal.python_name)
           |> string_tree.append("(")
           |> string_tree.append_tree(internal.generate_plural(
             arguments,
@@ -616,22 +612,6 @@ fn build_constructor_branch(
                     ),
                   ]),
                 )
-                "None" -> #(
-                  bindings,
-                  list.append(conditions, [
-                    python.BinaryOperator(
-                      python.Equal,
-                      constructor_field(
-                        subject,
-                        module,
-                        name,
-                        index,
-                        field_names,
-                      ),
-                      python.Nil,
-                    ),
-                  ]),
-                )
                 _ -> acc
               }
             _ -> acc
@@ -698,12 +678,11 @@ fn argument_is_simple(argument: python.Field(python.Pattern)) -> Bool {
   case argument {
     python.UnlabelledField(python.PatternVariable(_)) -> True
     python.UnlabelledField(python.PatternWildcard) -> True
-    // A field matched against the `True`/`False`/`None` literal (e.g. a
+    // A field matched against the `True`/`False` literal (e.g. a
     // `GenericTypeVariable(name, True)` case) is simple: it compiles to a
     // field-equality condition rather than a Python pattern.
     python.UnlabelledField(python.PatternConstructor(_, "True", [])) -> True
     python.UnlabelledField(python.PatternConstructor(_, "False", [])) -> True
-    python.UnlabelledField(python.PatternConstructor(_, "None", [])) -> True
     _ -> False
   }
 }

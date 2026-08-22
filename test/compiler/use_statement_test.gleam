@@ -351,7 +351,7 @@ def parse(tokens):
                 return Ok((Some(return_type), tokens_1,))
             return do_thing(tokens_0, _fn_def_0)
         case _:
-            return Ok((None, tokens,))
+            return Ok((None_, tokens,))
 
 
 __all__ = [\"parse\"]

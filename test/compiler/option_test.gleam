@@ -21,12 +21,13 @@ def main():
     match _case_subject:
         case Some(x):
             return x
-        case None:
+        case None_():
             return 0
 
 
 import gleam.option
 from gleam import option
+from gleam.option import None_
 from gleam.option import Some
 
 
@@ -54,9 +55,9 @@ pub fn option_none_variant_no_class_test() {
 from gleam_builtins import *
 
 def main():
-    value = None
+    value = None_
     match value:
-        case None:
+        case None_():
             return True
         case Some(_):
             return False
@@ -64,6 +65,7 @@ def main():
 
 import gleam.option
 from gleam import option
+from gleam.option import None_
 from gleam.option import Some
 
 
@@ -91,9 +93,9 @@ pub fn option_none_module_qualified_test() {
 from gleam_builtins import *
 
 def main():
-    value = None
+    value = option.None_
     match value:
-        case None:
+        case None_():
             return True
         case Some(_):
             return False

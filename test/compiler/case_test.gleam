@@ -551,7 +551,7 @@ from gleam_builtins import *
 def do_lex():
     _case_subject = (1, Some(2),)
     match _case_subject:
-        case (lexer, None):
+        case (lexer, None_()):
             return 0
         case (_, Some(token.EndOfFile())):
             return 1
@@ -658,7 +658,7 @@ def assignment(kind, tokens, start):
                     value, tokens_0_0 = use_capture_0
                     def _fn_case_1(_case_subject):
                         match _case_subject:
-                            case (LetAssert(None), GleamList(0, tokens_0_0_0)):
+                            case (LetAssert(None_()), GleamList(0, tokens_0_0_0)):
                                 return Ok((LetAssert(Some(\"x\")), tokens_0_0_0, start + 1,))
                             case (LetAssert(_), _) | (Let(), _):
                                 return Ok((kind, tokens_0_0, start,))
