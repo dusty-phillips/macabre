@@ -471,6 +471,11 @@ def gleam_match_bitstring(subject, *segments):
 
 
 def _bitstring_slice(data: bytes, start_bit: int, count: int) -> bytes | GleamBitArray:
+    if start_bit % 8 == 0 and count % 8 == 0:
+        # Byte-aligned: slice without copying. Recursive `rest:bits` patterns
+        # over large subjects would otherwise rebuild the tail byte-by-byte
+        # (O(n^2) in Gleam code that walks a bit array one step at a time).
+        return data[start_bit // 8:(start_bit + count) // 8]
     if count % 8 == 0:
         return _bits_to_bytes(data, start_bit, count)
     return GleamBitArray(_bits_to_bytes(data, start_bit, count), count)
