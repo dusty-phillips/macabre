@@ -21,6 +21,7 @@ pub type Error {
   TomlParseError(path: String, error: tom.ParseError)
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
   GlimpseTypeCheckError(module: String, error: glimpse_error.TypeCheckError)
+  HexResolveError(name: String, constraint: String, detail: String)
 }
 
 pub fn format_error(error: Error) -> String {
@@ -58,6 +59,13 @@ pub fn format_error(error: Error) -> String {
     GlimpseImportError(error) -> format_glimpse_import_error(error)
     GlimpseTypeCheckError(module, error) ->
       internal.format_glimpse_type_check_error(module, error)
+    HexResolveError(name, constraint, detail) ->
+      "Unable to resolve "
+      <> name
+      <> " matching `"
+      <> constraint
+      <> "`: "
+      <> detail
   }
 }
 

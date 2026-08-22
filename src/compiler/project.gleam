@@ -17,6 +17,7 @@ import gleam/result
 import gleam/set
 import gleam/string
 import hex
+import hex_version
 import simplifile
 import tom
 
@@ -221,9 +222,25 @@ fn clone_one(
   case package {
     GitPackage(git_url:, git_ref:, path: _) ->
       git.clone(name, git_url, git_ref, package_directory)
-    HexPackage(version) -> hex.fetch(package_directory, name, version)
+    HexPackage(version) ->
+      case is_concrete_version(version) {
+        True -> hex.fetch(package_directory, name, version)
+        False -> {
+          use concrete <- result.try(hex_version.resolve(name, version))
+          hex.fetch(package_directory, name, concrete)
+        }
+      }
     LocalPackage(_) -> Ok(Nil)
   }
+}
+
+// A hex dependency pinned to an exact version (e.g. from a manifest) is
+// fetched directly; a version constraint (e.g. `>= 1.0.0 and < 2.0.0`) is
+// resolved to a concrete version first.
+fn is_concrete_version(version: String) -> Bool {
+  !list.any(["<", ">", "=", "~", " "], fn(character) {
+    string.contains(version, character)
+  })
 }
 
 /// The dependencies of a package, read from its own config file. Only git and

@@ -33,7 +33,7 @@ fn fetch_fresh(
   use _ <- result.try(
     shellout.command(
       "curl",
-      ["-L", "-o", tarball_name, tarball_url],
+      ["-L", "--max-time", "60", "-o", tarball_name, tarball_url],
       package_dir,
       [],
     )
