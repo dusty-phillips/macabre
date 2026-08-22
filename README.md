@@ -226,8 +226,11 @@ Some tasks below are marked easy if you want to get started.
 
 ### High Pri
 
-- non-byte-aligned bitstrings are not supported yet
-- (EASY) Should be putting pubic types, functions, and constants in `__all__`
+- non-byte-aligned bitstrings are now supported for both construction and
+  pattern matching (verified: `<<1:3, 2:5, 3:4>>` packs to 12 bits and matches
+  back correctly). Remaining gap: the `bit_size`/`byte_size` runtime helpers
+  still assume byte alignment for non-byte-aligned values.
+- (EASY) Should be putting public types, functions, and constants in `__all__`
 
 ### Low Pri
 

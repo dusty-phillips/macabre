@@ -1,0 +1,65 @@
+# Corpus of external Gleam packages compiled + tested by macabre.
+# Format: <name>  <git-url-or-local-path>  <ref>
+# Local paths reuse the package's existing build/ cache (fast).
+# Criterion: @external(erlang,...) should map to Python stdlib.
+# Generated from all ~/Code/gleam/macabre_* checkouts (the compiler
+# repo itself is covered by self_host.sh).
+
+macabre_ansi  /Users/dustyphillips/Code/gleam/macabre_ansi  main
+macabre_argv  /Users/dustyphillips/Code/gleam/macabre_argv  main
+macabre_asyncio  /Users/dustyphillips/Code/gleam/macabre_asyncio  main
+macabre_bigdecimal  /Users/dustyphillips/Code/gleam/macabre_bigdecimal  main
+macabre_bigi  /Users/dustyphillips/Code/gleam/macabre_bigi  main
+macabre_birdie  /Users/dustyphillips/Code/gleam/macabre_birdie  main
+macabre_birl  /Users/dustyphillips/Code/gleam/macabre_birl  main
+macabre_bitty  /Users/dustyphillips/Code/gleam/macabre_bitty  main
+macabre_checkmark  /Users/dustyphillips/Code/gleam/macabre_checkmark  main
+macabre_clip  /Users/dustyphillips/Code/gleam/macabre_clip  main
+macabre_colour  /Users/dustyphillips/Code/gleam/macabre_colour  main
+macabre_dedent  /Users/dustyphillips/Code/gleam/macabre_dedent  main
+macabre_dot_env  /Users/dustyphillips/Code/gleam/macabre_dot_env  main
+macabre_edit_distance  /Users/dustyphillips/Code/gleam/macabre_edit_distance  main
+macabre_envoy  /Users/dustyphillips/Code/gleam/macabre_envoy  main
+macabre_exception  /Users/dustyphillips/Code/gleam/macabre_exception  main
+macabre_filepath  /Users/dustyphillips/Code/gleam/macabre_filepath  main
+macabre_glam  /Users/dustyphillips/Code/gleam/macabre_glam  main
+macabre_gleam_crypto  /Users/dustyphillips/Code/gleam/macabre_gleam_crypto  main
+macabre_gleam_json  /Users/dustyphillips/Code/gleam/macabre_gleam_json  main
+macabre_gleam_time  /Users/dustyphillips/Code/gleam/macabre_gleam_time  main
+macabre_gleam_yielder  /Users/dustyphillips/Code/gleam/macabre_gleam_yielder  main
+macabre_glearray  /Users/dustyphillips/Code/gleam/macabre_glearray  main
+macabre_gleeunit  /Users/dustyphillips/Code/gleam/macabre_gleeunit  main
+macabre_gleither  /Users/dustyphillips/Code/gleam/macabre_gleither  main
+macabre_glexer  /Users/dustyphillips/Code/gleam/macabre_glexer  main
+macabre_glint  /Users/dustyphillips/Code/gleam/macabre_glint  main
+macabre_global_value  /Users/dustyphillips/Code/gleam/macabre_global_value  main
+macabre_houdini  /Users/dustyphillips/Code/gleam/macabre_houdini  main
+macabre_http  /Users/dustyphillips/Code/gleam/macabre_http  main
+macabre_iv  /Users/dustyphillips/Code/gleam/macabre_iv  main
+macabre_jot  /Users/dustyphillips/Code/gleam/macabre_jot  main
+macabre_logging  /Users/dustyphillips/Code/gleam/macabre_logging  main
+macabre_maths  /Users/dustyphillips/Code/gleam/macabre_maths  main
+macabre_nibble  /Users/dustyphillips/Code/gleam/macabre_nibble  main
+macabre_pprint  /Users/dustyphillips/Code/gleam/macabre_pprint  main
+macabre_prng  /Users/dustyphillips/Code/gleam/macabre_prng  main
+macabre_qcheck  /Users/dustyphillips/Code/gleam/macabre_qcheck  main
+macabre_rada  /Users/dustyphillips/Code/gleam/macabre_rada  main
+macabre_ranger  /Users/dustyphillips/Code/gleam/macabre_ranger  main
+macabre_regexp  /Users/dustyphillips/Code/gleam/macabre_regexp  main
+macabre_repeatedly  /Users/dustyphillips/Code/gleam/macabre_repeatedly  main
+macabre_shellout  /Users/dustyphillips/Code/gleam/macabre_shellout  main
+macabre_simplifile  /Users/dustyphillips/Code/gleam/macabre_simplifile  main
+macabre_snag  /Users/dustyphillips/Code/gleam/macabre_snag  main
+macabre_splitter  /Users/dustyphillips/Code/gleam/macabre_splitter  main
+macabre_sqlight  /Users/dustyphillips/Code/gleam/macabre_sqlight  main
+macabre_starlette  /Users/dustyphillips/Code/gleam/macabre_starlette  main
+macabre_stdlib  /Users/dustyphillips/Code/gleam/macabre_stdlib  main
+macabre_storail  /Users/dustyphillips/Code/gleam/macabre_storail  main
+macabre_temporary  /Users/dustyphillips/Code/gleam/macabre_temporary  main
+macabre_term_size  /Users/dustyphillips/Code/gleam/macabre_term_size  main
+macabre_thirtytwo  /Users/dustyphillips/Code/gleam/macabre_thirtytwo  main
+macabre_tom  /Users/dustyphillips/Code/gleam/macabre_tom  main
+macabre_tote  /Users/dustyphillips/Code/gleam/macabre_tote  main
+macabre_trie_again  /Users/dustyphillips/Code/gleam/macabre_trie_again  main
+macabre_unitest  /Users/dustyphillips/Code/gleam/macabre_unitest  main
+macabre_xmb  /Users/dustyphillips/Code/gleam/macabre_xmb  main
