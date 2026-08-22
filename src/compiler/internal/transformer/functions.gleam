@@ -144,6 +144,20 @@ pub fn transform_top_level_function(
           _ -> Error(Nil)
         }
       }),
+      local_types: list.fold(
+        function.parameters,
+        dict.new(),
+        fn(acc, parameter) {
+          case parameter {
+            glance.FunctionParameter(
+              name: glance.Named(name),
+              type_: option.Some(type_),
+              ..,
+            ) -> dict.insert(acc, name, type_)
+            _ -> acc
+          }
+        },
+      ),
       module_name: module_name,
       function_name: function.name,
       file_path: file_path,

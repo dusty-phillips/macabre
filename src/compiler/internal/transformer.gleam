@@ -1,4 +1,5 @@
 import compiler/python
+import glance
 import gleam/bit_array
 import gleam/dict
 import gleam/list
@@ -42,6 +43,13 @@ pub type TransformerContext {
     // module-level function, so argument reordering for labelled calls must
     // not consult the module function's signature.
     local_bindings: List(String),
+    // The declared type annotation of each named function parameter, keyed by
+    // parameter name. Used to disambiguate `alias.label` when `alias` is a
+    // parameter shadowing an imported module and `label` is both a module
+    // function and a record field anywhere in the package (e.g. `date.year`
+    // where `date: t.CalendarDate` is field access, but `doc.group` where
+    // `doc: Document` has no such field is the module function).
+    local_types: dict.Dict(String, glance.Type),
     // A shared per-base-name counter used to mint fresh names across all
     // shadowing passes. Keeping one pool means a name like `state` is
     // renamed `state_0`, `state_1`, `state_2`... and no two passes can
@@ -73,6 +81,7 @@ pub fn empty_context() -> TransformerContext {
     external_functions: option.None,
     external_qualified: option.None,
     local_bindings: [],
+    local_types: dict.new(),
     fresh_pool: dict.new(),
     module_name: "",
     function_name: "",

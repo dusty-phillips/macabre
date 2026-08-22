@@ -168,18 +168,46 @@ pub fn compile_package(
         // (e.g. glance's `LabelledField` and python's own `LabelledField`), so
         // the bare keys for the module being compiled come from its own
         // definitions, merged on top to win deterministically.
-        let constructor_arities =
+        //
+        // Type-level keys (prefixed `type:`) carry the union of a custom
+        // type's variant field names, keyed by `type:<last_segment>.<name>`
+        // and `type:<name>`. They are used to decide whether `alias.label`
+        // where `alias` shadows an imported module is a field access on the
+        // local (the local's declared type has the label) or the module
+        // function. The `type:` prefix keeps them out of the variant-key
+        // lookups and the coarse `is_record_field` scan.
+        let constructor_arities = {
+          let s0 = package_bare_type_arities(package.package.modules)
+          let s1 =
+            dict.fold(
+              package_bare_arities(package.package.modules),
+              s0,
+              fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
+            )
+          let s2 =
+            dict.fold(
+              package_arities(package.package.modules),
+              s1,
+              fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
+            )
+          let s3 =
+            dict.fold(
+              package_type_arities(package.package.modules),
+              s2,
+              fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
+            )
+          let s4 =
+            dict.fold(
+              module_arities(value.module),
+              s3,
+              fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
+            )
           dict.fold(
-            module_arities(value.module),
-            package_arities(package.package.modules)
-              |> dict.fold(
-                package_bare_arities(package.package.modules),
-                fn(acc, name, field_names) {
-                  dict.insert(acc, name, field_names)
-                },
-              ),
+            module_type_arities(value.module),
+            s4,
             fn(acc, name, field_names) { dict.insert(acc, name, field_names) },
           )
+        }
         let file_path = case set.contains(test_modules, module_name) {
           True -> "test/" <> module_name <> ".gleam"
           False ->
@@ -392,6 +420,86 @@ fn package_bare_arities(
     modules
     |> dict.fold([], fn(acc, _module_name, module) {
       module_arities(module.module)
+      |> dict.fold(acc, fn(acc, name, field_names) {
+        [#(name, field_names), ..acc]
+      })
+    })
+  entries |> list.reverse |> dict.from_list
+}
+
+// The fields of every custom type defined in a module, keyed by the type's
+// qualified `<last_segment>.<name>` (prefixed `type:`) and its bare `name`.
+// Each value is the union of the fields of all of the type's variants.
+fn type_arities(
+  module_name: String,
+  glance_module: glance.Module,
+) -> dict.Dict(String, List(String)) {
+  let prefix = case module_name == "" {
+    True -> ""
+    False ->
+      module_name
+      |> string.split("/")
+      |> list.last
+      |> result.unwrap(module_name)
+  }
+  list.fold(glance_module.custom_types, dict.new(), fn(acc, custom_type) {
+    case custom_type {
+      glance.Definition(_, glance.CustomType(_, name, _, _, _, variants)) ->
+        case variants {
+          [] -> acc
+          _ -> {
+            let fields = variant_field_names_union(variants)
+            let qualified = case prefix == "" {
+              True -> "type:" <> name
+              False -> "type:" <> prefix <> "." <> name
+            }
+            acc
+            |> dict.insert(qualified, fields)
+            |> dict.insert("type:" <> name, fields)
+          }
+        }
+    }
+  })
+}
+
+fn variant_field_names_union(variants: List(glance.Variant)) -> List(String) {
+  variants
+  |> list.map(fn(variant) {
+    case variant {
+      glance.Variant(_, fields, _) -> variant_field_names(fields)
+    }
+  })
+  |> list.flatten
+  |> list.unique
+}
+
+fn module_type_arities(
+  glance_module: glance.Module,
+) -> dict.Dict(String, List(String)) {
+  type_arities("", glance_module)
+}
+
+fn package_type_arities(
+  modules: dict.Dict(String, glimpse.Module),
+) -> dict.Dict(String, List(String)) {
+  let entries =
+    modules
+    |> dict.fold([], fn(acc, module_name, module) {
+      type_arities(module_name, module.module)
+      |> dict.fold(acc, fn(acc, name, field_names) {
+        [#(name, field_names), ..acc]
+      })
+    })
+  entries |> list.reverse |> dict.from_list
+}
+
+fn package_bare_type_arities(
+  modules: dict.Dict(String, glimpse.Module),
+) -> dict.Dict(String, List(String)) {
+  let entries =
+    modules
+    |> dict.fold([], fn(acc, _module_name, module) {
+      type_arities("", module.module)
       |> dict.fold(acc, fn(acc, name, field_names) {
         [#(name, field_names), ..acc]
       })
