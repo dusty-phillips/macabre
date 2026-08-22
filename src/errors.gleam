@@ -21,6 +21,7 @@ pub type Error {
   TomlParseError(path: String, error: tom.ParseError)
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
   GlimpseTypeCheckError(module: String, error: glimpse_error.TypeCheckError)
+  MissingDependency(entry: String, missing: String)
   HexResolveError(name: String, constraint: String, detail: String)
 }
 
@@ -59,6 +60,12 @@ pub fn format_error(error: Error) -> String {
     GlimpseImportError(error) -> format_glimpse_import_error(error)
     GlimpseTypeCheckError(module, error) ->
       internal.format_glimpse_type_check_error(module, error)
+    MissingDependency(entry, missing) ->
+      "The test/dev module `"
+      <> entry
+      <> "` imports `"
+      <> missing
+      <> "` which is not available in this build"
     HexResolveError(name, constraint, detail) ->
       "Unable to resolve "
       <> name

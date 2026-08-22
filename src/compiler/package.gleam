@@ -12,7 +12,6 @@ import filepath
 import filesystem
 import glance
 import gleam/dict
-import gleam/io
 import gleam/list
 import gleam/result
 import gleam/set
@@ -140,11 +139,9 @@ fn load_glimpse_package(
   })
   // The project's own test and dev modules are compiled alongside its src:
   // each is an extra entry point whose transitive imports resolve against the
-  // same build src. A test/dev module whose dependencies are not available in
-  // this build (e.g. a dev-only library like gleeunit that has no Python port)
-  // is skipped rather than failing the whole build — but loudly: a skipped
-  // module is reported so a broken or partially-available test module is never
-  // silently dropped.
+  // same build src. A test/dev module whose dependency is missing from this
+  // build is a hard error: a package that compiles on erlang/javascript
+  // must not have its tests silently dropped.
   let extra_entries =
     list.append(
       project.test_module_names(project),
@@ -154,14 +151,8 @@ fn load_glimpse_package(
     use package <- result.try(state)
     case load_module_recursively(package, entry, loader) {
       Ok(package) -> Ok(package)
-      Error(errors.FileReadError(_, simplifile.Enoent)) -> {
-        io.println_error(
-          "warning: skipping test/dev module "
-          <> entry
-          <> " (a dependency of this module is not available in this build)",
-        )
-        Ok(package)
-      }
+      Error(errors.FileReadError(missing, simplifile.Enoent)) ->
+        Error(errors.MissingDependency(entry, missing))
       Error(error) -> Error(error)
     }
   })
