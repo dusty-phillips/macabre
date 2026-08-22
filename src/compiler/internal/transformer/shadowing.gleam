@@ -3366,7 +3366,7 @@ pub fn inline_fold_loops(
     option.None -> statements
     option.Some(paths) -> {
       let #(inlined, _) =
-        inline_fold_scope(statements, option.Some(paths), 0, statements)
+        inline_fold_scope(statements, option.Some(paths), 0, statements, False)
       inlined
     }
   }
@@ -3382,12 +3382,15 @@ fn inline_fold_scope(
   module_paths: option.Option(dict.Dict(String, String)),
   serial: Int,
   enclosing: List(python.Statement),
+  nested nested: Bool,
 ) -> #(List(python.Statement), Int) {
-  case find_and_inline_fold(statements, module_paths, serial, enclosing) {
+  case
+    find_and_inline_fold(statements, module_paths, serial, enclosing, nested)
+  {
     option.Some(#(inlined, serial)) ->
-      inline_fold_scope(inlined, module_paths, serial, enclosing)
+      inline_fold_scope(inlined, module_paths, serial, enclosing, nested)
     option.None ->
-      recurse_fold_scopes(statements, module_paths, serial, enclosing)
+      recurse_fold_scopes(statements, module_paths, serial, enclosing, nested)
   }
 }
 
@@ -3431,8 +3434,16 @@ fn find_and_inline_fold(
   module_paths: option.Option(dict.Dict(String, String)),
   serial: Int,
   enclosing: List(python.Statement),
+  nested nested: Bool,
 ) -> option.Option(#(List(python.Statement), Int)) {
-  fold_inline_in_statements(statements, [], module_paths, serial, enclosing)
+  fold_inline_in_statements(
+    statements,
+    [],
+    module_paths,
+    serial,
+    enclosing,
+    nested,
+  )
 }
 
 fn fold_inline_in_statements(
@@ -3441,6 +3452,7 @@ fn fold_inline_in_statements(
   module_paths: option.Option(dict.Dict(String, String)),
   serial: Int,
   enclosing: List(python.Statement),
+  nested nested: Bool,
 ) -> option.Option(#(List(python.Statement), Int)) {
   case statements {
     [] -> option.None
@@ -3453,6 +3465,7 @@ fn fold_inline_in_statements(
             module_paths,
             serial,
             enclosing,
+            nested,
           )
         option.Some(expression) ->
           case find_fold_place(expression, module_paths) {
@@ -3463,6 +3476,7 @@ fn fold_inline_in_statements(
                 module_paths,
                 serial,
                 enclosing,
+                nested,
               )
             option.Some(#(call, location)) ->
               case
@@ -3478,6 +3492,7 @@ fn fold_inline_in_statements(
                     module_paths,
                     serial,
                     enclosing,
+                    nested,
                   )
                 option.Some(function) -> {
                   let others =
@@ -3505,6 +3520,7 @@ fn fold_inline_in_statements(
                       serial,
                       enclosing,
                       target,
+                      nested,
                     )
                   {
                     option.None ->
@@ -3514,6 +3530,7 @@ fn fold_inline_in_statements(
                         module_paths,
                         serial,
                         enclosing,
+                        nested,
                       )
                     option.Some(inlined) -> {
                       let rebuilt = case location {
@@ -3617,6 +3634,82 @@ fn build_fold_inline(
   serial: Int,
   enclosing: List(python.Statement),
   target: FoldTarget,
+  nested nested: Bool,
+) -> option.Option(List(python.Statement)) {
+  // A fold spliced into a nested block (a case arm or the body of an
+  // if/while/for) cannot see references made after that block within the same
+  // function scope, so a callback parameter shared with such a reference is
+  // silently clobbered by the loop's per-iteration rebinding instead of being
+  // renamed. Folds located in nested blocks keep closure form, which is
+  // always correct.
+  case nested {
+    True -> option.None
+    False ->
+      build_fold_inline_top_level(
+        function,
+        call,
+        others,
+        serial,
+        enclosing,
+        target,
+      )
+  }
+}
+
+fn build_fold_inline_top_level(
+  function: python.Function,
+  call: FoldCall,
+  others: List(python.Statement),
+  serial: Int,
+  enclosing: List(python.Statement),
+  target: FoldTarget,
+) -> option.Option(List(python.Statement)) {
+  // A callback whose body declares nested functions must not be inlined:
+  // those closures may capture the callback's parameters, and after the
+  // splice their free references would resolve to the loop variables, which
+  // are reassigned on every iteration (Python closures bind by reference).
+  // Such folds keep the ordinary closure-dispatch form, which is correct.
+  let parameter_names =
+    list.filter_map(function.parameters, fn(parameter) {
+      case parameter {
+        python.NameParam(name) -> Ok(name)
+        python.DiscardParam(_) -> Error(Nil)
+      }
+    })
+  // Hoisted sibling function definitions execute lazily: if one captures a
+  // callback parameter, splicing the callback into a loop makes that capture
+  // alias the mutated loop variable. Plain sibling references to a parameter
+  // are safe — the rename pass mints fresh names for exactly those.
+  let captured_by_sibling =
+    list.any(others, fn(statement) {
+      case statement {
+        python.FunctionDef(_) ->
+          deep_statement_refs(statement, set.new(), set.new())
+          |> list.any(fn(name) { list.contains(parameter_names, name) })
+        _ -> False
+      }
+    })
+  case fold_body_has_nested_defs(function.body) || captured_by_sibling {
+    True -> option.None
+    False ->
+      build_fold_inline_checked(
+        function,
+        call,
+        others,
+        serial,
+        enclosing,
+        target,
+      )
+  }
+}
+
+fn build_fold_inline_checked(
+  function: python.Function,
+  call: FoldCall,
+  others: List(python.Statement),
+  serial: Int,
+  enclosing: List(python.Statement),
+  target: FoldTarget,
 ) -> option.Option(List(python.Statement)) {
   let FoldNames(_, acc_name, _, _) = fold_names(call.path, serial)
   let parameter_names =
@@ -3656,6 +3749,23 @@ fn build_fold_inline(
       |> replace_statement_returns(acc_name)
     })
   build_fold_loop(parameters, body, call, serial, target)
+}
+
+// True when any statement (at any depth) declares a function.
+fn fold_body_has_nested_defs(statements: List(python.Statement)) -> Bool {
+  case statements {
+    [] -> False
+    [statement, ..rest] ->
+      case statement {
+        python.FunctionDef(_) -> True
+        python.Match(_, cases) ->
+          list.any(cases, fn(case_) { fold_body_has_nested_defs(case_.body) })
+        python.While(_, body) | python.If(_, body) | python.For(_, _, body) ->
+          fold_body_has_nested_defs(body)
+        _ -> False
+      }
+      || fold_body_has_nested_defs(rest)
+  }
 }
 
 // The names the surrounding statements reference, so the splice can avoid
@@ -4413,6 +4523,7 @@ fn recurse_fold_scopes(
   module_paths: option.Option(dict.Dict(String, String)),
   serial: Int,
   enclosing: List(python.Statement),
+  _nested: Bool,
 ) -> #(List(python.Statement), Int) {
   list.fold(statements, #([], serial), fn(pair, statement) {
     let #(done, serial) = pair
@@ -4423,7 +4534,7 @@ fn recurse_fold_scopes(
             let #(folded_cases, serial) = pair
             let python.MatchCase(pattern, guard, body) = match_case
             let #(folded, next_serial) =
-              inline_fold_scope(body, module_paths, serial, enclosing)
+              inline_fold_scope(body, module_paths, serial, enclosing, True)
             #(
               list.append(folded_cases, [
                 python.MatchCase(pattern, guard, folded),
@@ -4440,7 +4551,7 @@ fn recurse_fold_scopes(
       }
       python.While(condition, body) -> {
         let #(folded, next_serial) =
-          inline_fold_scope(body, module_paths, serial, enclosing)
+          inline_fold_scope(body, module_paths, serial, enclosing, True)
         #(
           list.append(done, [
             python.While(condition: condition, body: folded),
@@ -4450,7 +4561,7 @@ fn recurse_fold_scopes(
       }
       python.If(condition, body) -> {
         let #(folded, next_serial) =
-          inline_fold_scope(body, module_paths, serial, enclosing)
+          inline_fold_scope(body, module_paths, serial, enclosing, True)
         #(
           list.append(done, [python.If(condition: condition, body: folded)]),
           next_serial,
@@ -4458,7 +4569,7 @@ fn recurse_fold_scopes(
       }
       python.For(targets, iterable, body) -> {
         let #(folded, next_serial) =
-          inline_fold_scope(body, module_paths, serial, enclosing)
+          inline_fold_scope(body, module_paths, serial, enclosing, True)
         #(
           list.append(done, [
             python.For(targets: targets, iterable: iterable, body: folded),
@@ -4468,7 +4579,13 @@ fn recurse_fold_scopes(
       }
       python.FunctionDef(function) -> {
         let #(folded, next_serial) =
-          inline_fold_scope(function.body, module_paths, serial, enclosing)
+          inline_fold_scope(
+            function.body,
+            module_paths,
+            serial,
+            enclosing,
+            True,
+          )
         #(
           list.append(done, [
             python.FunctionDef(python.Function(..function, body: folded)),

@@ -49,22 +49,31 @@ pub fn fold_callback_parameter_collision_test() {
   assert string.contains(output, "items_gleam_fold = _gleam_fold_item")
 }
 
-// A fold whose callback contains another fold must give the inner one a
-// distinct set of loop-local names and parameter bindings, or the inner loop
-// clobbers the outer loop's `_gleam_fold_*` accumulator mid-iteration.
+// A fold whose callback contains another fold must not let the inner loop
+// clobber the outer one's accumulator mid-iteration. Folds whose callbacks
+// involve closures over the callback's own parameters stay in closure form,
+// which isolates each fold's `_gleam_fold_*` locals in its own function scope;
+// only closure-free callbacks are spliced into shared loops.
 pub fn nested_folds_do_not_clobber_each_other_test() {
   let assert Ok(module) =
     "import gleam/list
 
     pub fn nested(numbers: List(Int), per_group: List(Int)) -> Int {
       list.fold(numbers, 0, fn(acc, n) {
-        list.fold(per_group, acc, fn(acc, m) { acc + n + m })
+        list.fold(per_group, acc + n, fn(acc, m) { acc + m })
       })
     }
     "
     |> glance.module
   let output = compiler.compile_module(module)
-  assert string.contains(output, "_gleam_fold_list")
-  assert string.contains(output, "_gleam_fold_acc_1")
-  assert string.contains(output, "_gleam_fold_acc_1 = acc_gleam_fold + n + m")
+  // Folds inside nested scopes (a callback body, a case arm, an if/while/for
+  // body) are never inlined — their per-iteration rebinding could clobber
+  // same-named variables referenced after the block — so neither fold here
+  // is inlined and no loop-local names are introduced at all.
+  assert !string.contains(output, "_gleam_fold")
+  assert string.contains(output, "return list.fold(numbers, 0, _fn_def_0)")
+  assert string.contains(
+    output,
+    "return list.fold(per_group, acc + n, _fn_def_0)",
+  )
 }
