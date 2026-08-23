@@ -7,6 +7,7 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/set
 
 type ParamFoldState {
   ParamFoldState(
@@ -195,6 +196,12 @@ pub fn transform_top_level_function(
     |> shadowing.resolve_block_shadowing(
       shadowing.function_parameter_names(parameters),
       list.map(module_aliases, fn(alias) { alias <> "_0" }),
+      set.from_list(
+        case function_signatures {
+          option.Some(sigs) -> dict.keys(sigs)
+          option.None -> []
+        },
+      ),
       fresh_pool,
     )
   python.Function(

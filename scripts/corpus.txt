@@ -30,6 +30,7 @@ macabre_gleam_yielder  /Users/dustyphillips/Code/gleam/macabre_gleam_yielder  ma
 macabre_glearray  /Users/dustyphillips/Code/gleam/macabre_glearray  main
 macabre_gleeunit  /Users/dustyphillips/Code/gleam/macabre_gleeunit  main
 macabre_gleither  /Users/dustyphillips/Code/gleam/macabre_gleither  main
+macabre_glance  /Users/dustyphillips/Code/gleam/macabre_glance  main
 macabre_glexer  /Users/dustyphillips/Code/gleam/macabre_glexer  main
 macabre_glint  /Users/dustyphillips/Code/gleam/macabre_glint  main
 macabre_global_value  /Users/dustyphillips/Code/gleam/macabre_global_value  main

@@ -52,6 +52,7 @@ pub fn resolve_block_shadowing(
   statements: List(python.Statement),
   parameter_names: List(String),
   reserved: List(String),
+  module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(List(python.Statement), dict.Dict(String, Int)) {
   let initial_scope = set.from_list(parameter_names)
@@ -149,6 +150,7 @@ pub fn resolve_block_shadowing(
                 scope,
                 cross_scope,
                 bound,
+                module_function_names,
                 pool,
               )
             let next_scope =
@@ -1094,6 +1096,7 @@ fn resolve_nested_binds(
   scope: set.Set(String),
   cross_scope: set.Set(String),
   bound: set.Set(String),
+  module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(python.Statement, dict.Dict(String, Int)) {
   case statement {
@@ -1152,6 +1155,7 @@ fn resolve_nested_binds(
           // but the enclosing case's binds do not.
           set.new(),
           bound,
+          module_function_names,
           pool,
         )
       #(
@@ -1168,6 +1172,7 @@ fn resolve_nested_binds(
           own_cross,
           scope,
           bound,
+          module_function_names,
           pool,
         )
       // The subject is evaluated in program order at this statement's position,
@@ -1195,6 +1200,7 @@ fn resolve_nested_binds(
           scope,
           cross_scope,
           bound,
+          module_function_names,
           pool,
         )
       // The condition runs in program order before the loop body's binds; only
@@ -1219,6 +1225,7 @@ fn resolve_nested_binds(
           scope,
           cross_scope,
           bound,
+          module_function_names,
           pool,
         )
       // The condition runs in program order before the branch's binds; only
@@ -1270,6 +1277,7 @@ fn nested_resolve_fold(
   initial_scope: set.Set(String),
   initial_cross_scope: set.Set(String),
   initial_bound: set.Set(String),
+  module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(List(python.Statement), dict.Dict(String, Int)) {
   let #(_, _, _, _, _, _, reversed, pool) =
@@ -1318,6 +1326,7 @@ fn nested_resolve_fold(
             scope,
             cross_scope,
             bound,
+            module_function_names,
             pool,
           )
         let next_scope =
@@ -1353,6 +1362,7 @@ fn resolve_match_cases(
   own_cross: dict.Dict(String, String),
   scope: set.Set(String),
   bound: set.Set(String),
+  module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(List(python.MatchCase), dict.Dict(String, Int)) {
   let all_binds =
@@ -1426,7 +1436,7 @@ fn resolve_match_cases(
       let matches_raw =
         list.any(final_refs, fn(referenced) { referenced == name })
       case list.contains(all_guard_binds, name) {
-        False -> matches_raw
+        False -> matches_raw || set.contains(module_function_names, name)
         True ->
           matches_raw
           || list.any(final_refs, fn(referenced) {
@@ -1454,6 +1464,7 @@ fn resolve_match_cases(
           new_cross,
           scope,
           bound,
+          module_function_names,
           pool,
         )
       #([renamed, ..out], pool)
@@ -1470,6 +1481,7 @@ fn nested_resolve_case(
   new_cross: dict.Dict(String, String),
   scope: set.Set(String),
   bound: set.Set(String),
+  module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
 ) -> #(python.MatchCase, dict.Dict(String, Int)) {
   let python.MatchCase(pattern, guard, body) = match_case
@@ -1533,6 +1545,7 @@ fn nested_resolve_case(
       initial_scope,
       initial_cross_scope,
       initial_bound,
+      module_function_names,
       pool,
     )
   let pattern = rename_pattern(pattern, cross_local)

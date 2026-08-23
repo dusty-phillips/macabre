@@ -5,6 +5,7 @@ import compiler/internal/transformer/shadowing
 import compiler/python
 import glance
 import gleam/dict
+import gleam/set
 import gleam/int
 import gleam/list
 import gleam/option
@@ -1945,6 +1946,12 @@ fn transform_fn(
     |> shadowing.resolve_block_shadowing(
       shadowing.function_parameter_names(parameters),
       context.module_reserved,
+      set.from_list(
+        case context.function_signatures {
+          option.Some(sigs) -> dict.keys(sigs)
+          option.None -> []
+        },
+      ),
       context.fresh_pool,
     )
   let #(parameters, body_statements, fresh_pool) =
@@ -2032,6 +2039,12 @@ fn transform_block(
     |> shadowing.resolve_block_shadowing(
       [],
       context.module_reserved,
+      set.from_list(
+        case context.function_signatures {
+          option.Some(sigs) -> dict.keys(sigs)
+          option.None -> []
+        },
+      ),
       context.fresh_pool,
     )
   let function =
