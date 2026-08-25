@@ -807,8 +807,8 @@ fn transform_bitstring_pattern_option(
   option: glance.BitStringSegmentOption(glance.BitArraySize),
 ) -> python.Expression {
   let #(name, payload) = case option {
-    glance.BytesOption -> #("BitString", python.Nil)
-    glance.BitsOption -> #("BitString", python.Nil)
+    glance.BytesOption -> #("Bytes", python.Nil)
+    glance.BitsOption -> #("Bits", python.Nil)
     glance.IntOption -> #("Int", python.Nil)
     glance.FloatOption -> #("Float", python.Nil)
     glance.Utf8Option -> #("Utf8", python.Nil)

@@ -12,6 +12,7 @@ import filepath
 import filesystem
 import glance
 import gleam/dict
+import gleam/io
 import gleam/list
 import gleam/result
 import gleam/set
@@ -110,9 +111,14 @@ fn load_glimpse_package(
   project: project.Project,
 ) -> Result(glimpse.Package, errors.Error) {
   let loader = fn(module_name) {
-    let path =
-      filepath.join(project.build_src_dir(project), module_name <> ".gleam")
-    filesystem.read(path)
+    case is_other_target_module(module_name) {
+      True -> Error(errors.UnsupportedTargetModule(module_name))
+      False -> {
+        let path =
+          filepath.join(project.build_src_dir(project), module_name <> ".gleam")
+        filesystem.read(path)
+      }
+    }
   }
   // A package's entry module is normally named after the project itself, but
   // some libraries keep their root module under a different path (e.g.
@@ -137,6 +143,10 @@ fn load_glimpse_package(
       })
     Error(_) -> Ok(glimpse.Package(project.name, dict.new(), []))
   })
+  // The src-tree module set, captured before test/dev entries are folded in.
+  // Type errors for these modules are always hard failures; modules loaded
+  // only for test/dev entries get one leniency (see typecheck_package).
+  let src_modules = set.from_list(dict.keys(main_package.modules))
   // The project's own test and dev modules are compiled alongside its src:
   // each is an extra entry point whose transitive imports resolve against the
   // same build src. A test/dev module whose dependency is missing from this
@@ -153,10 +163,25 @@ fn load_glimpse_package(
       Ok(package) -> Ok(package)
       Error(errors.FileReadError(missing, simplifile.Enoent)) ->
         Error(errors.MissingDependency(entry, missing))
+      // Host-support modules for other targets (gleam/erlang,
+      // gleam/javascript) can never be part of a python build. A test or dev
+      // entry that transitively needs one is skipped with a loud warning
+      // instead of failing the whole build; the src entry point still
+      // hard-errors through glimpse.load_package above.
+      Error(errors.UnsupportedTargetModule(missing)) -> {
+        io.println_error(
+          "Skipping test/dev module `"
+          <> entry
+          <> "`: it imports `"
+          <> missing
+          <> "`, which has no python implementation",
+        )
+        Ok(package)
+      }
       Error(error) -> Error(error)
     }
   })
-  |> result.try(typecheck_package)
+  |> result.try(typecheck_package(src_modules, _))
 }
 
 // Typechecks every module in the package for the python target using glimpse's
@@ -171,6 +196,7 @@ fn load_glimpse_package(
 // dev modules are additional entry points). So the full module set is sorted
 // topologically and each module is checked individually.
 fn typecheck_package(
+  src_modules: set.Set(String),
   package: glimpse.Package,
 ) -> Result(glimpse.Package, errors.Error) {
   // An empty package (no root module named after the project and nothing
@@ -187,25 +213,64 @@ fn typecheck_package(
       let target = target.Named("python")
       list.fold(sorted, Ok(#(package, dict.new())), fn(state, module_name) {
         use #(package, envs) <- result.try(state)
-        use glimpse_module <- result.try(
-          dict.get(package.modules, module_name)
-          |> result.replace_error(
-            errors.GlimpseImportError(glimpse_error.MissingImportError(
-              module_name,
-            )),
-          ),
-        )
-        use #(new_module, env) <- result.try(
-          typecheck.module(glimpse_module, envs, target, True)
-          |> result.map_error(fn(error) {
-            errors.GlimpseTypeCheckError(module_name, error)
-          }),
-        )
-        let modules = dict.insert(package.modules, module_name, new_module)
-        Ok(#(
-          glimpse.Package(..package, modules: modules),
-          dict.insert(envs, module_name, env),
-        ))
+        // A module dropped earlier in the fold (skipped as target-locked
+        // together with its transitive dependents) is simply absent here.
+        case dict.get(package.modules, module_name) {
+          Error(_) -> Ok(#(package, envs))
+          Ok(glimpse_module) ->
+            case typecheck.module(glimpse_module, envs, target, True) {
+              Ok(#(new_module, env)) -> {
+                let modules =
+                  dict.insert(package.modules, module_name, new_module)
+                Ok(#(
+                  glimpse.Package(..package, modules: modules),
+                  dict.insert(envs, module_name, env),
+                ))
+              }
+              // A test/dev-only module whose code path needs erlang- or
+              // javascript-only values (glimpse reports the first offending call
+              // as UnsupportedTarget) cannot run on python. Skip it — and every
+              // test/dev module that (transitively) imports it, since they cannot
+              // typecheck without it — with a loud warning rather than failing
+              // the build. Src-tree modules always hard-error so a broken
+              // library can never be silenced here.
+              Error(glimpse_error.UnsupportedTarget(name)) -> {
+                let skippable = !set.contains(src_modules, module_name)
+                case skippable {
+                  True -> {
+                    let dropped = dependent_closure(graph, module_name)
+                    dropped
+                    |> set.to_list
+                    |> list.each(fn(dropped_name) {
+                      io.println_error(
+                        "Skipping test/dev module `"
+                        <> dropped_name
+                        <> "`: it depends on `"
+                        <> module_name
+                        <> "`, which uses `"
+                        <> name
+                        <> "`, which has no python implementation",
+                      )
+                    })
+                    Ok(#(
+                      glimpse.Package(
+                        ..package,
+                        modules: set.fold(dropped, package.modules, dict.delete),
+                      ),
+                      envs,
+                    ))
+                  }
+                  False ->
+                    Error(errors.GlimpseTypeCheckError(
+                      module_name,
+                      glimpse_error.UnsupportedTarget(name),
+                    ))
+                }
+              }
+              Error(error) ->
+                Error(errors.GlimpseTypeCheckError(module_name, error))
+            }
+        }
       })
       |> result.map(fn(state) { state.0 })
     }
@@ -287,6 +352,58 @@ fn load_module_recursively(
         use package <- result.try(state)
         load_module_recursively(package, dependency, loader)
       })
+    }
+  }
+}
+
+// Modules under these namespaces are host-support shims for the erlang and
+// javascript targets (e.g. the gleam_erlang and gleam_javascript packages).
+// They never have a python implementation, so macabre treats them as absent:
+// the module loader refuses them and test/dev entries that transitively need
+// one are skipped with a warning.
+fn is_other_target_module(module_name: String) -> Bool {
+  string.starts_with(module_name, "gleam/erlang/")
+  || string.starts_with(module_name, "gleam/javascript/")
+}
+
+// All modules that transitively depend on `module_name` (excluding itself),
+// computed from the import graph. Used to drop the dependents of a skipped
+// test/dev module: they cannot typecheck without it.
+fn dependent_closure(
+  graph: dict.Dict(String, List(String)),
+  module_name: String,
+) -> set.Set(String) {
+  // Reverse edges: importer -> list of modules it is imported by.
+  let reverse =
+    dict.fold(graph, dict.new(), fn(acc, importer, dependencies) {
+      list.fold(dependencies, acc, fn(acc, dependency) {
+        case dict.get(acc, dependency) {
+          Ok(importers) -> dict.insert(acc, dependency, [importer, ..importers])
+          Error(_) -> dict.insert(acc, dependency, [importer])
+        }
+      })
+    })
+  dependent_closure_loop(reverse, set.from_list([module_name]), set.new())
+}
+
+fn dependent_closure_loop(
+  reverse: dict.Dict(String, List(String)),
+  frontier: set.Set(String),
+  visited: set.Set(String),
+) -> set.Set(String) {
+  case set.is_empty(frontier) {
+    True -> visited
+    False -> {
+      let next =
+        frontier
+        |> set.to_list
+        |> list.flat_map(fn(name) {
+          dict.get(reverse, name) |> result.unwrap([])
+        })
+        |> set.from_list
+        |> set.drop(set.to_list(visited))
+      let visited = set.union(visited, frontier)
+      dependent_closure_loop(reverse, next, visited)
     }
   }
 }

@@ -192,6 +192,10 @@ def gleam_bitstring_segments_to_bytes(*segments):
                     type = 'int'
                 case ('BitString', None):
                     type = 'bitstring'
+                case ('Bytes', None):
+                    type = 'bytes'
+                case ('Bits', None):
+                    type = 'bits'
                 case ('Utf8', None):
                     type = 'utf8'
                 case ('Utf16', None):
@@ -219,8 +223,10 @@ def gleam_bitstring_segments_to_bytes(*segments):
             match type:
                 case 'int' | 'float':
                     unit = 1
-                case 'bitstring' | 'utf8' | 'utf16' | 'utf32':
+                case 'bitstring' | 'bytes' | 'utf8' | 'utf16' | 'utf32':
                     unit = 8
+                case 'bits':
+                    unit = 1
 
         segment_bits = []
         if type == 'int':
@@ -252,7 +258,7 @@ def gleam_bitstring_segments_to_bytes(*segments):
                 case _:
                     raise Exception('bitstring floats must be 32 or 64 bits')
             segment_bits = _bits_of(struct.pack(f'{order}{fmt}', value), bitsize)
-        elif type == 'bitstring':
+        elif type == 'bitstring' or type == 'bytes' or type == 'bits':
             if isinstance(value, GleamBitArray):
                 segment_bits = _bits_of(value.data, value.bits)
             else:
@@ -372,6 +378,10 @@ def gleam_match_bitstring(subject, *segments):
                     type = 'int'
                 case ('BitString', _):
                     type = 'bitstring'
+                case ('Bytes', _):
+                    type = 'bytes'
+                case ('Bits', _):
+                    type = 'bits'
                 case ('Utf8', _):
                     type = 'utf8'
                 case ('Utf16', _):
@@ -395,7 +405,22 @@ def gleam_match_bitstring(subject, *segments):
             else:
                 type = 'int'
 
-        if type == 'bitstring':
+        # An explicit utf string literal segment (for example a utf8-tagged
+        # string) also gets its size from the payload length.
+        if (
+            type in ('utf8', 'utf16', 'utf32')
+            and size == None
+            and kind == 'string'
+            and isinstance(payload, str)
+        ):
+            encoding = {
+                'utf8': 'utf-8',
+                'utf16': 'utf-16-le' if endianness == 'little' else 'utf-16-be',
+                'utf32': 'utf-32-le' if endianness == 'little' else 'utf-32-be',
+            }[type]
+            size = len(payload.encode(encoding))
+
+        if type in ('bitstring', 'bytes', 'bits'):
             if size == None:
                 value = _bitstring_slice(
                     subject_bytes, cursor, total_bits - cursor,
@@ -403,7 +428,9 @@ def gleam_match_bitstring(subject, *segments):
                 cursor = total_bits
             else:
                 if unit == None:
-                    unit = 8
+                    # `:bytes-size(N)` counts bytes (erlang's default unit of
+                    # 8); `:bits-size(N)` counts individual bits.
+                    unit = 1 if type == 'bits' else 8
                 bitsize = unit * size
                 if cursor + bitsize > total_bits:
                     return None
@@ -441,15 +468,27 @@ def gleam_match_bitstring(subject, *segments):
                 case 'float':
                     value = _bits_to_float(data, start_bit, bitsize, endianness)
                 case 'utf8':
-                    value = _bits_to_utf8(data, start_bit, bitsize, 'utf-8')
+                    # An invalid or truncated UTF-8 sequence means the
+                    # segment cannot match (erlang fails the match rather
+                    # than raising).
+                    try:
+                        value = _bits_to_utf8(data, start_bit, bitsize, 'utf-8')
+                    except UnicodeDecodeError:
+                        return None
                 case 'utf16':
-                    value = _bits_to_utf8(
-                        data, start_bit, bitsize,
-                        'utf-16-le' if endianness == 'little' else 'utf-16-be')
+                    try:
+                        value = _bits_to_utf8(
+                            data, start_bit, bitsize,
+                            'utf-16-le' if endianness == 'little' else 'utf-16-be')
+                    except UnicodeDecodeError:
+                        return None
                 case 'utf32':
-                    value = _bits_to_utf8(
-                        data, start_bit, bitsize,
-                        'utf-32-le' if endianness == 'little' else 'utf-32-be')
+                    try:
+                        value = _bits_to_utf8(
+                            data, start_bit, bitsize,
+                            'utf-32-le' if endianness == 'little' else 'utf-32-be')
+                    except UnicodeDecodeError:
+                        return None
             cursor += bitsize
 
         match kind:

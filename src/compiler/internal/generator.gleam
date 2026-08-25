@@ -125,9 +125,19 @@ pub fn generate_docstring(
       string_tree.from_string("\"\"\"")
       |> string_tree.append(
         text
-        |> string.replace("\\", "\\\\")
-        |> string.replace("\"", "\\\""),
+        |> string.to_utf_codepoints
+        |> list.map(escape_docstring_codepoint)
+        |> string.join(""),
       )
       |> string_tree.append("\"\"\"")
+  }
+}
+
+fn escape_docstring_codepoint(codepoint) -> String {
+  let value = string.utf_codepoint_to_int(codepoint)
+  case value {
+    92 -> "\\\\"
+    34 -> "\\\""
+    _ -> string.from_utf_codepoints([codepoint])
   }
 }

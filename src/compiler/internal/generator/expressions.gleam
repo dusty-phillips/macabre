@@ -218,11 +218,55 @@ fn generate_binop(
       |> string_tree.append(", ")
       |> string_tree.append_tree(generate_expression(right))
       |> string_tree.append(")")
-    _ ->
+    _ -> {
+      let precedence = binop_precedence(name)
       string_tree.new()
-      |> string_tree.append_tree(generate_expression(left))
+      |> string_tree.append_tree(generate_binop_operand(precedence, left))
       |> string_tree.append(op_string)
-      |> string_tree.append_tree(generate_expression(right))
+      |> string_tree.append_tree(generate_binop_operand(precedence, right))
+    }
+  }
+}
+
+// Python's boolean operators have relative precedences (`or` binds looser
+// than `and`, which binds looser than comparisons). Without parens an
+// expression like `(x := f()) is not None and c1 or c2` would silently
+// reassociate. Operands whose precedence is looser than their parent's get
+// wrapped.
+fn binop_precedence(name: python.BinaryOperator) -> Int {
+  case name {
+    python.Or -> 1
+    python.And -> 2
+    python.Equal
+    | python.NotEqual
+    | python.LessThan
+    | python.LessThanEqual
+    | python.GreaterThan
+    | python.GreaterThanEqual
+    | python.Is -> 3
+    python.Add | python.Subtract -> 4
+    python.Multiply -> 5
+    _ -> 6
+  }
+}
+
+fn generate_binop_operand(
+  parent_precedence: Int,
+  expression: python.Expression,
+) -> StringTree {
+  let needs_parens = case expression {
+    python.BinaryOperator(name, _, _) ->
+      binop_precedence(name) < parent_precedence
+    python.Not(_) -> True
+    _ -> False
+  }
+  case needs_parens {
+    True ->
+      string_tree.new()
+      |> string_tree.append("(")
+      |> string_tree.append_tree(generate_expression(expression))
+      |> string_tree.append(")")
+    False -> generate_expression(expression)
   }
 }
 
@@ -268,6 +312,8 @@ fn generate_bitstring_segment_option(
     python.LittleOption -> string_tree.from_string("\"Little\", None")
     python.NativeOption -> string_tree.from_string("\"Native\", None")
     python.BitStringOption -> string_tree.from_string("\"BitString\", None")
+    python.BytesOption -> string_tree.from_string("\"Bytes\", None")
+    python.BitsOption -> string_tree.from_string("\"Bits\", None")
     python.Utf8Option -> string_tree.from_string("\"Utf8\", None")
     python.Utf16Option -> string_tree.from_string("\"Utf16\", None")
     python.Utf32Option -> string_tree.from_string("\"Utf32\", None")

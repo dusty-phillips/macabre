@@ -5,11 +5,11 @@ import compiler/internal/transformer/shadowing
 import compiler/python
 import glance
 import gleam/dict
-import gleam/set
 import gleam/int
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/set
 import gleam/string
 
 // a block is a scope, so context can be reset at this level.
@@ -1946,12 +1946,10 @@ fn transform_fn(
     |> shadowing.resolve_block_shadowing(
       shadowing.function_parameter_names(parameters),
       context.module_reserved,
-      set.from_list(
-        case context.function_signatures {
-          option.Some(sigs) -> dict.keys(sigs)
-          option.None -> []
-        },
-      ),
+      set.from_list(case context.function_signatures {
+        option.Some(sigs) -> dict.keys(sigs)
+        option.None -> []
+      }),
       context.fresh_pool,
     )
   let #(parameters, body_statements, fresh_pool) =
@@ -2039,12 +2037,10 @@ fn transform_block(
     |> shadowing.resolve_block_shadowing(
       [],
       context.module_reserved,
-      set.from_list(
-        case context.function_signatures {
-          option.Some(sigs) -> dict.keys(sigs)
-          option.None -> []
-        },
-      ),
+      set.from_list(case context.function_signatures {
+        option.Some(sigs) -> dict.keys(sigs)
+        option.None -> []
+      }),
       context.fresh_pool,
     )
   let function =
@@ -2474,10 +2470,8 @@ fn fold_bitsting_segment_option(
     glance.BigOption -> internal.map_state_prepend(state, python.BigOption)
     glance.NativeOption ->
       internal.map_state_prepend(state, python.NativeOption)
-    glance.BytesOption ->
-      internal.map_state_prepend(state, python.BitStringOption)
-    glance.BitsOption ->
-      internal.map_state_prepend(state, python.BitStringOption)
+    glance.BytesOption -> internal.map_state_prepend(state, python.BytesOption)
+    glance.BitsOption -> internal.map_state_prepend(state, python.BitsOption)
     glance.Utf8Option -> internal.map_state_prepend(state, python.Utf8Option)
     glance.Utf16Option -> internal.map_state_prepend(state, python.Utf16Option)
     glance.Utf32Option -> internal.map_state_prepend(state, python.Utf32Option)

@@ -49,9 +49,17 @@ echo "  total:    $total"
 echo "  portable: $portable   (maps to Python stdlib)"
 echo "  bespoke:  $bespoke    (package-specific / OTP)"
 echo
-if [ "${#seen_portable[@]:-0}" -gt 0 ]; then
+set +u
+if [ "${#seen_portable[@]}" -gt 0 ]; then
   echo "Portable externals to shim (distinct module.fun):"
   for k in $(printf '%s\n' "${!seen_portable[@]}" | sort); do
     echo "  $k"
   done
 fi
+if [ "${#seen_bespoke[@]}" -gt 0 ]; then
+  echo "Bespoke externals (need reimpl):"
+  for k in $(printf '%s\n' "${!seen_bespoke[@]}" | sort); do
+    echo "  $k"
+  done
+fi
+set -u

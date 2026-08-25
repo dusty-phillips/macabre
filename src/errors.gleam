@@ -22,6 +22,7 @@ pub type Error {
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
   GlimpseTypeCheckError(module: String, error: glimpse_error.TypeCheckError)
   MissingDependency(entry: String, missing: String)
+  UnsupportedTargetModule(module: String)
   HexResolveError(name: String, constraint: String, detail: String)
 }
 
@@ -66,6 +67,10 @@ pub fn format_error(error: Error) -> String {
       <> "` imports `"
       <> missing
       <> "` which is not available in this build"
+    UnsupportedTargetModule(module) ->
+      "The module `"
+      <> module
+      <> "` is only implemented for other build targets and cannot be part of a python build"
     HexResolveError(name, constraint, detail) ->
       "Unable to resolve "
       <> name

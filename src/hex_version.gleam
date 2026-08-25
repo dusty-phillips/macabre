@@ -4,7 +4,7 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option
-import gleam/order.{Eq, Gt, Lt, type Order}
+import gleam/order.{type Order, Eq, Gt, Lt}
 import gleam/result
 import gleam/string
 import shellout
@@ -53,15 +53,18 @@ fn matching_version(
 }
 
 fn release_versions_decoder() -> decode.Decoder(List(String)) {
-  use entries <- decode.then(
-    decode.at(["releases"], decode.list(decode.dynamic)),
+  use entries <- decode.then(decode.at(
+    ["releases"],
+    decode.list(decode.dynamic),
+  ))
+  decode.success(
+    list.filter_map(entries, fn(entry) {
+      case decode.run(entry, version_decoder()) {
+        Ok(version) -> Ok(version)
+        Error(_) -> Error(Nil)
+      }
+    }),
   )
-  decode.success(list.filter_map(entries, fn(entry) {
-    case decode.run(entry, version_decoder()) {
-      Ok(version) -> Ok(version)
-      Error(_) -> Error(Nil)
-    }
-  }))
 }
 
 fn version_decoder() -> decode.Decoder(String) {
@@ -116,13 +119,15 @@ fn compare_versions(a: Version, b: Version) -> Order {
   let minors = int.compare(a.minor, b.minor)
   let patches = int.compare(a.patch, b.patch)
   case majors {
-    Eq -> case minors {
-      Eq -> case patches {
-        Eq -> compare_pre(a.pre, b.pre)
+    Eq ->
+      case minors {
+        Eq ->
+          case patches {
+            Eq -> compare_pre(a.pre, b.pre)
+            order -> order
+          }
         order -> order
       }
-      order -> order
-    }
     order -> order
   }
 }
@@ -153,10 +158,11 @@ fn highest(versions: List(Version)) -> option.Option(Version) {
   list.fold(versions, option.None, fn(acc, current) {
     case acc {
       option.None -> option.Some(current)
-      option.Some(best) -> case compare_versions(current, best) {
-        Gt -> option.Some(current)
-        _ -> acc
-      }
+      option.Some(best) ->
+        case compare_versions(current, best) {
+          Gt -> option.Some(current)
+          _ -> acc
+        }
     }
   })
 }
@@ -220,12 +226,9 @@ fn match_compatible(version: Version, version_text: String) -> Bool {
     Error(_) -> False
     Ok(lower) -> {
       let upper = case parts {
-        [Ok(major)] ->
-          Version(major + 1, 0, 0, [])
-        [Ok(major), Ok(_minor)] ->
-          Version(major + 1, 0, 0, [])
-        [Ok(major), Ok(minor), ..] ->
-          Version(major, minor + 1, 0, [])
+        [Ok(major)] -> Version(major + 1, 0, 0, [])
+        [Ok(major), Ok(_minor)] -> Version(major + 1, 0, 0, [])
+        [Ok(major), Ok(minor), ..] -> Version(major, minor + 1, 0, [])
         _ -> Version(version.major + 1, 0, 0, [])
       }
       case compare_versions(version, lower) {

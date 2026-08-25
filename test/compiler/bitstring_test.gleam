@@ -248,7 +248,7 @@ pub fn bitstring_test() {
 from gleam_builtins import *
 
 def main():
-    return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"BitString\", None)]))
+    return gleam_bitstring_segments_to_bytes((gleam_bitstring_segments_to_bytes((3, [])), [(\"Bits\", None)]))
 
 
 __all__ = [\"main\"]
