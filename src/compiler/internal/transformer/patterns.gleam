@@ -73,7 +73,11 @@ pub fn transform_alternative_patterns(
         })
       case
         list.any(transformed, fn(t) {
-          t.guard != option.None || t.body_prepend != []
+          t.guard != option.None
+          || t.body_prepend != []
+          // Python's or-patterns cannot contain `as` bindings, so an
+          // alternative with an as-binding must become its own match case.
+          || list.any(t.pattern |> flatten_pattern, pattern_is_assignment)
         })
       {
         // Alternative patterns that produce guards (e.g. bitstring or
@@ -97,6 +101,42 @@ pub fn transform_alternative_patterns(
 // gleam distinguishes between groups of patterns (e.g: case 1, 2 {x, y -> ...})
 // and glance sends those to us as a list of patterns. The python pattern
 // for a group of patterns will always be a single tuple pattern.
+fn pattern_is_assignment(pattern: python.Pattern) -> Bool {
+  case pattern {
+    python.PatternAssignment(_, _) -> True
+    _ -> False
+  }
+}
+
+// Every sub-pattern of a pattern, including the pattern itself, in no
+// particular order.
+fn flatten_pattern(pattern: python.Pattern) -> List(python.Pattern) {
+  let nested = case pattern {
+    python.PatternWildcard
+    | python.PatternInt(_)
+    | python.PatternFloat(_)
+    | python.PatternString(_)
+    | python.PatternVariable(_)
+    | python.PatternAssignment(_, _) -> []
+    python.PatternTuple(patterns) -> patterns
+    python.PatternList(elems, rest) ->
+      list.append(elems, case rest {
+        option.Some(r) -> [r]
+        option.None -> []
+      })
+    python.PatternAlternate(patterns) -> patterns
+    python.PatternConstructor(_, _, arguments) ->
+      arguments
+      |> list.map(fn(field) {
+        case field {
+          python.LabelledField(_, item) -> item
+          python.UnlabelledField(item) -> item
+        }
+      })
+  }
+  [pattern, ..list.flatten(list.map(nested, flatten_pattern))]
+}
+
 fn transform_grouped_patterns(
   patterns: List(glance.Pattern),
   is_multi_subject: Bool,

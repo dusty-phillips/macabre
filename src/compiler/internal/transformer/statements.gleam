@@ -1310,8 +1310,21 @@ fn transform_call(
     // module binding is marked with `python.Module` so it is never confused
     // with a variable or parameter of the same name (which may shadow the
     // module binding inside a function).
-    glance.FieldAccess(_, glance.Variable(_, alias), name) ->
-      case list.contains(context.module_aliases, alias) {
+    glance.FieldAccess(_, glance.Variable(_, alias), name) -> {
+      // A local sharing its name with a module alias usually means the call
+      // is module-qualified (`resolve_module_shadowing` renames colliding
+      // parameters for exactly that reason). But when the local's DECLARED
+      // TYPE has a field with this label, real Gleam types the container as
+      // a value first: the call is a record-field call on the shadowing
+      // local, and emitting a module reference would break at runtime.
+      // Known gap: a case-pattern bind has no written annotation, so its
+      // type is unknown here; a bind shadowing a module AND calling one of
+      // that module's functions as a record field must be renamed in source
+      // until pattern-bind types flow through the transformer.
+      let shadows_with_field =
+        list.contains(context.local_bindings, alias)
+        && type_has_field(context, alias, name) == option.Some(True)
+      case list.contains(context.module_aliases, alias) && !shadows_with_field {
         True ->
           internal.empty_return(
             context,
@@ -1322,6 +1335,7 @@ fn transform_call(
           )
         False -> transform_expression(context, function)
       }
+    }
     // A plain variable or constructor used as a call target, e.g. `Some(x)`
     // or `count_down(n)`. This is a reference to the callee, not a nullary
     // variant *value*, so it must stay a bare variable even when capitalized.

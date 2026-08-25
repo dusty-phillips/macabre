@@ -211,35 +211,67 @@ pub fn resolve_module_shadowing(
 ) {
   let parameter_names = function_parameter_names(parameters)
 
-  let collisions =
+  let parameter_collisions =
     parameter_names
     |> list.filter(fn(name) { list.contains(module_aliases, name) })
     |> list.unique
 
-  case collisions {
-    [] -> #(parameters, statements, pool)
-    _ -> {
+  // Python scopes match-capture patterns and assignments to the entire
+  // enclosing function, so a Gleam local named like an imported module
+  // (`import yum/yaml/token` + a pattern variable `token`) shadows the module
+  // binding everywhere in the generated function, breaking earlier
+  // module-qualified references. Those locals must be renamed too, together
+  // with every reference to them.
+  let local_collisions =
+    statements
+    |> list.flat_map(fn(statement) {
+      list.append(all_nested_binds(statement), all_case_binds(statement))
+    })
+    |> list.filter(fn(name) { list.contains(module_aliases, name) })
+    |> list.unique
+
+  case parameter_collisions, local_collisions {
+    [], [] -> #(parameters, statements, pool)
+    _, _ -> {
       let used =
         set.from_list(parameter_names)
         |> set.union(set.from_list(module_aliases))
-      let #(renames, pool) =
-        list.fold(collisions, #(dict.new(), pool), fn(acc, name) {
-          let #(renames, pool) = acc
-          let #(fresh, pool) = fresh_name(name, used, pool)
-          #(dict.insert(renames, name, fresh), pool)
-        })
+        |> set.union(
+          set.from_list(list.flatten(list.map(statements, all_nested_binds))),
+        )
+        |> set.union(
+          set.from_list(list.flatten(list.map(statements, all_case_binds))),
+        )
+        |> set.union(
+          set.from_list(
+            list.flatten(list.map(statements, statement_refs(_, set.new()))),
+          ),
+        )
+      let #(colliding_renames, pool) =
+        list.fold(
+          list.append(parameter_collisions, local_collisions),
+          #(dict.new(), pool),
+          fn(acc, name) {
+            let #(renames, pool) = acc
+            let #(fresh, pool) = fresh_name(name, used, pool)
+            #(dict.insert(renames, name, fresh), pool)
+          },
+        )
 
       let renamed_parameters =
         list.map(parameters, fn(parameter) {
           case parameter {
             python.NameParam(name) ->
-              python.NameParam(result.unwrap(dict.get(renames, name), name))
+              python.NameParam(result.unwrap(
+                dict.get(colliding_renames, name),
+                name,
+              ))
             python.DiscardParam(_) -> parameter
           }
         })
 
       let used_for_locals =
-        set.from_list(dict.values(renames))
+        set.from_list(dict.values(colliding_renames))
         |> set.union(used)
         // Names bound inside nested functions and match arms (e.g. a
         // case-branch local that the case-level shadowing pass renamed) are
@@ -258,7 +290,13 @@ pub fn resolve_module_shadowing(
         )
 
       let #(renamed_statements, pool) =
-        rename_module_shadowed(statements, renames, used_for_locals, pool)
+        rename_module_shadowed(
+          statements,
+          colliding_renames,
+          used_for_locals,
+          colliding_renames,
+          pool,
+        )
 
       #(renamed_parameters, renamed_statements, pool)
     }
@@ -277,13 +315,14 @@ fn rename_module_shadowed(
   statements: List(python.Statement),
   param_renames: dict.Dict(String, String),
   used: set.Set(String),
+  force: dict.Dict(String, String),
   pool: dict.Dict(String, Int),
 ) -> #(List(python.Statement), dict.Dict(String, Int)) {
   let #(_, reversed, pool) =
     list.fold(statements, #(param_renames, [], pool), fn(acc, statement) {
       let #(renaming, out, pool) = acc
       let #(renamed, renaming, pool) =
-        rename_module_statement(statement, renaming, used, pool)
+        rename_module_statement(statement, renaming, used, force, pool)
       #(renaming, [renamed, ..out], pool)
     })
   #(list.reverse(reversed), pool)
@@ -298,6 +337,7 @@ fn rename_module_statement(
   statement: python.Statement,
   renaming: dict.Dict(String, String),
   used: set.Set(String),
+  force: dict.Dict(String, String),
   pool: dict.Dict(String, Int),
 ) -> #(python.Statement, dict.Dict(String, String), dict.Dict(String, Int)) {
   case statement {
@@ -341,7 +381,7 @@ fn rename_module_statement(
     )
     python.FunctionDef(function) -> {
       let #(renamed_body, pool) =
-        rename_module_shadowed(function.body, renaming, used, pool)
+        rename_module_shadowed(function.body, renaming, used, force, pool)
       let renamed_function =
         python.Function(
           ..function,
@@ -358,7 +398,7 @@ fn rename_module_statement(
         list.fold(cases, #([], pool), fn(acc, match_case) {
           let #(out, pool) = acc
           let #(renamed, pool) =
-            rename_module_case(match_case, renaming, used, pool)
+            rename_module_case(match_case, renaming, used, force, pool)
           #([renamed, ..out], pool)
         })
       #(
@@ -372,7 +412,7 @@ fn rename_module_statement(
     }
     python.While(condition, body) -> {
       let #(renamed_body, pool) =
-        rename_module_shadowed(body, renaming, used, pool)
+        rename_module_shadowed(body, renaming, used, force, pool)
       #(
         python.While(
           rename_expression(condition, renaming, set.new()),
@@ -384,7 +424,7 @@ fn rename_module_statement(
     }
     python.If(condition, body) -> {
       let #(renamed_body, pool) =
-        rename_module_shadowed(body, renaming, used, pool)
+        rename_module_shadowed(body, renaming, used, force, pool)
       #(
         python.If(
           rename_expression(condition, renaming, set.new()),
@@ -396,7 +436,7 @@ fn rename_module_statement(
     }
     python.For(targets, iterable, body) -> {
       let #(renamed_body, pool) =
-        rename_module_shadowed(body, renaming, used, pool)
+        rename_module_shadowed(body, renaming, used, force, pool)
       #(
         python.For(
           targets,
@@ -432,28 +472,40 @@ fn rename_module_case(
   match_case: python.MatchCase,
   renaming: dict.Dict(String, String),
   used: set.Set(String),
+  force: dict.Dict(String, String),
   pool: dict.Dict(String, Int),
 ) -> #(python.MatchCase, dict.Dict(String, Int)) {
   let python.MatchCase(pattern, guard, body) = match_case
   // Names the case pattern binds are locals of the whole generated match
   // function; references to them in the body use the original name (matching
   // the unrenamed pattern), so they are excluded from the renaming. The
-  // pattern itself keeps the original names.
+  // exception is a capture that collides with an imported module binding:
+  // Python scopes match captures to the entire enclosing function, so both
+  // the pattern and its references must be renamed.
   let local_renames =
     dict.filter(renaming, fn(name, _) {
-      !list.contains(pattern_binds(pattern), name)
+      !list.contains(pattern_binds(pattern), name) || dict.has_key(force, name)
     })
+  let renamed_pattern = case
+    list.any(pattern_binds(pattern), fn(name) { dict.has_key(force, name) })
+  {
+    True -> rename_pattern(pattern, local_renames)
+    False -> pattern
+  }
   let #(renamed_body, pool) =
-    rename_module_shadowed(body, local_renames, used, pool)
+    rename_module_shadowed(body, local_renames, used, force, pool)
   #(
     python.MatchCase(
-      pattern,
+      renamed_pattern,
       option.map(guard, rename_expression(_, local_renames, set.new())),
       renamed_body,
     ),
     pool,
   )
 }
+
+// Renames the variables captured by a match pattern using the existing
+// `rename_pattern` walker defined below.
 
 // Names bound by a top level assignment in a function body. These become
 // locals of the whole generated function in Python.
@@ -1171,6 +1223,7 @@ fn resolve_nested_binds(
           cross_renames,
           own_cross,
           scope,
+          cross_scope,
           bound,
           module_function_names,
           pool,
@@ -1361,6 +1414,7 @@ fn resolve_match_cases(
   cross_renames: dict.Dict(String, String),
   own_cross: dict.Dict(String, String),
   scope: set.Set(String),
+  cross_scope: set.Set(String),
   bound: set.Set(String),
   module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
@@ -1463,6 +1517,7 @@ fn resolve_match_cases(
           own_cross,
           new_cross,
           scope,
+          cross_scope,
           bound,
           module_function_names,
           pool,
@@ -1480,6 +1535,7 @@ fn nested_resolve_case(
   own_cross: dict.Dict(String, String),
   new_cross: dict.Dict(String, String),
   scope: set.Set(String),
+  cross_scope: set.Set(String),
   bound: set.Set(String),
   module_function_names: set.Set(String),
   pool: dict.Dict(String, Int),
@@ -1528,10 +1584,13 @@ fn nested_resolve_case(
   // Only the case's own bindings are in scope for its renames at the start of
   // its body: a reference that comes before the binding (e.g. in a nested
   // function in the binding's own right hand side) still points at the
-  // enclosing scope.
+  // enclosing scope. The inherited cross_scope stays active too: Python
+  // scopes are function-wide, so an enclosing arm's renamed pattern bind must
+  // keep its fresh name inside nested blocks of this arm's body.
   let initial_cross_scope =
     set.from_list(pattern_binds)
     |> set.union(set.from_list(guard_binds))
+    |> set.union(cross_scope)
   let initial_bound =
     bound
     |> set.union(set.from_list(pattern_binds))
