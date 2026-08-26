@@ -116,7 +116,6 @@ pub fn transform_top_level_function(
   module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
-  imported_constructors: option.Option(dict.Dict(String, List(String))),
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
   public: Bool,
@@ -140,7 +139,6 @@ pub fn transform_top_level_function(
       external_functions: external_functions,
       external_qualified: external_qualified,
       module_bindings: module_bindings,
-      imported_constructors: imported_constructors,
       local_bindings: list.filter_map(function.parameters, fn(parameter) {
         case parameter {
           glance.FunctionParameter(name: glance.Named(name), ..) -> Ok(name)

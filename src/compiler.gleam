@@ -444,7 +444,7 @@ fn type_arities(
   }
   list.fold(glance_module.custom_types, dict.new(), fn(acc, custom_type) {
     case custom_type {
-      glance.Definition(_, glance.CustomType(_, name, _, _, _, variants)) ->
+      glance.Definition(_, glance.CustomType(_, name, _, opaque_, _, variants)) ->
         case variants {
           [] -> acc
           _ -> {
@@ -453,9 +453,19 @@ fn type_arities(
               True -> "type:" <> name
               False -> "type:" <> prefix <> "." <> name
             }
-            acc
-            |> dict.insert(qualified, fields)
-            |> dict.insert("type:" <> name, fields)
+            let acc =
+              acc
+              |> dict.insert(qualified, fields)
+              |> dict.insert("type:" <> name, fields)
+            // Opaque types get mirror keys so transform_call can tell field
+            // access (visible fields) apart from the module-function fallback.
+            case opaque_ {
+              True ->
+                acc
+                |> dict.insert("opaque:" <> qualified, fields)
+                |> dict.insert("opaque:type:" <> name, fields)
+              False -> acc
+            }
           }
         }
     }

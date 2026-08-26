@@ -1326,10 +1326,8 @@ fn transform_call(
       // pattern-bind types flow through the transformer.
       let shadows_with_visible_field =
         list.contains(context.local_bindings, alias)
-        && case type_has_field(context, alias, name) {
-          option.Some(True) -> constructor_is_imported(context, alias, name)
-          _ -> False
-        }
+        && type_has_field(context, alias, name) == option.Some(True)
+        && type_fields_visible(context, alias, name)
       case
         list.contains(context.module_aliases, alias)
         && !shadows_with_visible_field
@@ -2631,34 +2629,32 @@ fn type_has_field(
   }
 }
 
-// Whether the constructor of the type annotating local `alias` is visible from
-// the module being compiled. A type is opaque to a caller that did not import
-// its constructor (e.g. `import yum/yaml/document.{type Document}`), so record
-// field access through such a value is not possible and qualified calls fall
-// back to module functions. Types defined in the compiled module itself (no
-// qualifier) and modules whose import table is unknown are treated as visible.
-fn constructor_is_imported(
+// Whether record fields of the type annotating local `alias` are accessible
+// from the module being compiled. Fields of an `pub opaque type` are only
+// visible inside its defining module; upstream Gleam then falls back to
+// resolving a qualified call through a shadowing local as a module function.
+// Opaque types are registered in the arities table under `opaque:`-prefixed
+// keys mirroring the `type:` keys (qualified first, bare fallback).
+fn type_fields_visible(
   context: internal.TransformerContext,
   alias: String,
   _label: String,
 ) -> Bool {
+  let arities = case context.constructor_arities {
+    option.Some(arities) -> arities
+    option.None -> dict.new()
+  }
   case dict.get(context.local_types, alias) {
     Error(_) -> True
     Ok(glance.NamedType(name: name, module: module, ..)) -> {
-      // The written qualifier identifies the providing import directly; for an
-      // unqualified annotation the import table maps the type name to it.
-      let key = case module {
-        option.Some(binding) -> binding
-        option.None -> name
+      let keys = case module {
+        option.Some(binding) -> {
+          let prefix = module_prefix(context, binding)
+          ["opaque:type:" <> prefix <> "." <> name, "opaque:type:" <> name]
+        }
+        option.None -> ["opaque:type:" <> name]
       }
-      case context.imported_constructors {
-        option.None -> True
-        option.Some(constructors) ->
-          case dict.get(constructors, key) {
-            Ok(names) -> list.contains(names, name)
-            Error(_) -> False
-          }
-      }
+      !list.any(keys, fn(key) { dict.has_key(arities, key) })
     }
     Ok(_) -> True
   }
