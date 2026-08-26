@@ -99,3 +99,9 @@ macabre_aqueduct  /Users/dustyphillips/Code/gleam/macabre_aqueduct  main
 macabre_twister  /Users/dustyphillips/Code/gleam/macabre_twister  main
 macabre_magic_string  /Users/dustyphillips/Code/gleam/macabre_magic_string  main
 macabre_swatch  /Users/dustyphillips/Code/gleam/macabre_swatch  main
+macabre_cgi  /Users/dustyphillips/Code/gleam/macabre_cgi  main
+macabre_greenwood  /Users/dustyphillips/Code/gleam/macabre_greenwood  main
+macabre_party  /Users/dustyphillips/Code/gleam/macabre_party  main
+macabre_qcheck_gleeunit_utils  /Users/dustyphillips/Code/gleam/macabre_qcheck_gleeunit_utils  main
+macabre_rank  /Users/dustyphillips/Code/gleam/macabre_rank  main
+macabre_string_width  /Users/dustyphillips/Code/gleam/macabre_string_width  main
