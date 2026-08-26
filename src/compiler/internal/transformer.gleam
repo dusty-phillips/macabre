@@ -50,6 +50,14 @@ pub type TransformerContext {
     // where `date: t.CalendarDate` is field access, but `doc.group` where
     // `doc: Document` has no such field is the module function).
     local_types: dict.Dict(String, glance.Type),
+    // Unqualified imported values (constructors), keyed by module binding name
+    // AND by unqualified type name (mapping to the value list of the import
+    // that brought the type). A type whose import brings no constructors is
+    // opaque to this module: upstream Gleam then falls back to resolving
+    // `alias.label(...)` as a module-qualified call even though a local
+    // shadows the alias, because record fields of an opaque type are not
+    // accessible. Used by transform_call to make that same fallback.
+    imported_constructors: option.Option(dict.Dict(String, List(String))),
     // A shared per-base-name counter used to mint fresh names across all
     // shadowing passes. Keeping one pool means a name like `state` is
     // renamed `state_0`, `state_1`, `state_2`... and no two passes can
@@ -82,6 +90,7 @@ pub fn empty_context() -> TransformerContext {
     external_qualified: option.None,
     local_bindings: [],
     local_types: dict.new(),
+    imported_constructors: option.None,
     fresh_pool: dict.new(),
     module_name: "",
     function_name: "",

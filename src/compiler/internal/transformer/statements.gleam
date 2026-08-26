@@ -1313,18 +1313,27 @@ fn transform_call(
     glance.FieldAccess(_, glance.Variable(_, alias), name) -> {
       // A local sharing its name with a module alias usually means the call
       // is module-qualified (`resolve_module_shadowing` renames colliding
-      // parameters for exactly that reason). But when the local's DECLARED
-      // TYPE has a field with this label, real Gleam types the container as
-      // a value first: the call is a record-field call on the shadowing
-      // local, and emitting a module reference would break at runtime.
-      // Known gap: a case-pattern bind has no written annotation, so its
-      // type is unknown here; a bind shadowing a module AND calling one of
-      // that module's functions as a record field must be renamed in source
-      // until pattern-bind types flow through the transformer.
-      let shadows_with_field =
+      // parameters for exactly that reason). When the local's DECLARED TYPE
+      // has this label as a record field AND that field is visible from here,
+      // upstream Gleam resolves the call as a record-field call on the local.
+      // Visibility matters for opaque types: a type whose constructor the
+      // calling module did not import hides its fields, and upstream falls
+      // back to resolving the call as a module function instead (e.g. yum's
+      // `document.root(document)` where `Document` is opaque). Known gap: a
+      // case-pattern bind has no written annotation, so its type is unknown
+      // here; a bind shadowing a module AND calling one of that module's
+      // functions as a record field must be renamed in source until
+      // pattern-bind types flow through the transformer.
+      let shadows_with_visible_field =
         list.contains(context.local_bindings, alias)
-        && type_has_field(context, alias, name) == option.Some(True)
-      case list.contains(context.module_aliases, alias) && !shadows_with_field {
+        && case type_has_field(context, alias, name) {
+          option.Some(True) -> constructor_is_imported(context, alias, name)
+          _ -> False
+        }
+      case
+        list.contains(context.module_aliases, alias)
+        && !shadows_with_visible_field
+      {
         True ->
           internal.empty_return(
             context,
@@ -2619,6 +2628,39 @@ fn type_has_field(
       type_fields_of(keys, arities, label)
     }
     Ok(_), option.Some(_) -> option.None
+  }
+}
+
+// Whether the constructor of the type annotating local `alias` is visible from
+// the module being compiled. A type is opaque to a caller that did not import
+// its constructor (e.g. `import yum/yaml/document.{type Document}`), so record
+// field access through such a value is not possible and qualified calls fall
+// back to module functions. Types defined in the compiled module itself (no
+// qualifier) and modules whose import table is unknown are treated as visible.
+fn constructor_is_imported(
+  context: internal.TransformerContext,
+  alias: String,
+  _label: String,
+) -> Bool {
+  case dict.get(context.local_types, alias) {
+    Error(_) -> True
+    Ok(glance.NamedType(name: name, module: module, ..)) -> {
+      // The written qualifier identifies the providing import directly; for an
+      // unqualified annotation the import table maps the type name to it.
+      let key = case module {
+        option.Some(binding) -> binding
+        option.None -> name
+      }
+      case context.imported_constructors {
+        option.None -> True
+        option.Some(constructors) ->
+          case dict.get(constructors, key) {
+            Ok(names) -> list.contains(names, name)
+            Error(_) -> False
+          }
+      }
+    }
+    Ok(_) -> True
   }
 }
 

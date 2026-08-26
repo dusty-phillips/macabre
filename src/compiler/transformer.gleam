@@ -298,6 +298,24 @@ pub fn transform_module_with_metadata(
           dict.insert(paths, module_binding_name(module, alias), module)
       }
     })
+  let imported_constructors =
+    list.fold(input.imports, dict.new(), fn(constructors, import_) {
+      case import_ {
+        glance.Definition(_, glance.Import(_, module, alias, types, values)) -> {
+          // Only unqualified VALUES make a type's fields visible: `import
+          // x.{type Document}` brings the type but not its constructors, so
+          // the type stays opaque to this module. Keying by unqualified type
+          // name as well lets an annotation like `document: Document` find
+          // its import's constructor list.
+          let names = list.map(values, fn(u) { u.name })
+          let binding = module_binding_name(module, alias)
+          let constructors = dict.insert(constructors, binding, names)
+          list.fold(types, constructors, fn(constructors, u) {
+            dict.insert(constructors, u.name, names)
+          })
+        }
+      }
+    })
   let module_bindings =
     compute_module_bindings(input, submodule_names, mangled_submodules)
   let #(leading_comments, comments_by_start, trailing_comments) =
@@ -321,6 +339,7 @@ pub fn transform_module_with_metadata(
             module_paths: option.Some(module_paths),
             constructor_arities:,
             module_bindings: option.Some(module_bindings),
+            imported_constructors: option.Some(imported_constructors),
             external_functions: option.Some(external_functions),
             external_qualified: option.Some(external_qualified),
             module_name: module_name,
@@ -343,6 +362,7 @@ pub fn transform_module_with_metadata(
         module_paths,
         constructor_arities,
         option.Some(module_bindings),
+        option.Some(imported_constructors),
         option.Some(external_functions),
         option.Some(external_qualified),
         comments_by_start,
@@ -509,6 +529,7 @@ fn transform_function_or_external(
   module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
+  imported_constructors: option.Option(dict.Dict(String, List(String))),
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
   comments_by_start: dict.Dict(Int, List(comments.Comment)),
@@ -539,6 +560,7 @@ fn transform_function_or_external(
                 module_paths,
                 constructor_arities,
                 module_bindings,
+                imported_constructors,
                 external_functions,
                 external_qualified,
                 comments_by_start,
@@ -556,6 +578,7 @@ fn transform_function_or_external(
             module_paths,
             constructor_arities,
             module_bindings,
+            imported_constructors,
             external_functions,
             external_qualified,
             comments_by_start,
@@ -578,6 +601,7 @@ fn compile_normal_function(
   module_paths: dict.Dict(String, String),
   constructor_arities: option.Option(dict.Dict(String, List(String))),
   module_bindings: option.Option(dict.Dict(String, String)),
+  imported_constructors: option.Option(dict.Dict(String, List(String))),
   external_functions: option.Option(List(String)),
   external_qualified: option.Option(List(String)),
   comments_by_start: dict.Dict(Int, List(comments.Comment)),
@@ -595,6 +619,7 @@ fn compile_normal_function(
       module_paths,
       constructor_arities,
       module_bindings,
+      imported_constructors,
       external_functions,
       external_qualified,
       case function.definition.publicity {

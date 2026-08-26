@@ -1218,6 +1218,7 @@ fn resolve_nested_binds(
     python.Match(subject, cases) -> {
       let #(renamed_cases, pool) =
         resolve_match_cases(
+          subject,
           cases,
           renames,
           cross_renames,
@@ -1409,6 +1410,7 @@ fn nested_resolve_fold(
 // Body assignments that shadow an enclosing renamed name are handled by the
 // program order fold (their binding targets are always renamed).
 fn resolve_match_cases(
+  subject: python.Expression,
   cases: List(python.MatchCase),
   renames: dict.Dict(String, String),
   cross_renames: dict.Dict(String, String),
@@ -1449,6 +1451,12 @@ fn resolve_match_cases(
     cases
     |> list.map(fn(match_case) { case_refs(match_case, set.new()) })
     |> list.flatten
+    // The subject is evaluated before any arm runs, inside the same generated
+    // function, so a name it references collides with an arm that binds the
+    // same name (e.g. a string-concatenation pattern capturing the subject's
+    // own name): Python would treat the capture as a function-local and the
+    // subject evaluation as an UnboundLocalError.
+    |> list.append(expression_refs(subject, set.new()))
   let final_refs = list.map(all_refs, effective_rename)
   let used =
     set.from_list(all_binds)
@@ -3085,13 +3093,25 @@ fn driver_leaked_names(function: python.Function) -> List(String) {
         cases
         |> list.map(fn(match_case) { pattern_binds(match_case.pattern) })
         |> list.flatten
+      // Guard walruses (from string-concatenation patterns) bind too, and
+      // Python leaves them in the enclosing scope after inlining just like
+      // pattern captures and body binds.
+      let guard_names =
+        cases
+        |> list.map(fn(match_case) {
+          option.unwrap(option.map(match_case.guard, expression_binds), [])
+        })
+        |> list.flatten
       let body_names =
         cases
         |> list.map(fn(match_case) {
           match_case.body |> list.map(statement_binds) |> list.flatten
         })
         |> list.flatten
-      pattern_names |> list.append(body_names) |> list.unique
+      pattern_names
+      |> list.append(guard_names)
+      |> list.append(body_names)
+      |> list.unique
     }
     _ -> []
   }
