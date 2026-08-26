@@ -2875,35 +2875,45 @@ fn rewrite_expression_tail(
 // Python's `match` does not scope its pattern captures or the names bound in
 // case bodies, so inlining leaks them into the enclosing function scope. A
 // driver is only inlined when none of those leaked names are referenced by any
-// other statement of the enclosing scope, so a later use cannot silently pick
-// up the leaked value. `resolve_tail_calls` must run first: its drivers use
-// the `GleamTco` protocol, which this pass refuses to touch.
+// other statement of the enclosing scope or by any ancestor block of the same
+// Python function (a function-local bind affects every block between itself
+// and the function boundary, not just the block it appears in), so a later use
+// cannot silently pick up the leaked value. `resolve_tail_calls` must run
+// first: its drivers use the `GleamTco` protocol, which this pass refuses to
+// touch.
 pub fn inline_case_drivers(
   statements: List(python.Statement),
 ) -> List(python.Statement) {
-  inline_scope(statements)
+  inline_scope(statements, set.new())
 }
 
-fn inline_scope(statements: List(python.Statement)) -> List(python.Statement) {
-  case find_and_inline_driver(statements) {
-    option.Some(inlined) -> inline_scope(inlined)
-    option.None -> recurse_nested_scopes(statements)
+fn inline_scope(
+  statements: List(python.Statement),
+  inherited: set.Set(String),
+) -> List(python.Statement) {
+  case find_and_inline_driver(statements, inherited) {
+    option.Some(inlined) -> inline_scope(inlined, inherited)
+    option.None -> recurse_nested_scopes(statements, inherited)
   }
 }
 
 // Inlines the first safe single-use case driver found among the top-level
 // statements. Returns `None` when there is none. `prefix` carries the
 // statements seen so far so they are not dropped when the driver is later in
-// the list.
+// the list. `inherited` holds names referenced by ancestor blocks of the same
+// Python function; a leaked name matching any of them would change their
+// meaning.
 fn find_and_inline_driver(
   statements: List(python.Statement),
+  inherited: set.Set(String),
 ) -> option.Option(List(python.Statement)) {
-  find_driver_in_statements(statements, [])
+  find_driver_in_statements(statements, [], inherited)
 }
 
 fn find_driver_in_statements(
   statements: List(python.Statement),
   prefix: List(python.Statement),
+  inherited: set.Set(String),
 ) -> option.Option(List(python.Statement)) {
   case statements {
     [] -> option.None
@@ -2921,6 +2931,7 @@ fn find_driver_in_statements(
                   function,
                   subject,
                   list.append(prefix, statements),
+                  inherited,
                 )
               {
                 True ->
@@ -2934,18 +2945,29 @@ fn find_driver_in_statements(
                       find_driver_in_statements(
                         rest,
                         list.append(prefix, [statement]),
+                        inherited,
                       )
                   }
                 False ->
                   find_driver_in_statements(
                     rest,
                     list.append(prefix, [statement]),
+                    inherited,
                   )
               }
             _, _ ->
-              find_driver_in_statements(rest, list.append(prefix, [statement]))
+              find_driver_in_statements(
+                rest,
+                list.append(prefix, [statement]),
+                inherited,
+              )
           }
-        _ -> find_driver_in_statements(rest, list.append(prefix, [statement]))
+        _ ->
+          find_driver_in_statements(
+            rest,
+            list.append(prefix, [statement]),
+            inherited,
+          )
       }
   }
 }
@@ -3029,20 +3051,22 @@ fn simple_inline_case(
 // another statement references. The names an inlined match binds are the
 // pattern captures and the binds of each case body (all of which Python leaves
 // in the enclosing function scope). A reference to one of those names from any
-// other statement, or from the match subject itself, would change meaning or
-// (for a subject reference) become an unbound local, so the driver is not
-// inlined.
+// other statement, from the match subject itself, or from an ancestor block of
+// the same Python function (`inherited`) would change meaning or (for a
+// subject reference) become an unbound local, so the driver is not inlined.
 fn driver_leak_safe(
   function: python.Function,
   subject: python.Expression,
   statements: List(python.Statement),
+  inherited: set.Set(String),
 ) -> Bool {
   case driver_leaked_names(function) {
     [] -> True
     leaked -> {
       let others = statements_without_driver_and_use(statements, function.name)
       list.all(leaked, fn(name) {
-        !expression_references(subject, name)
+        !set.contains(inherited, name)
+        && !expression_references(subject, name)
         && !list.any(others, fn(statement) {
           list.contains(
             deep_statement_refs(statement, set.new(), set.new()),
@@ -3101,7 +3125,18 @@ fn statements_without_driver_and_use(
 
 fn recurse_nested_scopes(
   statements: List(python.Statement),
+  inherited: set.Set(String),
 ) -> List(python.Statement) {
+  // Every reference anywhere in this scope joins the inherited names for
+  // deeper scopes: a bind leaked by an inlined driver becomes a function-local
+  // of the whole enclosing Python function, so even a reference in a sibling
+  // subtree of an ancestor block would be affected.
+  let inherited =
+    statements
+    |> list.map(deep_statement_refs(_, set.new(), set.new()))
+    |> list.flatten
+    |> set.from_list
+    |> set.union(inherited)
   list.map(statements, fn(statement) {
     case statement {
       python.Match(subject, cases) ->
@@ -3109,13 +3144,13 @@ fn recurse_nested_scopes(
           subject: subject,
           cases: list.map(cases, fn(match_case) {
             let python.MatchCase(pattern, guard, body) = match_case
-            python.MatchCase(pattern, guard, inline_scope(body))
+            python.MatchCase(pattern, guard, inline_scope(body, inherited))
           }),
         )
       python.While(condition, body) ->
-        python.While(condition: condition, body: inline_scope(body))
+        python.While(condition: condition, body: inline_scope(body, inherited))
       python.If(condition, body) ->
-        python.If(condition: condition, body: inline_scope(body))
+        python.If(condition: condition, body: inline_scope(body, inherited))
       python.FunctionDef(function) ->
         // A function that is part of the tail-recursion trampoline (it returns
         // or passes a `GleamTco` marker) is opaque to this pass: inlining
@@ -3125,7 +3160,10 @@ fn recurse_nested_scopes(
           True -> statement
           False ->
             python.FunctionDef(
-              python.Function(..function, body: inline_scope(function.body)),
+              python.Function(
+                ..function,
+                body: inline_scope(function.body, inherited),
+              ),
             )
         }
       _ -> statement
