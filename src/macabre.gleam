@@ -71,7 +71,10 @@ fn load_and_compile(
 // test runner's: 0 when all tests pass, non-zero otherwise.
 pub fn run_test(directory: String) -> Nil {
   case load_and_compile(directory) {
-    Error(error) -> filesystem.write_error(error)
+    Error(error) -> {
+      filesystem.write_error(error)
+      shellout.exit(1)
+    }
     Ok(compiled_package) -> {
       // The subprocess runs with the project directory as its working
       // directory, so the compiled test module is referenced relative to it.

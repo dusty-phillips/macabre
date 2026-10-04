@@ -20,7 +20,12 @@ pub type Error {
   TomlFieldError(path: String, error: tom.GetError)
   TomlParseError(path: String, error: tom.ParseError)
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
-  GlimpseTypeCheckError(module: String, error: glimpse_error.TypeCheckError)
+  GlimpseTypeCheckError(
+    module: String,
+    error: glimpse_error.TypeCheckError,
+    source: String,
+    file: String,
+  )
   MissingDependency(entry: String, missing: String)
   UnsupportedTargetModule(module: String)
   HexResolveError(name: String, constraint: String, detail: String)
@@ -29,52 +34,90 @@ pub type Error {
 pub fn format_error(error: Error) -> String {
   case error {
     FileOrDirectoryNotFound(filename, _) ->
-      "File or directory not found " <> filename
-    GitCloneError(name, _) -> "Unable to clone " <> name
-    GitCheckoutError(name, git_ref, _) ->
-      "Unable to checkout " <> git_ref <> " in " <> name
-    HexDownloadError(name, version, _) ->
-      "Unable to download " <> name <> " version " <> version
-    HexExtractError(name, version, _) ->
-      "Unable to extract " <> name <> " version " <> version
-    TomlParseError(filename, _) -> "Invalid toml file " <> filename
-    TomlFieldError(filename, tom.NotFound(key)) ->
-      "Missing toml field in " <> filename <> ": " <> string.join(key, ",")
-    TomlFieldError(filename, tom.WrongType(key, expected, got)) ->
-      "Incorrect toml field in "
+      "error: File or directory not found\n\n`"
       <> filename
-      <> ": "
+      <> "` was not found."
+    GitCloneError(name, _) ->
+      "error: Unable to clone dependency\n\nCould not clone `"
+      <> name
+      <> "`.\nHint: Check the repository URL and your network connection."
+    GitCheckoutError(name, git_ref, _) ->
+      "error: Unable to checkout dependency\n\nCould not checkout `"
+      <> git_ref
+      <> "` in `"
+      <> name
+      <> "`.\nHint: Check that the ref exists."
+    HexDownloadError(name, version, _) ->
+      "error: Unable to download package\n\nCould not download `"
+      <> name
+      <> "` version `"
+      <> version
+      <> "`.\nHint: Check the version and your network connection."
+    HexExtractError(name, version, _) ->
+      "error: Unable to extract package\n\nCould not extract `"
+      <> name
+      <> "` version `"
+      <> version
+      <> "`."
+    TomlParseError(filename, _) ->
+      "error: Invalid TOML\n\nCould not parse `" <> filename <> "`."
+    TomlFieldError(filename, tom.NotFound(key)) ->
+      "error: Missing configuration\n\nMissing field `"
       <> string.join(key, ",")
-      <> "\n(expected: "
+      <> "` in `"
+      <> filename
+      <> "`."
+    TomlFieldError(filename, tom.WrongType(key, expected, got)) ->
+      "error: Invalid configuration\n\nIncorrect field `"
+      <> string.join(key, ",")
+      <> "` in `"
+      <> filename
+      <> "`.\nExpected: "
       <> expected
-      <> ", got: "
+      <> "\nGot: "
       <> got
-      <> ")"
-    FileReadError(filename, simplifile.Enoent) -> "File not found " <> filename
-    FileReadError(filename, _) -> "Unable to read " <> filename
-    FileWriteError(filename, _) -> "Unable to write " <> filename
-    DeleteError(filename, _) -> "Unable to delete " <> filename
-    MkdirError(filename, _) -> "Unable to mkdir " <> filename
-    CopyFileError(src, dst, _) -> "Unable to copy " <> src <> " to " <> dst
+    FileReadError(filename, simplifile.Enoent) ->
+      "error: File not found\n\n`" <> filename <> "` was not found."
+    FileReadError(filename, _) ->
+      "error: Unable to read file\n\nCould not read `" <> filename <> "`."
+    FileWriteError(filename, _) ->
+      "error: Unable to write file\n\nCould not write `" <> filename <> "`."
+    DeleteError(filename, _) ->
+      "error: Unable to delete\n\nCould not delete `" <> filename <> "`."
+    MkdirError(filename, _) ->
+      "error: Unable to create directory\n\nCould not create `"
+      <> filename
+      <> "`."
+    CopyFileError(src, dst, _) ->
+      "error: Unable to copy file\n\nCould not copy `"
+      <> src
+      <> "` to `"
+      <> dst
+      <> "`."
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
     GlimpseImportError(error) -> format_glimpse_import_error(error)
-    GlimpseTypeCheckError(module, error) ->
-      internal.format_glimpse_type_check_error(module, error)
+    GlimpseTypeCheckError(module, error, source, file) ->
+      internal.format_glimpse_type_check_error_with_source(
+        module,
+        error,
+        source,
+        file,
+      )
     MissingDependency(entry, missing) ->
-      "The test/dev module `"
+      "error: Missing dependency\n\nThe test/dev module `"
       <> entry
       <> "` imports `"
       <> missing
-      <> "` which is not available in this build"
+      <> "` which is not available in this build.\nHint: Add it to your `macabre.toml` dependencies."
     UnsupportedTargetModule(module) ->
-      "The module `"
+      "error: Unsupported target\n\nThe module `"
       <> module
-      <> "` is only implemented for other build targets and cannot be part of a python build"
+      <> "` is only implemented for other build targets and cannot be part of a python build.\nHint: Use a python-compatible alternative."
     HexResolveError(name, constraint, detail) ->
-      "Unable to resolve "
+      "error: Unable to resolve package\n\nCould not resolve `"
       <> name
-      <> " matching `"
+      <> "` matching `"
       <> constraint
       <> "`: "
       <> detail
@@ -86,16 +129,16 @@ fn format_glimpse_import_error(
 ) -> String {
   case error {
     glimpse_error.CircularDependencyError(module_name) ->
-      "The module `"
+      "error: Circular dependency\n\nThe module `"
       <> module_name
-      <> "` forms a circular dependency with another module. Modules must not import each other directly or indirectly."
+      <> "` forms a circular dependency with another module.\nHint: Modules must not import each other directly or indirectly."
     glimpse_error.MissingImportError(module_name) ->
-      "The module `"
+      "error: Unknown module\n\nThe module `"
       <> module_name
-      <> "` could not be found. Check the module name and that it is part of this package or one of its dependencies."
+      <> "` could not be found.\nHint: Check the module name and that it is part of this package or one of its dependencies."
     glimpse_error.SrcImportingDevDependency(module_name) ->
-      "The module `"
+      "error: Invalid import\n\nThe module `"
       <> module_name
-      <> "` is a dev-only dependency and cannot be imported from a source module. Move the import to a test or dev module."
+      <> "` is a dev-only dependency and cannot be imported from a source module.\nHint: Move the import to a test or dev module."
   }
 }

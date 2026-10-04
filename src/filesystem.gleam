@@ -73,7 +73,7 @@ pub fn write_py_main(
 pub fn write_error(error: errors.Error) -> Nil {
   error
   |> errors.format_error
-  |> io.println
+  |> io.println_error
 }
 
 pub fn delete(path: String) -> Result(Nil, errors.Error) {

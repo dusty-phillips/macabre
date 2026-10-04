@@ -134,11 +134,20 @@ fn load_glimpse_package(
         case error {
           glimpse_error.LoadError(error) -> error
           glimpse_error.ParseError(glance_error, name, content) ->
-            errors.GlanceParseError(glance_error, name, content)
+            errors.GlanceParseError(
+              glance_error,
+              parse_display_path(project, name),
+              content,
+            )
           glimpse_error.ImportError(import_error) ->
             errors.GlimpseImportError(import_error)
           glimpse_error.TypeCheckError(type_check_error) ->
-            errors.GlimpseTypeCheckError("", type_check_error)
+            errors.GlimpseTypeCheckError(
+              project.name,
+              type_check_error,
+              module_source(project, project.name),
+              "src/" <> project.name <> ".gleam",
+            )
         }
       })
     Error(_) -> Ok(glimpse.Package(project.name, dict.new(), []))
@@ -159,7 +168,7 @@ fn load_glimpse_package(
     )
   list.fold(extra_entries, Ok(main_package), fn(state, entry) {
     use package <- result.try(state)
-    case load_module_recursively(package, entry, loader) {
+    case load_module_recursively(package, entry, loader, project) {
       Ok(package) -> Ok(package)
       Error(errors.FileReadError(missing, simplifile.Enoent)) ->
         Error(errors.MissingDependency(entry, missing))
@@ -181,7 +190,7 @@ fn load_glimpse_package(
       Error(error) -> Error(error)
     }
   })
-  |> result.try(typecheck_package(src_modules, _))
+  |> result.try(typecheck_package(project, src_modules, _))
 }
 
 // Typechecks every module in the package for the python target using glimpse's
@@ -195,7 +204,35 @@ fn load_glimpse_package(
 // loaded module (the root module may live under a different path, and test and
 // dev modules are additional entry points). So the full module set is sorted
 // topologically and each module is checked individually.
+// The user-facing path of a module for error messages: test/ and dev/
+// modules keep their own prefix, everything else is a src/ module.
+fn module_display_path(
+  project: project.Project,
+  src_modules: set.Set(String),
+  module_name: String,
+) -> String {
+  case set.contains(src_modules, module_name) {
+    True -> "src/" <> module_name <> ".gleam"
+    False ->
+      case list.contains(project.test_module_names(project), module_name) {
+        True -> "test/" <> module_name <> ".gleam"
+        False ->
+          case list.contains(project.dev_module_names(project), module_name) {
+            True -> "dev/" <> module_name <> ".gleam"
+            False -> "src/" <> module_name <> ".gleam"
+          }
+      }
+  }
+}
+
+fn module_source(project: project.Project, module_name: String) -> String {
+  filepath.join(project.build_src_dir(project), module_name <> ".gleam")
+  |> filesystem.read
+  |> result.unwrap("")
+}
+
 fn typecheck_package(
+  project: project.Project,
   src_modules: set.Set(String),
   package: glimpse.Package,
 ) -> Result(glimpse.Package, errors.Error) {
@@ -264,11 +301,18 @@ fn typecheck_package(
                     Error(errors.GlimpseTypeCheckError(
                       module_name,
                       glimpse_error.UnsupportedTarget(name),
+                      module_source(project, module_name),
+                      module_display_path(project, src_modules, module_name),
                     ))
                 }
               }
               Error(error) ->
-                Error(errors.GlimpseTypeCheckError(module_name, error))
+                Error(errors.GlimpseTypeCheckError(
+                  module_name,
+                  error,
+                  module_source(project, module_name),
+                  module_display_path(project, src_modules, module_name),
+                ))
             }
         }
       })
@@ -330,6 +374,7 @@ fn load_module_recursively(
   package: glimpse.Package,
   module_name: String,
   loader: fn(String) -> Result(String, errors.Error),
+  project: project.Project,
 ) -> Result(glimpse.Package, errors.Error) {
   case dict.has_key(package.modules, module_name) {
     True -> Ok(package)
@@ -338,7 +383,11 @@ fn load_module_recursively(
       use glance_module <- result.try(
         glance.module(content)
         |> result.map_error(fn(error) {
-          errors.GlanceParseError(error, module_name, content)
+          errors.GlanceParseError(
+            error,
+            parse_display_path(project, module_name),
+            content,
+          )
         }),
       )
       let glimpse_module = glimpse.load_module(glance_module, module_name)
@@ -350,9 +399,23 @@ fn load_module_recursively(
       glimpse.filter_new_dependencies(glimpse_module, package)
       |> list.fold(Ok(package), fn(state, dependency) {
         use package <- result.try(state)
-        load_module_recursively(package, dependency, loader)
+        load_module_recursively(package, dependency, loader, project)
       })
     }
+  }
+}
+
+// Display prefix for a parse error when the src/test/dev split is unknown
+// at load time. Test and dev entries keep their own prefix; everything
+// else (src modules and dependencies) renders under src/.
+fn parse_display_path(project: project.Project, module_name: String) -> String {
+  case list.contains(project.test_module_names(project), module_name) {
+    True -> "test/" <> module_name
+    False ->
+      case list.contains(project.dev_module_names(project), module_name) {
+        True -> "dev/" <> module_name
+        False -> "src/" <> module_name
+      }
   }
 }
 

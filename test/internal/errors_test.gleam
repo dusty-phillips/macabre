@@ -11,8 +11,9 @@ pub fn position_at_first_byte_test() {
       token.Int("5"),
       glexer.Position(0),
       "5bcdefg",
+      "src/main.gleam",
     )
-    == "Unexpected Token 5\nAt line 1 column 1\n\n5bcdefg\n^\n"
+    == "error: Syntax error\n  ┌─ src/main.gleam:1:1\n  │\n1 │ 5bcdefg\n  │ ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn position_in_first_line_test() {
@@ -20,8 +21,9 @@ pub fn position_in_first_line_test() {
       token.Int("5"),
       glexer.Position(4),
       "abcd5fg",
+      "src/main.gleam",
     )
-    == "Unexpected Token 5\nAt line 1 column 5\n\nabcd5fg\n    ^\n"
+    == "error: Syntax error\n  ┌─ src/main.gleam:1:5\n  │\n1 │ abcd5fg\n  │     ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn position_in_second_line_test() {
@@ -29,8 +31,9 @@ pub fn position_in_second_line_test() {
       token.Int("5"),
       glexer.Position(5),
       "abc\nd5fg",
+      "src/main.gleam",
     )
-    == "Unexpected Token 5\nAt line 2 column 2\n\nd5fg\n ^\n"
+    == "error: Syntax error\n  ┌─ src/main.gleam:2:2\n  │\n2 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn position_after_newline_test() {
@@ -38,8 +41,9 @@ pub fn position_after_newline_test() {
       token.Int("5"),
       glexer.Position(6),
       "abc\n\nd5fg",
+      "src/main.gleam",
     )
-    == "Unexpected Token 5\nAt line 3 column 2\n\nd5fg\n ^\n"
+    == "error: Syntax error\n  ┌─ src/main.gleam:3:2\n  │\n3 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn type_check_error_in_module_test() {
@@ -47,7 +51,7 @@ pub fn type_check_error_in_module_test() {
       "foo/bar",
       glimpse_error.UnknownCustomType("Wibble"),
     )
-    == "Type error in foo/bar.gleam:\n\nUnknown type `Wibble`."
+    == "error: Unknown type\n  ┌─ foo/bar.gleam\n  │\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
 }
 
 pub fn type_check_error_in_entry_module_test() {
@@ -55,7 +59,7 @@ pub fn type_check_error_in_entry_module_test() {
       "",
       glimpse_error.DuplicateDefinition("wibble"),
     )
-    == "Type error:\n\nThe name `wibble` has already been defined in this module."
+    == "error: Duplicate definition\n\nThe name `wibble` has already been defined in this module."
 }
 
 pub fn type_check_error_invalid_return_type_test() {
@@ -63,7 +67,7 @@ pub fn type_check_error_invalid_return_type_test() {
       "main",
       glimpse_error.InvalidReturnType("main", "Int", "String"),
     )
-    == "Type error in main.gleam:\n\nThe function `main` has a return type of `String` but returns a value of type `Int`."
+    == "error: Incorrect return type\n  ┌─ main.gleam\n  │\n\nThe function `main` has a return type of `String` but returns a value of type `Int`."
 }
 
 pub fn type_check_error_inexhaustive_test() {
@@ -71,7 +75,7 @@ pub fn type_check_error_inexhaustive_test() {
       "main",
       glimpse_error.InexhaustivePattern("the `Nil` variant"),
     )
-    == "Type error in main.gleam:\n\nThis case expression does not have a clause for the `Nil` variant.\n\nIf you are sure this is impossible, use `panic` to tell the compiler it will never happen."
+    == "error: Inexhaustive pattern\n  ┌─ main.gleam\n  │\n\nThis case expression does not have a clause for the `Nil` variant.\n\nIf you are sure this is impossible, use `panic` to tell the compiler it will never happen.\n\nHint: Add the missing clause or use `panic` for impossible cases."
 }
 
 pub fn type_check_error_lowercase_bool_pattern_test() {
@@ -79,7 +83,7 @@ pub fn type_check_error_lowercase_bool_pattern_test() {
       "main",
       glimpse_error.LowercaseBoolPattern("true"),
     )
-    == "Type error in main.gleam:\n\nThe pattern `true` is written in lowercase, so it is treated as a variable rather than the `True` or `False` value. Capitalise it to match the boolean value."
+    == "error: Invalid pattern\n  ┌─ main.gleam\n  │\n\nThe pattern `true` is written in lowercase, so it is treated as a variable rather than the `True` or `False` value. Capitalise it to match the boolean value."
 }
 
 pub fn type_check_error_argument_arity_test() {
@@ -87,11 +91,33 @@ pub fn type_check_error_argument_arity_test() {
       "main",
       glimpse_error.InvalidPatternArity(2, 1),
     )
-    == "Type error in main.gleam:\n\nThis pattern expects 2 argument(s) but has 1."
+    == "error: Incorrect arity\n  ┌─ main.gleam\n  │\n\nThis pattern expects 2 argument(s) but has 1."
+}
+
+pub fn type_check_error_with_source_snippet_test() {
+  let source = "pub fn main() -> Wibble {\n  todo\n}"
+  assert errors.format_glimpse_type_check_error_with_source(
+      "main",
+      glimpse_error.UnknownCustomType("Wibble"),
+      source,
+      "src/main.gleam",
+    )
+    == "error: Unknown type\n  ┌─ src/main.gleam:1:18\n  │\n1 │ pub fn main() -> Wibble {\n  │                  ^^^^^^\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
+}
+
+pub fn type_check_error_with_missing_needle_test() {
+  // A needle that never appears falls back to the file header.
+  assert errors.format_glimpse_type_check_error_with_source(
+      "main",
+      glimpse_error.UnknownCustomType("Wibble"),
+      "pub fn main() -> Int {\n  1\n}",
+      "src/main.gleam",
+    )
+    == "error: Unknown type\n  ┌─ src/main.gleam\n  │\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
 }
 
 // Spot-check that the full catalogue of error variants renders without
-// panicking (each must produce a non-empty, module-prefixed message).
+// panicking (each must produce a non-empty `error:`-prefixed message).
 pub fn type_check_error_all_variants_render_test() {
   let module = "m"
   let variants = [
@@ -357,7 +383,7 @@ pub fn type_check_error_all_variants_render_test() {
     ),
   ]
   assert list.all(variants, fn(message) {
-    string.starts_with(message, "Type error in m.gleam:")
-    && string.length(message) > string.length("Type error in m.gleam:")
+    string.starts_with(message, "error: ")
+    && string.length(message) > string.length("error: ")
   })
 }

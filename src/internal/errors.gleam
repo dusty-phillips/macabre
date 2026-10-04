@@ -1,118 +1,172 @@
 import glance
-import gleam/bit_array
-import gleam/bytes_tree.{type BytesTree}
 import gleam/int
-import gleam/list
-import gleam/result
 import gleam/string
-import gleam/yielder
 import glexer
 import glexer/token
 import glimpse/error as glimpse_error
-import internal/bytes
 
 pub fn format_glance_error(
   error: glance.Error,
   filename: String,
   contents: String,
 ) -> String {
-  let error_message = case error {
-    glance.UnexpectedEndOfInput -> "Unexpected EOF"
-    glance.UnexpectedToken(token, position) ->
-      format_unexpected_token(token, position, contents)
+  let file = display_file(filename)
+  case error {
+    glance.UnexpectedEndOfInput ->
+      "error: Unexpected end of input\n"
+      <> frame_for_offset(contents, string.byte_size(contents), file, 1)
+      <> "\nUnexpected end of input while parsing "
+      <> file
+      <> ".\nHint: Check for an unclosed block or missing expression."
+    glance.UnexpectedToken(tok, position) ->
+      format_unexpected_token(tok, position, contents, file)
   }
-  "Unable to compile " <> filename <> ":\n" <> error_message
 }
 
-type PositionState {
-  PositionState(
-    current_line_number: Int,
-    current_line_bytes: BytesTree,
-    current_line_first_byte_position: Int,
-    current_position: Int,
-    target_position: Int,
-  )
+// A module name such as `foo/bar` renders as `foo/bar.gleam`; an empty
+// module (the entry point before its name is known) renders as just the
+// file it was read from when a path is passed, or `main.gleam` otherwise.
+fn display_file(filename: String) -> String {
+  case filename {
+    "" -> "main.gleam"
+    name ->
+      case string.ends_with(name, ".gleam") {
+        True -> name
+        False -> name <> ".gleam"
+      }
+  }
+}
+
+// Renders a Gleam-style code frame for a byte offset into source:
+//
+//   ┌─ src/main.gleam:2:5
+//   │
+// 2 │ pub fn main() {
+//   │     ^^^
+pub fn frame_for_offset(
+  source: String,
+  byte_offset: Int,
+  file: String,
+  underline_len: Int,
+) -> String {
+  let #(line_number, column, line_text) =
+    line_col_at_offset(source, byte_offset)
+  let line_no = int.to_string(line_number)
+  let gutter = string.repeat(" ", string.length(line_no))
+  let width = case underline_len < 1 {
+    True -> 1
+    False -> underline_len
+  }
+  "  ┌─ "
+  <> file
+  <> ":"
+  <> line_no
+  <> ":"
+  <> int.to_string(column)
+  <> "\n  │\n"
+  <> line_no
+  <> " │ "
+  <> line_text
+  <> "\n"
+  <> gutter
+  <> " │ "
+  <> string.repeat(" ", column - 1)
+  <> string.repeat("^", width)
+  <> "\n"
+}
+
+// A header-only frame when no byte offset is known, e.g. `  ┌─ src/foo.gleam`.
+pub fn frame_header(file: String) -> String {
+  "  ┌─ " <> file <> "\n  │\n"
+}
+
+fn line_col_at_offset(source: String, offset: Int) -> #(Int, Int, String) {
+  let clamped = case offset < 0 {
+    True -> 0
+    False ->
+      case offset > string.byte_size(source) {
+        True -> string.byte_size(source)
+        False -> offset
+      }
+  }
+  find_line(string.split(source, "\n"), clamped, 1, 0)
+}
+
+fn find_line(
+  lines: List(String),
+  offset: Int,
+  line_number: Int,
+  base: Int,
+) -> #(Int, Int, String) {
+  case lines {
+    [] -> #(line_number, 1, "")
+    [line, ..rest] -> {
+      let line_end = base + string.byte_size(line)
+      case offset <= line_end {
+        True -> {
+          let column = offset - base + 1
+          let max_col = string.length(line) + 1
+          let col = case column > max_col {
+            True -> max_col
+            False ->
+              case column < 1 {
+                True -> 1
+                False -> column
+              }
+          }
+          #(line_number, col, line)
+        }
+        False -> find_line(rest, offset, line_number + 1, line_end + 1)
+      }
+    }
+  }
+}
+
+// Byte offset of the first occurrence of `needle` in `source`, so snippets
+// point at the offending identifier. Byte-accurate even with unicode,
+// since the prefix before the split point is measured in bytes.
+pub fn find_needle_offset(source: String, needle: String) -> Result(Int, Nil) {
+  case needle {
+    "" -> Error(Nil)
+    _ ->
+      case string.split(source, needle) {
+        [before, ..rest] ->
+          case rest {
+            [] -> Error(Nil)
+            _ -> Ok(string.byte_size(before))
+          }
+        [] -> Error(Nil)
+      }
+  }
 }
 
 pub fn format_unexpected_token(
   token: token.Token,
   position: glexer.Position,
   contents: String,
+  file: String,
 ) -> String {
-  let initial =
-    PositionState(
-      current_line_number: 1,
-      current_line_bytes: bytes_tree.new(),
-      current_line_first_byte_position: 0,
-      current_position: 0,
-      // glexer positions start at byte 0, which is character 1 on a line based system
-      target_position: position.byte_offset + 1,
-    )
-
-  let position_state =
-    contents
-    |> bytes.iterate
-    |> yielder.fold_until(initial, fold_position_to_lines)
-
-  case position_state.current_position {
-    pos if pos < position_state.target_position ->
-      "\nUnexpected EOF looking for "
+  let offset = position.byte_offset
+  let size = string.byte_size(contents)
+  case offset >= size {
+    True -> {
+      "error: Unexpected end of input\n"
+      <> frame_for_offset(contents, size, file, 1)
+      <> "\nUnexpected end of input while looking for `"
       <> format_token(token)
-      <> " at position "
-      <> int.to_string(position_state.target_position)
-    _ -> {
-      let column =
-        position_state.target_position
-        - position_state.current_line_first_byte_position
-      "Unexpected Token "
-      <> format_token(token)
-      <> "\nAt line "
-      <> int.to_string(position_state.current_line_number)
-      <> " column "
-      <> int.to_string(column)
-      <> "\n\n"
-      <> {
-        position_state.current_line_bytes
-        |> bytes_tree.to_bit_array
-        |> bit_array.to_string
-        |> result.unwrap("Unexpected unicode")
-      }
-      <> "\n"
-      <> string.repeat(" ", column - 1)
-      <> "^\n"
+      <> "`.\nHint: Check for an unclosed block or missing expression."
     }
-  }
-}
-
-// Given a byte position, return information about the line that contains that
-// byte iterates over each bytes, counting lines. Once it finds the target,
-// continues iterating until the end of the line and returns that line.
-fn fold_position_to_lines(
-  state: PositionState,
-  byte: Int,
-) -> list.ContinueOrStop(PositionState) {
-  case byte, state.current_position, state.target_position {
-    10, curr, target if curr < target ->
-      list.Continue(
-        PositionState(
-          ..state,
-          current_line_first_byte_position: state.current_position + 1,
-          current_line_number: state.current_line_number + 1,
-          current_line_bytes: bytes_tree.new(),
-          current_position: state.current_position + 1,
-        ),
+    False -> {
+      "error: Syntax error\n"
+      <> frame_for_offset(
+        contents,
+        offset,
+        file,
+        string.length(format_token(token)),
       )
-    10, _, _ -> list.Stop(state)
-    byte, _, _ -> {
-      list.Continue(
-        PositionState(
-          ..state,
-          current_line_bytes: bytes_tree.append(state.current_line_bytes, <<
-            byte,
-          >>),
-          current_position: state.current_position + 1,
-        ),
-      )
+      <> "\nUnexpected token `"
+      <> format_token(token)
+      <> "`.\nHint: Check the Gleam syntax around this location."
     }
   }
 }
@@ -128,7 +182,49 @@ pub fn format_glimpse_type_check_error(
   module: String,
   error: glimpse_error.TypeCheckError,
 ) -> String {
-  let message = case error {
+  format_glimpse_type_check_error_with_source(module, error, "", "")
+}
+
+pub fn format_glimpse_type_check_error_with_source(
+  module: String,
+  error: glimpse_error.TypeCheckError,
+  source: String,
+  file: String,
+) -> String {
+  let title = type_check_title(error)
+  let message = type_check_message(error)
+  let header = "error: " <> title <> "\n"
+  let resolved_file = case file {
+    "" ->
+      case module {
+        "" -> ""
+        name -> display_file(name)
+      }
+    path -> path
+  }
+  let frame = case resolved_file, source {
+    "", _ -> ""
+    path, "" -> frame_header(path)
+    path, contents ->
+      case type_check_needle(error) {
+        Error(_) -> frame_header(path)
+        Ok(needle) ->
+          case find_needle_offset(contents, needle) {
+            Error(_) -> frame_header(path)
+            Ok(offset) ->
+              frame_for_offset(contents, offset, path, string.length(needle))
+          }
+      }
+  }
+  let suffix = case type_check_hint(error) {
+    Ok(text) -> "\n\nHint: " <> text
+    Error(_) -> ""
+  }
+  header <> frame <> "\n" <> message <> suffix
+}
+
+fn type_check_message(error: glimpse_error.TypeCheckError) -> String {
+  case error {
     glimpse_error.InvalidReturnType(function_name, got, expected) ->
       "The function `"
       <> function_name
@@ -404,8 +500,177 @@ pub fn format_glimpse_type_check_error(
     glimpse_error.DuplicateImport(name) ->
       "The module `" <> name <> "` is imported more than once."
   }
-  case module {
-    "" -> "Type error:\n\n" <> message
-    name -> "Type error in " <> name <> ".gleam:\n\n" <> message
+}
+
+fn type_check_title(error: glimpse_error.TypeCheckError) -> String {
+  case error {
+    glimpse_error.InvalidReturnType(..) -> "Incorrect return type"
+    glimpse_error.InvalidName(..) -> "Unknown variable"
+    glimpse_error.InvalidType(..) -> "Type mismatch"
+    glimpse_error.InvalidBinOp(..) -> "Type mismatch"
+    glimpse_error.UnknownCustomType(..) -> "Unknown type"
+    glimpse_error.RecursiveTypeAlias(..) -> "Recursive type alias"
+    glimpse_error.NotCallable(..) -> "Not callable"
+    glimpse_error.InvalidArguments(..) -> "Wrong arguments"
+    glimpse_error.InvalidArgumentLabel(..) -> "Unknown label"
+    glimpse_error.UnexpectedLabelledArgument(..) ->
+      "Unexpected labelled argument"
+    glimpse_error.DuplicateCustomType(..) -> "Duplicate type"
+    glimpse_error.InvalidFieldAccess(..) -> "Unknown field"
+    glimpse_error.UnexpectedType(..) -> "Type mismatch"
+    glimpse_error.InvalidAnnotation(..) -> "Type mismatch"
+    glimpse_error.CaseClauseMismatch(..) -> "Type mismatch"
+    glimpse_error.PatternMismatch(..) -> "Pattern mismatch"
+    glimpse_error.InvalidGuard(..) -> "Type mismatch"
+    glimpse_error.InvalidGuardExpression -> "Invalid guard"
+    glimpse_error.LowercaseBoolPattern(..) -> "Invalid pattern"
+    glimpse_error.MissingParameterAnnotation(..) -> "Missing annotation"
+    glimpse_error.MissingReturnAnnotation(..) -> "Missing annotation"
+    glimpse_error.UnexpectedTypeHole(..) -> "Unexpected type hole"
+    glimpse_error.InvalidUse(..) -> "Invalid use"
+    glimpse_error.InexhaustivePattern(..) -> "Inexhaustive pattern"
+    glimpse_error.InvalidBitStringSegment(..) -> "Invalid bit array segment"
+    glimpse_error.UnsafeRecordUpdate(..) -> "Unsafe record update"
+    glimpse_error.RecordUpdateOnUnlabelledConstructor(..) ->
+      "Invalid record update"
+    glimpse_error.DuplicateArgument(..) -> "Duplicate argument"
+    glimpse_error.MissingField(..) -> "Unknown field"
+    glimpse_error.DuplicateArgumentName(..) -> "Duplicate argument"
+    glimpse_error.UnlabelledArgumentAfterLabelled -> "Invalid argument"
+    glimpse_error.PositionalArgumentAfterLabelled -> "Invalid argument"
+    glimpse_error.DuplicateConstructor(..) -> "Duplicate constructor"
+    glimpse_error.PrivateTypeLeak(..) -> "Private type leak"
+    glimpse_error.TodoInConstant -> "Invalid constant"
+    glimpse_error.InvalidConstantExpression -> "Invalid constant"
+    glimpse_error.FnInConstant -> "Invalid constant"
+    glimpse_error.UnusedTypeParameter(..) -> "Unused type parameter"
+    glimpse_error.UnnecessarySpread -> "Unnecessary spread"
+    glimpse_error.InvalidPatternArity(..) -> "Incorrect arity"
+    glimpse_error.DoubleVariableAssignment -> "Duplicate variable"
+    glimpse_error.DuplicateDefinition(..) -> "Duplicate definition"
+    glimpse_error.DuplicateTypeParameter(..) -> "Duplicate type parameter"
+    glimpse_error.DuplicateLabel(..) -> "Duplicate label"
+    glimpse_error.TypeUsedAsConstructor(..) -> "Invalid type"
+    glimpse_error.ExternalTypeWithConstructors(..) -> "Invalid external type"
+    glimpse_error.IncorrectPatternCount(..) -> "Incorrect arity"
+    glimpse_error.DuplicatePatternVariable(..) -> "Duplicate variable"
+    glimpse_error.MissingPatternVariable(..) -> "Missing variable"
+    glimpse_error.ExtraPatternVariable(..) -> "Extra variable"
+    glimpse_error.RecursiveType -> "Recursive type"
+    glimpse_error.FloatOutOfRange(..) -> "Invalid float"
+    glimpse_error.InvalidEscape(..) -> "Invalid escape"
+    glimpse_error.UnknownTarget(..) -> "Unknown target"
+    glimpse_error.InvalidExternalAttribute -> "Invalid external"
+    glimpse_error.InvalidExternalModule(..) -> "Invalid external"
+    glimpse_error.InvalidExternalFunction(..) -> "Invalid external"
+    glimpse_error.ExternalAttributePlacement(..) -> "Invalid attribute"
+    glimpse_error.InvalidAttributePlacement(..) -> "Invalid attribute"
+    glimpse_error.InvalidTypeName(..) -> "Invalid name"
+    glimpse_error.InvalidFunctionName(..) -> "Invalid name"
+    glimpse_error.InvalidConstantName(..) -> "Invalid name"
+    glimpse_error.InvalidArgumentName(..) -> "Invalid name"
+    glimpse_error.InvalidTypeVariableName(..) -> "Invalid name"
+    glimpse_error.InvalidVariableName(..) -> "Invalid name"
+    glimpse_error.InvalidVariantName(..) -> "Invalid name"
+    glimpse_error.InvalidTypeAliasName(..) -> "Invalid name"
+    glimpse_error.InvalidAttributeShape(..) -> "Invalid attribute"
+    glimpse_error.UnknownAttribute(..) -> "Unknown attribute"
+    glimpse_error.DuplicateAttribute(..) -> "Duplicate attribute"
+    glimpse_error.UnsupportedTarget(..) -> "Unsupported target"
+    glimpse_error.MissingImplementation(..) -> "Missing implementation"
+    glimpse_error.DuplicateImport(..) -> "Duplicate import"
+  }
+}
+
+fn type_check_needle(
+  error: glimpse_error.TypeCheckError,
+) -> Result(String, Nil) {
+  case error {
+    glimpse_error.InvalidReturnType(function_name, ..) -> Ok(function_name)
+    glimpse_error.InvalidName(name) -> Ok(name)
+    glimpse_error.UnknownCustomType(name) -> Ok(name)
+    glimpse_error.RecursiveTypeAlias(name) -> Ok(name)
+    glimpse_error.InvalidArgumentLabel(_, got) -> Ok(got)
+    glimpse_error.UnexpectedLabelledArgument(label) -> Ok(label)
+    glimpse_error.DuplicateCustomType(name) -> Ok(name)
+    glimpse_error.InvalidFieldAccess(_, label) -> Ok(label)
+    glimpse_error.InvalidAnnotation(_, _, name) -> Ok(name)
+    glimpse_error.LowercaseBoolPattern(name) -> Ok(name)
+    glimpse_error.MissingParameterAnnotation(name) -> Ok(name)
+    glimpse_error.MissingReturnAnnotation(function_name) -> Ok(function_name)
+    glimpse_error.UnexpectedTypeHole(name) -> Ok(name)
+    glimpse_error.InvalidUse(..) -> Ok("use")
+    glimpse_error.InexhaustivePattern(..) -> Ok("case")
+    glimpse_error.UnsafeRecordUpdate(name) ->
+      case name {
+        "" -> Error(Nil)
+        value -> Ok(value)
+      }
+    glimpse_error.RecordUpdateOnUnlabelledConstructor(constructor) ->
+      Ok(constructor)
+    glimpse_error.DuplicateArgument(field) -> Ok(field)
+    glimpse_error.DuplicateArgumentName(name) -> Ok(name)
+    glimpse_error.DuplicateConstructor(name) -> Ok(name)
+    glimpse_error.PrivateTypeLeak(name) -> Ok(name)
+    glimpse_error.TodoInConstant -> Ok("todo")
+    glimpse_error.FnInConstant -> Ok("fn")
+    glimpse_error.UnusedTypeParameter(name) -> Ok(name)
+    glimpse_error.UnnecessarySpread -> Ok("..")
+    glimpse_error.DuplicateDefinition(name) -> Ok(name)
+    glimpse_error.DuplicateTypeParameter(name) -> Ok(name)
+    glimpse_error.DuplicateLabel(label) -> Ok(label)
+    glimpse_error.TypeUsedAsConstructor(type_name) -> Ok(type_name)
+    glimpse_error.ExternalTypeWithConstructors(type_name) -> Ok(type_name)
+    glimpse_error.IncorrectPatternCount(..) -> Ok("case")
+    glimpse_error.DuplicatePatternVariable(name) -> Ok(name)
+    glimpse_error.MissingPatternVariable(name) -> Ok(name)
+    glimpse_error.ExtraPatternVariable(name) -> Ok(name)
+    glimpse_error.FloatOutOfRange(value) -> Ok(value)
+    glimpse_error.InvalidEscape(value) -> Ok(value)
+    glimpse_error.UnknownTarget(name) -> Ok(name)
+    glimpse_error.InvalidExternalAttribute -> Ok("external")
+    glimpse_error.InvalidExternalModule(module) -> Ok(module)
+    glimpse_error.InvalidExternalFunction(name) -> Ok(name)
+    glimpse_error.ExternalAttributePlacement(..) -> Ok("external")
+    glimpse_error.InvalidAttributePlacement(attribute, ..) -> Ok(attribute)
+    glimpse_error.InvalidTypeName(name) -> Ok(name)
+    glimpse_error.InvalidFunctionName(name) -> Ok(name)
+    glimpse_error.InvalidConstantName(name) -> Ok(name)
+    glimpse_error.InvalidArgumentName(name) -> Ok(name)
+    glimpse_error.InvalidTypeVariableName(name) -> Ok(name)
+    glimpse_error.InvalidVariableName(name) -> Ok(name)
+    glimpse_error.InvalidVariantName(name) -> Ok(name)
+    glimpse_error.InvalidTypeAliasName(name) -> Ok(name)
+    glimpse_error.InvalidAttributeShape(attribute) -> Ok(attribute)
+    glimpse_error.UnknownAttribute(name) -> Ok(name)
+    glimpse_error.DuplicateAttribute(name) -> Ok(name)
+    glimpse_error.UnsupportedTarget(name) -> Ok(name)
+    glimpse_error.MissingImplementation(name) -> Ok(name)
+    glimpse_error.DuplicateImport(name) -> Ok(name)
+    _ -> Error(Nil)
+  }
+}
+
+fn type_check_hint(error: glimpse_error.TypeCheckError) -> Result(String, Nil) {
+  case error {
+    glimpse_error.InvalidName(..) ->
+      Ok("Check the spelling and that the variable is defined.")
+    glimpse_error.UnknownCustomType(..) ->
+      Ok("Check the type name and that it is imported.")
+    glimpse_error.PrivateTypeLeak(..) ->
+      Ok("Make the type public or hide it from the public interface.")
+    glimpse_error.UnsupportedTarget(name) ->
+      Ok("Use a python-compatible alternative to `" <> name <> "`.")
+    glimpse_error.MissingImplementation(..) ->
+      Ok("Add a function body or an `@external(python, ...)` implementation.")
+    glimpse_error.DuplicateImport(..) ->
+      Ok("Remove one of the duplicate imports.")
+    glimpse_error.InexhaustivePattern(..) ->
+      Ok("Add the missing clause or use `panic` for impossible cases.")
+    glimpse_error.InvalidEscape(..) ->
+      Ok(
+        "Valid escapes are `\\n`, `\\r`, `\\t`, `\\\"`, `\\\\`, and `\\u{...}`.",
+      )
+    _ -> Error(Nil)
   }
 }
