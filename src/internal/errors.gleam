@@ -157,16 +157,9 @@ fn find_line(
       let line_end = base + string.byte_size(line)
       case offset <= line_end {
         True -> {
-          let column = offset - base + 1
-          let max_col = string.length(line) + 1
-          let col = case column > max_col {
-            True -> max_col
-            False ->
-              case column < 1 {
-                True -> 1
-                False -> column
-              }
-          }
+          // Clamp to the line so a span ending at a newline still
+          // underlines the last character rather than running past it.
+          let col = int.clamp(offset - base + 1, 1, string.length(line) + 1)
           #(line_number, col, line)
         }
         False -> find_line(rest, offset, line_number + 1, line_end + 1)
