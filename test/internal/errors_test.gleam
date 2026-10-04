@@ -1,3 +1,4 @@
+import glance
 import gleam/list
 import gleam/string
 import glexer
@@ -33,7 +34,7 @@ pub fn position_in_second_line_test() {
       "abc\nd5fg",
       "src/main.gleam",
     )
-    == "error: Syntax error\n  ┌─ src/main.gleam:2:2\n  │\n2 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
+    == "error: Syntax error\n  ┌─ src/main.gleam:2:2\n  │\n1 │ abc\n2 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn position_after_newline_test() {
@@ -43,7 +44,7 @@ pub fn position_after_newline_test() {
       "abc\n\nd5fg",
       "src/main.gleam",
     )
-    == "error: Syntax error\n  ┌─ src/main.gleam:3:2\n  │\n3 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
+    == "error: Syntax error\n  ┌─ src/main.gleam:3:2\n  │\n2 │ \n3 │ d5fg\n  │  ^\n\nUnexpected token `5`.\nHint: Check the Gleam syntax around this location."
 }
 
 pub fn type_check_error_in_module_test() {
@@ -59,7 +60,7 @@ pub fn type_check_error_in_entry_module_test() {
       "",
       glimpse_error.DuplicateDefinition("wibble"),
     )
-    == "error: Duplicate definition\n\nThe name `wibble` has already been defined in this module."
+    == "error: Duplicate definition\n\nThe name `wibble` has already been defined in this module.\n\nHint: Rename one of the definitions."
 }
 
 pub fn type_check_error_invalid_return_type_test() {
@@ -67,7 +68,7 @@ pub fn type_check_error_invalid_return_type_test() {
       "main",
       glimpse_error.InvalidReturnType("main", "Int", "String"),
     )
-    == "error: Incorrect return type\n  ┌─ main.gleam\n  │\n\nThe function `main` has a return type of `String` but returns a value of type `Int`."
+    == "error: Incorrect return type\n  ┌─ main.gleam\n  │\n\nThe function `main` has a return type of `String` but returns a value of type `Int`.\n\nHint: Check the value returned on every code path."
 }
 
 pub fn type_check_error_inexhaustive_test() {
@@ -83,7 +84,7 @@ pub fn type_check_error_lowercase_bool_pattern_test() {
       "main",
       glimpse_error.LowercaseBoolPattern("true"),
     )
-    == "error: Invalid pattern\n  ┌─ main.gleam\n  │\n\nThe pattern `true` is written in lowercase, so it is treated as a variable rather than the `True` or `False` value. Capitalise it to match the boolean value."
+    == "error: Invalid pattern\n  ┌─ main.gleam\n  │\n\nThe pattern `true` is written in lowercase, so it is treated as a variable rather than the `True` or `False` value. Capitalise it to match the boolean value.\n\nHint: Capitalise it to `True` or `False`."
 }
 
 pub fn type_check_error_argument_arity_test() {
@@ -91,29 +92,77 @@ pub fn type_check_error_argument_arity_test() {
       "main",
       glimpse_error.InvalidPatternArity(2, 1),
     )
-    == "error: Incorrect arity\n  ┌─ main.gleam\n  │\n\nThis pattern expects 2 argument(s) but has 1."
+    == "error: Incorrect arity\n  ┌─ main.gleam\n  │\n\nThis pattern expects 2 argument(s) but has 1.\n\nHint: Check the constructor definition for its fields."
 }
 
 pub fn type_check_error_with_source_snippet_test() {
   let source = "pub fn main() -> Wibble {\n  todo\n}"
   assert errors.format_glimpse_type_check_error_with_source(
       "main",
-      glimpse_error.UnknownCustomType("Wibble"),
+      glimpse_error.LocatedError(
+        glance.Span(-1, -1),
+        glimpse_error.UnknownCustomType("Wibble"),
+      ),
       source,
       "src/main.gleam",
     )
-    == "error: Unknown type\n  ┌─ src/main.gleam:1:18\n  │\n1 │ pub fn main() -> Wibble {\n  │                  ^^^^^^\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
+    == "error: Unknown type\n  ┌─ src/main.gleam:1:18\n  │\n1 │ pub fn main() -> Wibble {\n  │                  ^^^^^^\n2 │   todo\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
+}
+
+pub fn type_check_error_with_span_uses_span_not_needle_test() {
+  // The span points at the annotation even though the identifier also
+  // appears later in the file; the frame must follow the span.
+  let source = "pub fn main() -> Wibble {\n  Wibble\n}"
+  assert errors.format_glimpse_type_check_error_with_source(
+      "main",
+      glimpse_error.LocatedError(
+        glance.Span(17, 23),
+        glimpse_error.UnknownCustomType("Wibble"),
+      ),
+      source,
+      "src/main.gleam",
+    )
+    == "error: Unknown type\n  ┌─ src/main.gleam:1:18\n  │\n1 │ pub fn main() -> Wibble {\n  │                  ^^^^^^\n2 │   Wibble\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
 }
 
 pub fn type_check_error_with_missing_needle_test() {
   // A needle that never appears falls back to the file header.
   assert errors.format_glimpse_type_check_error_with_source(
       "main",
-      glimpse_error.UnknownCustomType("Wibble"),
+      glimpse_error.LocatedError(
+        glance.Span(-1, -1),
+        glimpse_error.UnknownCustomType("Wibble"),
+      ),
       "pub fn main() -> Int {\n  1\n}",
       "src/main.gleam",
     )
     == "error: Unknown type\n  ┌─ src/main.gleam\n  │\n\nUnknown type `Wibble`.\n\nHint: Check the type name and that it is imported."
+}
+
+pub fn duplicate_definition_shows_both_sites_test() {
+  let source = "pub fn f() -> Int {\n  1\n}\npub fn f() -> Int {\n  2\n}"
+  let message =
+    errors.format_glimpse_type_check_error_with_source(
+      "main",
+      glimpse_error.LocatedError(
+        glance.Span(-1, -1),
+        glimpse_error.DuplicateDefinition("f"),
+      ),
+      source,
+      "src/main.gleam",
+    )
+  // The primary frame follows the first occurrence, and each additional
+  // definition gets a labelled secondary frame.
+  assert string.contains(message, "error: Duplicate definition")
+  assert string.contains(message, "first defined here")
+  assert string.contains(message, "redefined here")
+  assert string.contains(message, "Hint: Rename one of the definitions.")
+}
+
+pub fn multiline_span_underlines_first_line_test() {
+  let source = "pub fn main() -> Int {\n  1\n}"
+  assert errors.frame_for_span(source, 0, 27, "src/main.gleam", "")
+    == "  ┌─ src/main.gleam:1:1\n  │\n1 │ pub fn main() -> Int {\n  │ ^^^^^^^^^^^^^^^^^^^^^^\n2 │   1\n"
 }
 
 // Spot-check that the full catalogue of error variants renders without

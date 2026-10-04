@@ -1,5 +1,8 @@
 import glance
 import gleam/int
+import gleam/list
+import gleam/option
+import gleam/result
 import gleam/string
 import glexer
 import glexer/token
@@ -37,42 +40,92 @@ fn display_file(filename: String) -> String {
   }
 }
 
-// Renders a Gleam-style code frame for a byte offset into source:
+// Renders a Gleam-style code frame for a byte span in source, with one line
+// of context on either side when available:
 //
 //   ┌─ src/main.gleam:2:5
 //   │
-// 2 │ pub fn main() {
-//   │     ^^^
+// 1 │ pub fn main() {
+// 2 │   1 + "hello"
+//   │       ^^^^^^^
+// 3 │ }
+//
+// Multi-line spans underline from the start column to the end of the first
+// line. An optional label is printed after the carets.
+pub fn frame_for_span(
+  source: String,
+  start: Int,
+  end: Int,
+  file: String,
+  label: String,
+) -> String {
+  let #(start_line, start_col, start_text) = line_col_at_offset(source, start)
+  let #(end_line, end_col, _) = line_col_at_offset(source, end)
+  let lines = string.split(source, "\n")
+  let total = list.length(lines)
+  let line_at = fn(n) {
+    list.drop(lines, n - 1) |> list.first |> result.unwrap("")
+  }
+  let gutter_width =
+    int.to_string(case start_line + 1 > total {
+      True -> start_line
+      False -> start_line + 1
+    })
+    |> string.length
+  let gutter = fn(n) {
+    let text = int.to_string(n)
+    string.repeat(" ", gutter_width - string.length(text)) <> text <> " │ "
+  }
+  let blank = string.repeat(" ", gutter_width) <> " │ "
+  let width = case end_line == start_line {
+    True ->
+      case end_col - start_col < 1 {
+        True -> 1
+        False -> end_col - start_col
+      }
+    False ->
+      case string.length(start_text) - start_col + 1 < 1 {
+        True -> 1
+        False -> string.length(start_text) - start_col + 1
+      }
+  }
+  let carets =
+    blank
+    <> string.repeat(" ", start_col - 1)
+    <> string.repeat("^", width)
+    <> case label {
+      "" -> ""
+      text -> " " <> text
+    }
+  "  ┌─ "
+  <> file
+  <> ":"
+  <> int.to_string(start_line)
+  <> ":"
+  <> int.to_string(start_col)
+  <> "\n  │\n"
+  <> case start_line > 1 {
+    True -> gutter(start_line - 1) <> line_at(start_line - 1) <> "\n"
+    False -> ""
+  }
+  <> gutter(start_line)
+  <> start_text
+  <> "\n"
+  <> carets
+  <> "\n"
+  <> case start_line < total {
+    True -> gutter(start_line + 1) <> line_at(start_line + 1) <> "\n"
+    False -> ""
+  }
+}
+
 pub fn frame_for_offset(
   source: String,
   byte_offset: Int,
   file: String,
   underline_len: Int,
 ) -> String {
-  let #(line_number, column, line_text) =
-    line_col_at_offset(source, byte_offset)
-  let line_no = int.to_string(line_number)
-  let gutter = string.repeat(" ", string.length(line_no))
-  let width = case underline_len < 1 {
-    True -> 1
-    False -> underline_len
-  }
-  "  ┌─ "
-  <> file
-  <> ":"
-  <> line_no
-  <> ":"
-  <> int.to_string(column)
-  <> "\n  │\n"
-  <> line_no
-  <> " │ "
-  <> line_text
-  <> "\n"
-  <> gutter
-  <> " │ "
-  <> string.repeat(" ", column - 1)
-  <> string.repeat("^", width)
-  <> "\n"
+  frame_for_span(source, byte_offset, byte_offset + underline_len, file, "")
 }
 
 // A header-only frame when no byte offset is known, e.g. `  ┌─ src/foo.gleam`.
@@ -182,15 +235,21 @@ pub fn format_glimpse_type_check_error(
   module: String,
   error: glimpse_error.TypeCheckError,
 ) -> String {
-  format_glimpse_type_check_error_with_source(module, error, "", "")
+  format_glimpse_type_check_error_with_source(
+    module,
+    glimpse_error.LocatedError(glance.Span(-1, -1), error),
+    "",
+    "",
+  )
 }
 
 pub fn format_glimpse_type_check_error_with_source(
   module: String,
-  error: glimpse_error.TypeCheckError,
+  located: glimpse_error.LocatedError,
   source: String,
   file: String,
 ) -> String {
+  let error = located.error
   let title = type_check_title(error)
   let message = type_check_message(error)
   let header = "error: " <> title <> "\n"
@@ -206,14 +265,19 @@ pub fn format_glimpse_type_check_error_with_source(
     "", _ -> ""
     path, "" -> frame_header(path)
     path, contents ->
-      case type_check_needle(error) {
-        Error(_) -> frame_header(path)
-        Ok(needle) ->
-          case find_needle_offset(contents, needle) {
-            Error(_) -> frame_header(path)
-            Ok(offset) ->
-              frame_for_offset(contents, offset, path, string.length(needle))
+      case located.span {
+        glance.Span(start, _) if start < 0 -> {
+          // Labelling every involved site explains a duplicate fully, so
+          // the single-needle guess is only shown when no sites are found.
+          let extras = secondary_frames(contents, path, Error(Nil), error)
+          case extras {
+            "" -> needle_frame(contents, path, error)
+            _ -> extras
           }
+        }
+        glance.Span(start, end) ->
+          frame_for_span(contents, start, end, path, "")
+          <> secondary_frames(contents, path, Ok(located.span), error)
       }
   }
   let suffix = case type_check_hint(error) {
@@ -221,6 +285,153 @@ pub fn format_glimpse_type_check_error_with_source(
     Error(_) -> ""
   }
   header <> frame <> "\n" <> message <> suffix
+}
+
+// Fallback for errors raised without a span: point at the first occurrence
+// of the offending identifier, or just the file header when it is absent.
+fn needle_frame(
+  contents: String,
+  path: String,
+  error: glimpse_error.TypeCheckError,
+) -> String {
+  case type_check_needle(error) {
+    Error(_) -> frame_header(path)
+    Ok(needle) ->
+      case find_needle_offset(contents, needle) {
+        Error(_) -> frame_header(path)
+        Ok(offset) ->
+          frame_for_offset(contents, offset, path, string.length(needle))
+      }
+  }
+}
+
+// Extra frames pointing at the other sites involved in an error, e.g. the
+// first definition alongside a duplicate. The primary span is excluded.
+fn secondary_frames(
+  contents: String,
+  path: String,
+  primary: Result(glance.Span, Nil),
+  error: glimpse_error.TypeCheckError,
+) -> String {
+  case glance.module(contents) {
+    Error(_) -> ""
+    Ok(ast) ->
+      find_duplicate_spans(ast, error)
+      |> list.filter(fn(pair) {
+        let #(span, _) = pair
+        case primary {
+          Ok(first) -> span != first
+          Error(_) -> True
+        }
+      })
+      |> list.map(fn(pair) {
+        let #(span, label) = pair
+        case span {
+          glance.Span(start, end) ->
+            frame_for_span(contents, start, end, path, label)
+        }
+      })
+      |> string.join("")
+  }
+}
+
+fn label_spans(
+  spans: List(glance.Span),
+  first: String,
+  rest: String,
+) -> List(#(glance.Span, String)) {
+  let ordered =
+    list.sort(spans, fn(a, b) {
+      case a, b {
+        glance.Span(start_a, _), glance.Span(start_b, _) ->
+          int.compare(start_a, start_b)
+      }
+    })
+  case ordered {
+    [] -> []
+    [head, ..tail] -> [
+      #(head, first),
+      ..list.map(tail, fn(span) { #(span, rest) })
+    ]
+  }
+}
+
+fn find_duplicate_spans(
+  module: glance.Module,
+  error: glimpse_error.TypeCheckError,
+) -> List(#(glance.Span, String)) {
+  case error {
+    glimpse_error.DuplicateDefinition(name) -> {
+      let functions =
+        list.filter_map(module.functions, fn(definition) {
+          case definition.definition.name == name {
+            True -> Ok(definition.definition.location)
+            False -> Error(Nil)
+          }
+        })
+      let constants =
+        list.filter_map(module.constants, fn(definition) {
+          case definition.definition.name == name {
+            True -> Ok(definition.definition.location)
+            False -> Error(Nil)
+          }
+        })
+      label_spans(
+        list.append(functions, constants),
+        "first defined here",
+        "redefined here",
+      )
+    }
+    glimpse_error.DuplicateImport(name) ->
+      label_spans(
+        list.filter_map(module.imports, fn(definition) {
+          case import_binding(definition.definition) == name {
+            True -> Ok(definition.definition.location)
+            False -> Error(Nil)
+          }
+        }),
+        "first imported here",
+        "imported again here",
+      )
+    glimpse_error.DuplicateCustomType(name) ->
+      label_spans(
+        list.filter_map(module.custom_types, fn(definition) {
+          case definition.definition.name == name {
+            True -> Ok(definition.definition.location)
+            False -> Error(Nil)
+          }
+        }),
+        "first defined here",
+        "redefined here",
+      )
+    glimpse_error.DuplicateConstructor(name) -> {
+      let types =
+        list.filter_map(module.custom_types, fn(definition) {
+          case
+            list.any(definition.definition.variants, fn(variant) {
+              variant.name == name
+            })
+          {
+            True -> Ok(definition.definition.location)
+            False -> Error(Nil)
+          }
+        })
+      label_spans(types, "constructor defined here", "defined again here")
+    }
+    _ -> []
+  }
+}
+
+fn import_binding(import_: glance.Import) -> String {
+  case import_.alias {
+    option.Some(glance.Named(name)) -> name
+    option.Some(glance.Discarded(name)) -> name
+    option.None ->
+      import_.module
+      |> string.split("/")
+      |> list.last
+      |> result.unwrap(import_.module)
+  }
 }
 
 fn type_check_message(error: glimpse_error.TypeCheckError) -> String {
@@ -653,24 +864,149 @@ fn type_check_needle(
 
 fn type_check_hint(error: glimpse_error.TypeCheckError) -> Result(String, Nil) {
   case error {
+    glimpse_error.InvalidReturnType(..) ->
+      Ok("Check the value returned on every code path.")
     glimpse_error.InvalidName(..) ->
       Ok("Check the spelling and that the variable is defined.")
+    glimpse_error.InvalidType(..) ->
+      Ok("Check the annotated type against the value produced here.")
+    glimpse_error.InvalidBinOp(..) ->
+      Ok("Convert one side so both sides have the expected type.")
     glimpse_error.UnknownCustomType(..) ->
       Ok("Check the type name and that it is imported.")
+    glimpse_error.RecursiveTypeAlias(..) ->
+      Ok("Break the cycle with a concrete type on one side.")
+    glimpse_error.NotCallable(..) ->
+      Ok("Only functions and constructors can be called.")
+    glimpse_error.InvalidArguments(..) ->
+      Ok("Check the function definition for the expected arguments.")
+    glimpse_error.InvalidArgumentLabel(..) ->
+      Ok("Check the function definition for the expected labels.")
+    glimpse_error.UnexpectedLabelledArgument(..) ->
+      Ok("Remove the label or use a function that accepts labelled arguments.")
+    glimpse_error.DuplicateCustomType(..) ->
+      Ok("Rename one of the types or remove the duplicate.")
+    glimpse_error.InvalidFieldAccess(..) ->
+      Ok("Check the field name and the type definition.")
+    glimpse_error.UnexpectedType(..) ->
+      Ok("Check the value produced here against what is expected.")
+    glimpse_error.InvalidAnnotation(..) ->
+      Ok("Fix the annotation or the value so they agree.")
+    glimpse_error.CaseClauseMismatch(..) ->
+      Ok("Make every clause return the same type.")
+    glimpse_error.PatternMismatch(..) ->
+      Ok("Match on the actual type of the value being scrutinised.")
+    glimpse_error.InvalidGuard(..) ->
+      Ok("Guards must return a Bool; move other logic into the clause body.")
+    glimpse_error.InvalidGuardExpression ->
+      Ok(
+        "Guards only allow variables, literals, field access, and boolean operators.",
+      )
+    glimpse_error.LowercaseBoolPattern(..) ->
+      Ok("Capitalise it to `True` or `False`.")
+    glimpse_error.MissingParameterAnnotation(..) ->
+      Ok("Add a type annotation such as `name: Type`.")
+    glimpse_error.MissingReturnAnnotation(..) ->
+      Ok("Add a return annotation such as `-> Type`.")
+    glimpse_error.UnexpectedTypeHole(..) ->
+      Ok("Replace the hole with a concrete type.")
+    glimpse_error.InvalidUse(..) ->
+      Ok("`use` takes exactly one callback; check the callback arity.")
+    glimpse_error.InexhaustivePattern(..) ->
+      Ok("Add the missing clause or use `panic` for impossible cases.")
+    glimpse_error.InvalidBitStringSegment(..) ->
+      Ok("Check the segment options against the bit-array syntax.")
+    glimpse_error.UnsafeRecordUpdate(..) ->
+      Ok("Match on the variant first, or construct the record explicitly.")
+    glimpse_error.RecordUpdateOnUnlabelledConstructor(..) ->
+      Ok("Add labels to the constructor fields or construct it explicitly.")
+    glimpse_error.DuplicateArgument(..) ->
+      Ok("Remove one of the repeated fields.")
+    glimpse_error.MissingField(..) ->
+      Ok("Check the type definition for field names.")
+    glimpse_error.DuplicateArgumentName(..) ->
+      Ok("Give each argument a unique label.")
+    glimpse_error.UnlabelledArgumentAfterLabelled ->
+      Ok("Move the unlabelled argument before the labelled ones, or label it.")
+    glimpse_error.PositionalArgumentAfterLabelled ->
+      Ok("Move the positional argument before the labelled ones, or label it.")
+    glimpse_error.DuplicateConstructor(..) ->
+      Ok("Rename one of the constructors.")
     glimpse_error.PrivateTypeLeak(..) ->
       Ok("Make the type public or hide it from the public interface.")
+    glimpse_error.TodoInConstant ->
+      Ok("Replace `todo` with the final constant value.")
+    glimpse_error.InvalidConstantExpression ->
+      Ok("Constants only allow literals, references, and construction.")
+    glimpse_error.FnInConstant ->
+      Ok("Move the function to the module body or a `let` binding.")
+    glimpse_error.UnusedTypeParameter(..) ->
+      Ok("Remove the parameter or use it in the definition.")
+    glimpse_error.UnnecessarySpread -> Ok("Remove the `..` spread.")
+    glimpse_error.InvalidPatternArity(..) ->
+      Ok("Check the constructor definition for its fields.")
+    glimpse_error.DoubleVariableAssignment ->
+      Ok("Use each variable only once in the pattern.")
+    glimpse_error.DuplicateDefinition(..) ->
+      Ok("Rename one of the definitions.")
+    glimpse_error.DuplicateTypeParameter(..) ->
+      Ok("Declare each type parameter only once.")
+    glimpse_error.DuplicateLabel(..) -> Ok("Give each field a unique label.")
+    glimpse_error.TypeUsedAsConstructor(..) -> Ok("Remove the parentheses.")
+    glimpse_error.ExternalTypeWithConstructors(..) ->
+      Ok("Remove either the `@external` attribute or the constructors.")
+    glimpse_error.IncorrectPatternCount(..) ->
+      Ok("Give every clause one pattern per subject.")
+    glimpse_error.DuplicatePatternVariable(..) ->
+      Ok("Bind each variable only once per pattern.")
+    glimpse_error.MissingPatternVariable(..) ->
+      Ok("Bind the variable in every alternative, or not at all.")
+    glimpse_error.ExtraPatternVariable(..) ->
+      Ok("Bind the variable in the earlier alternatives too.")
+    glimpse_error.RecursiveType ->
+      Ok("Break the cycle with a concrete type on one side.")
+    glimpse_error.FloatOutOfRange(..) ->
+      Ok("Use a smaller literal or parse the value at runtime.")
+    glimpse_error.InvalidEscape(..) ->
+      Ok(
+        "Valid escapes are `\\n`, `\\r`, `\\t`, `\\\"`, `\\\\`, and `\\u{...}`.",
+      )
+    glimpse_error.UnknownTarget(..) ->
+      Ok("Valid targets are `erlang` and `javascript`.")
+    glimpse_error.InvalidExternalAttribute ->
+      Ok("Write it as `@external(Target, \"module\", \"function\")`.")
+    glimpse_error.InvalidExternalModule(..) ->
+      Ok("Use a valid module path with no spaces.")
+    glimpse_error.InvalidExternalFunction(..) ->
+      Ok("Use a valid function name with no leading digit or dash.")
+    glimpse_error.ExternalAttributePlacement(..) ->
+      Ok("Move it onto a function or custom type declaration.")
+    glimpse_error.InvalidAttributePlacement(..) ->
+      Ok("Move the attribute to a declaration that allows it.")
+    glimpse_error.InvalidTypeName(..) ->
+      Ok("Start with an uppercase letter and avoid underscores.")
+    glimpse_error.InvalidFunctionName(..) -> Ok("Write it in snake_case.")
+    glimpse_error.InvalidConstantName(..) -> Ok("Write it in snake_case.")
+    glimpse_error.InvalidArgumentName(..) -> Ok("Write it in snake_case.")
+    glimpse_error.InvalidTypeVariableName(..) -> Ok("Write it in snake_case.")
+    glimpse_error.InvalidVariableName(..) -> Ok("Write it in snake_case.")
+    glimpse_error.InvalidVariantName(..) ->
+      Ok("Start with an uppercase letter and avoid underscores.")
+    glimpse_error.InvalidTypeAliasName(..) ->
+      Ok("Start with an uppercase letter and avoid underscores.")
+    glimpse_error.InvalidAttributeShape(..) ->
+      Ok("Check the attribute documentation for its arguments.")
+    glimpse_error.UnknownAttribute(..) ->
+      Ok(
+        "Valid attributes are `@external`, `@internal`, `@deprecated`, and `@target`.",
+      )
+    glimpse_error.DuplicateAttribute(..) ->
+      Ok("Remove one of the duplicate attributes.")
     glimpse_error.UnsupportedTarget(name) ->
       Ok("Use a python-compatible alternative to `" <> name <> "`.")
     glimpse_error.MissingImplementation(..) ->
       Ok("Add a function body or an `@external(python, ...)` implementation.")
     glimpse_error.DuplicateImport(..) ->
       Ok("Remove one of the duplicate imports.")
-    glimpse_error.InexhaustivePattern(..) ->
-      Ok("Add the missing clause or use `panic` for impossible cases.")
-    glimpse_error.InvalidEscape(..) ->
-      Ok(
-        "Valid escapes are `\\n`, `\\r`, `\\t`, `\\\"`, `\\\\`, and `\\u{...}`.",
-      )
-    _ -> Error(Nil)
   }
 }

@@ -271,48 +271,55 @@ fn typecheck_package(
               // typecheck without it — with a loud warning rather than failing
               // the build. Src-tree modules always hard-error so a broken
               // library can never be silenced here.
-              Error(glimpse_error.UnsupportedTarget(name)) -> {
-                let skippable = !set.contains(src_modules, module_name)
-                case skippable {
-                  True -> {
-                    let dropped = dependent_closure(graph, module_name)
-                    dropped
-                    |> set.to_list
-                    |> list.each(fn(dropped_name) {
-                      io.println_error(
-                        "Skipping test/dev module `"
-                        <> dropped_name
-                        <> "`: it depends on `"
-                        <> module_name
-                        <> "`, which uses `"
-                        <> name
-                        <> "`, which has no python implementation",
-                      )
-                    })
-                    Ok(#(
-                      glimpse.Package(
-                        ..package,
-                        modules: set.fold(dropped, package.modules, dict.delete),
-                      ),
-                      envs,
-                    ))
+              Error(located) ->
+                case located.error {
+                  glimpse_error.UnsupportedTarget(name) -> {
+                    let skippable = !set.contains(src_modules, module_name)
+                    case skippable {
+                      True -> {
+                        let dropped = dependent_closure(graph, module_name)
+                        dropped
+                        |> set.to_list
+                        |> list.each(fn(dropped_name) {
+                          io.println_error(
+                            "Skipping test/dev module `"
+                            <> dropped_name
+                            <> "`: it depends on `"
+                            <> module_name
+                            <> "`, which uses `"
+                            <> name
+                            <> "`, which has no python implementation",
+                          )
+                        })
+                        Ok(#(
+                          glimpse.Package(
+                            ..package,
+                            modules: set.fold(
+                              dropped,
+                              package.modules,
+                              dict.delete,
+                            ),
+                          ),
+                          envs,
+                        ))
+                      }
+                      False ->
+                        Error(errors.GlimpseTypeCheckError(
+                          module_name,
+                          located,
+                          module_source(project, module_name),
+                          module_display_path(project, src_modules, module_name),
+                        ))
+                    }
                   }
-                  False ->
+                  _ ->
                     Error(errors.GlimpseTypeCheckError(
                       module_name,
-                      glimpse_error.UnsupportedTarget(name),
+                      located,
                       module_source(project, module_name),
                       module_display_path(project, src_modules, module_name),
                     ))
                 }
-              }
-              Error(error) ->
-                Error(errors.GlimpseTypeCheckError(
-                  module_name,
-                  error,
-                  module_source(project, module_name),
-                  module_display_path(project, src_modules, module_name),
-                ))
             }
         }
       })

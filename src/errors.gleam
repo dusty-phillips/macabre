@@ -22,7 +22,7 @@ pub type Error {
   GlimpseImportError(error: glimpse_error.GlimpseImportError)
   GlimpseTypeCheckError(
     module: String,
-    error: glimpse_error.TypeCheckError,
+    located: glimpse_error.LocatedError,
     source: String,
     file: String,
   )
@@ -37,30 +37,40 @@ pub fn format_error(error: Error) -> String {
       "error: File or directory not found\n\n`"
       <> filename
       <> "` was not found."
-    GitCloneError(name, _) ->
+    GitCloneError(name, #(_, output)) ->
       "error: Unable to clone dependency\n\nCould not clone `"
       <> name
-      <> "`.\nHint: Check the repository URL and your network connection."
-    GitCheckoutError(name, git_ref, _) ->
+      <> "`."
+      <> command_output(output)
+      <> "\nHint: Check the repository URL and your network connection."
+    GitCheckoutError(name, git_ref, #(_, output)) ->
       "error: Unable to checkout dependency\n\nCould not checkout `"
       <> git_ref
       <> "` in `"
       <> name
-      <> "`.\nHint: Check that the ref exists."
-    HexDownloadError(name, version, _) ->
+      <> "`."
+      <> command_output(output)
+      <> "\nHint: Check that the ref exists."
+    HexDownloadError(name, version, #(_, output)) ->
       "error: Unable to download package\n\nCould not download `"
       <> name
       <> "` version `"
       <> version
-      <> "`.\nHint: Check the version and your network connection."
-    HexExtractError(name, version, _) ->
+      <> "`."
+      <> command_output(output)
+      <> "\nHint: Check the version and your network connection."
+    HexExtractError(name, version, #(_, output)) ->
       "error: Unable to extract package\n\nCould not extract `"
       <> name
       <> "` version `"
       <> version
       <> "`."
-    TomlParseError(filename, _) ->
-      "error: Invalid TOML\n\nCould not parse `" <> filename <> "`."
+      <> command_output(output)
+    TomlParseError(filename, parse_error) ->
+      "error: Invalid TOML\n\nCould not parse `"
+      <> filename
+      <> "`: "
+      <> tom_parse_detail(parse_error)
     TomlFieldError(filename, tom.NotFound(key)) ->
       "error: Missing configuration\n\nMissing field `"
       <> string.join(key, ",")
@@ -78,29 +88,40 @@ pub fn format_error(error: Error) -> String {
       <> got
     FileReadError(filename, simplifile.Enoent) ->
       "error: File not found\n\n`" <> filename <> "` was not found."
-    FileReadError(filename, _) ->
-      "error: Unable to read file\n\nCould not read `" <> filename <> "`."
-    FileWriteError(filename, _) ->
-      "error: Unable to write file\n\nCould not write `" <> filename <> "`."
-    DeleteError(filename, _) ->
-      "error: Unable to delete\n\nCould not delete `" <> filename <> "`."
-    MkdirError(filename, _) ->
+    FileReadError(filename, cause) ->
+      "error: Unable to read file\n\nCould not read `"
+      <> filename
+      <> "`."
+      <> os_cause(cause)
+    FileWriteError(filename, cause) ->
+      "error: Unable to write file\n\nCould not write `"
+      <> filename
+      <> "`."
+      <> os_cause(cause)
+    DeleteError(filename, cause) ->
+      "error: Unable to delete\n\nCould not delete `"
+      <> filename
+      <> "`."
+      <> os_cause(cause)
+    MkdirError(filename, cause) ->
       "error: Unable to create directory\n\nCould not create `"
       <> filename
       <> "`."
-    CopyFileError(src, dst, _) ->
+      <> os_cause(cause)
+    CopyFileError(src, dst, cause) ->
       "error: Unable to copy file\n\nCould not copy `"
       <> src
       <> "` to `"
       <> dst
       <> "`."
+      <> os_cause(cause)
     GlanceParseError(error, filename, contents) ->
       internal.format_glance_error(error, filename, contents)
     GlimpseImportError(error) -> format_glimpse_import_error(error)
-    GlimpseTypeCheckError(module, error, source, file) ->
+    GlimpseTypeCheckError(module, located, source, file) ->
       internal.format_glimpse_type_check_error_with_source(
         module,
-        error,
+        located,
         source,
         file,
       )
@@ -140,5 +161,27 @@ fn format_glimpse_import_error(
       "error: Invalid import\n\nThe module `"
       <> module_name
       <> "` is a dev-only dependency and cannot be imported from a source module.\nHint: Move the import to a test or dev module."
+  }
+}
+
+// The captured output of a failed shell command, shown only when non-empty.
+fn command_output(output: String) -> String {
+  case string.trim(output) {
+    "" -> ""
+    trimmed -> "\n\nCommand output:\n" <> trimmed
+  }
+}
+
+// The operating-system cause of a filesystem failure, e.g. `Eacces`.
+fn os_cause(cause: simplifile.FileError) -> String {
+  "\n\nCause: " <> string.inspect(cause)
+}
+
+fn tom_parse_detail(error: tom.ParseError) -> String {
+  case error {
+    tom.Unexpected(got, expected) ->
+      "unexpected `" <> got <> "`, expected " <> expected
+    tom.KeyAlreadyInUse(key) ->
+      "duplicate key `" <> string.join(key, ",") <> "`"
   }
 }
