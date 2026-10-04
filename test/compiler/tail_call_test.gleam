@@ -327,3 +327,47 @@ from gleam import list
 
 "
 }
+
+// A case nested directly in another case's clause (rather than as the whole
+// right-hand side of the `let`) inside a tail-recursive loop: the inner
+// driver's value must be assigned to the `let` binding, never returned early
+// out of the loop.
+pub fn nested_case_in_clause_in_loop_assigns_test() {
+  let assert Ok(module) =
+    "fn f(n: Int) -> Int {
+    case n <= 0 {
+      True -> {
+        let c = case n > 10 {
+          True -> 100
+          False ->
+            case n < 1 {
+              True -> 1
+              False -> n
+            }
+        }
+        c
+      }
+      False -> f(n - 1)
+    }
+  }"
+    |> glance.module
+  assert compiler.compile_module(module) == "from __future__ import annotations
+from gleam_builtins import *
+
+def f(n):
+    while True:
+        _case_subject = n <= 0
+        if _case_subject:
+            _case_subject = n > 10
+            if _case_subject:
+                c = 100
+            else:
+                _case_subject = n < 1
+                if _case_subject:
+                    c = 1
+                else:
+                    c = n
+            return c
+        else:
+            n = n - 1"
+}

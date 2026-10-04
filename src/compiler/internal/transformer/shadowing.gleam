@@ -2346,15 +2346,87 @@ fn inline_tail(
     DriverPositionAssign(target) ->
       case list.reverse(body) {
         [python.Return(value), ..preceding] ->
+          case expression_contains_gleam_tco(value) {
+            True -> option.None
+            False ->
+              option.Some(
+                list.append(list.reverse(preceding), [
+                  python.SimpleAssignment(target, value),
+                ]),
+              )
+          }
+        [python.Match(subject, cases), ..preceding] ->
+          case assign_match_tails(cases, target) {
+            option.Some(new_cases) ->
+              option.Some(
+                list.append(list.reverse(preceding), [
+                  python.Match(subject: subject, cases: new_cases),
+                ]),
+              )
+            option.None -> option.None
+          }
+        _ -> option.None
+      }
+    DriverPositionOther -> option.None
+  }
+}
+
+// Rewrites trailing value-returns inside match arms into assignments to
+// `target`, so a driver inlined in assignment position never leaks a `return`
+// into the enclosing flow. Nested matches recurse; anything else is kept
+// as-is. Bails (returning `None`, leaving the driver as a closure) when an
+// arm tail cannot be assigned: a `GleamTco` marker that must keep flowing to
+// the loop dispatch, or a trailing `if` with no else branch to attach.
+fn assign_match_tails(
+  cases: List(python.MatchCase),
+  target: String,
+) -> option.Option(List(python.MatchCase)) {
+  list.fold(cases, option.Some([]), fn(acc, match_case) {
+    case acc {
+      option.None -> option.None
+      option.Some(done) -> {
+        let python.MatchCase(pattern, guard, arm_body) = match_case
+        case assign_tails(arm_body, target) {
+          option.Some(new_body) ->
+            option.Some(
+              list.append(done, [
+                python.MatchCase(pattern, guard, new_body),
+              ]),
+            )
+          option.None -> option.None
+        }
+      }
+    }
+  })
+}
+
+fn assign_tails(
+  body: List(python.Statement),
+  target: String,
+) -> option.Option(List(python.Statement)) {
+  case list.reverse(body) {
+    [python.Return(value), ..preceding] ->
+      case expression_contains_gleam_tco(value) {
+        True -> option.None
+        False ->
           option.Some(
             list.append(list.reverse(preceding), [
               python.SimpleAssignment(target, value),
             ]),
           )
-        [python.Match(_, _), ..] -> option.Some(body)
-        _ -> option.None
       }
-    DriverPositionOther -> option.None
+    [python.Match(subject, cases), ..preceding] ->
+      case assign_match_tails(cases, target) {
+        option.Some(new_cases) ->
+          option.Some(
+            list.append(list.reverse(preceding), [
+              python.Match(subject: subject, cases: new_cases),
+            ]),
+          )
+        option.None -> option.None
+      }
+    [python.If(_, _), ..] -> option.None
+    _ -> option.Some(body)
   }
 }
 
